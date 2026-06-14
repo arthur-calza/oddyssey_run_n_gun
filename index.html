@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PÓLVORA &amp; AÇO</title>
+<style>
+  :root{
+    --stone:#2b2622; --gold:#e8b94a; --blood:#b1322c; --bone:#e8e0cf;
+    --ash:#9a8f7d; --shadow:#15110e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;background:#0c0a08;overflow:hidden;
+    font-family:"Trebuchet MS","Segoe UI",sans-serif;color:var(--bone);}
+  #wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;}
+  canvas{background:#1a1510;
+    box-shadow:0 0 0 2px #000, 0 0 60px #000 inset;max-width:100vw;max-height:100vh;}
+  /* HUD overlay (DOM, drawn over canvas) */
+  #hud{position:fixed;inset:0;pointer-events:none;font-weight:bold;
+    text-shadow:2px 2px 0 #000;display:none;}
+  .hud-tl{position:absolute;top:12px;left:14px;display:flex;gap:14px;align-items:flex-start;}
+  .portrait{width:62px;height:62px;border:3px solid var(--gold);background:#1a140e;
+    border-radius:6px;position:relative;box-shadow:0 0 0 2px #000;}
+  .portrait canvas{position:absolute;inset:0;width:100%;height:100%;background:transparent;box-shadow:none;}
+  .hbars{display:flex;flex-direction:column;gap:5px;min-width:200px;}
+  .bar{height:16px;background:#1a140e;border:2px solid #000;border-radius:3px;position:relative;overflow:hidden;}
+  .bar > i{display:block;height:100%;width:100%;transition:width .12s linear;}
+  .bar.hp > i{background:linear-gradient(#e06b5e,var(--blood));}
+  .bar.sp > i{background:linear-gradient(#6fd0ff,#2b7fd0);}
+  .bar span{position:absolute;inset:0;font-size:11px;line-height:12px;text-align:center;color:#fff;}
+  .hname{font-size:15px;color:var(--gold);letter-spacing:1px;}
+  .hud-tr{position:absolute;top:12px;right:16px;text-align:right;}
+  .lives{font-size:22px;color:var(--blood);}
+  .coins{font-size:18px;color:var(--gold);margin-top:2px;}
+  .obj{margin-top:6px;font-size:14px;color:var(--bone);max-width:340px;}
+  .roster{position:absolute;bottom:10px;left:14px;display:flex;gap:6px;}
+  .rchip{width:30px;height:30px;border:2px solid #000;border-radius:5px;background:#221a12;
+    display:flex;align-items:center;justify-content:center;font-size:14px;opacity:.55;}
+  .rchip.act{border-color:var(--gold);opacity:1;box-shadow:0 0 10px var(--gold);}
+  /* Screens */
+  #screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:radial-gradient(circle at 50% 30%, #1e150d, #070503 80%);text-align:center;padding:24px;}
+  .title{font-size:64px;letter-spacing:6px;color:var(--gold);
+    text-shadow:0 4px 0 #5a3a10, 4px 4px 0 #000;}
+  .subtitle{color:var(--ash);margin-top:4px;letter-spacing:3px;font-size:15px;}
+  .menu{margin-top:34px;display:flex;flex-direction:column;gap:12px;width:min(420px,86vw);}
+  button.mbtn{pointer-events:auto;cursor:pointer;font-family:inherit;font-weight:bold;font-size:18px;
+    color:var(--bone);background:linear-gradient(#3a2c1c,#241a10);border:3px solid var(--gold);
+    border-radius:8px;padding:12px;letter-spacing:2px;transition:.12s;text-shadow:1px 1px 0 #000;}
+  button.mbtn:hover{background:linear-gradient(#5a4326,#3a2c1c);transform:translateY(-2px);}
+  button.mbtn:disabled{opacity:.4;cursor:not-allowed;border-color:#555;}
+  .controls{margin-top:26px;color:var(--ash);font-size:13px;line-height:1.9;max-width:560px;}
+  .controls b{color:var(--gold);}
+  .lvgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;width:min(640px,90vw);}
+  .big{font-size:46px;}
+  .win{color:#7be08a;} .lose{color:var(--blood);}
+  .hint{color:var(--ash);font-size:13px;margin-top:18px;letter-spacing:2px;}
+  #flash{position:fixed;inset:0;pointer-events:none;background:#fff;opacity:0;}
+</style>
+</head>
+<body>
+  <div id="wrap"><canvas id="game" width="1280" height="720"></canvas></div>
+
+  <!-- In-game HUD -->
+  <div id="hud">
+    <div class="hud-tl">
+      <div class="portrait"><canvas id="portrait" width="62" height="62"></canvas></div>
+      <div class="hbars">
+        <div class="hname" id="hudName">—</div>
+        <div class="bar hp"><i id="hpFill"></i><span id="hpTxt"></span></div>
+        <div class="bar sp"><i id="spFill"></i><span id="spTxt">ESPECIAL</span></div>
+      </div>
+    </div>
+    <div class="hud-tr">
+      <div class="lives" id="hudLives">♥♥♥</div>
+      <div class="coins" id="hudCoins">⛀ 0</div>
+      <div class="obj" id="hudObj">Objetivo</div>
+    </div>
+    <div class="roster" id="hudRoster"></div>
+  </div>
+
+  <!-- Menu / screens -->
+  <div id="screen">
+    <div class="title">PÓLVORA &amp; AÇO</div>
+    <div class="subtitle">CRUZADA DE FERRO E FOGO</div>
+    <div class="menu" id="menu"></div>
+    <div class="controls" id="controlsBox">
+      <b>Mover</b> A / D &nbsp;·&nbsp; <b>Pular</b> W / Espaço (duplo p/ alguns heróis) &nbsp;·&nbsp; <b>Mira</b> Mouse<br>
+      <b>Atirar</b> Botão esq. / J &nbsp;·&nbsp; <b>Especial</b> Botão dir. / K &nbsp;·&nbsp; <b>Trocar herói</b> Q / E<br>
+      <b>Pausar</b> P / Esc
+    </div>
+  </div>
+
+  <div id="flash"></div>
+
+  <!-- modules (classic scripts; run by double-clicking index.html, no server needed) -->
+  <script src="js/core.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/textures.js"></script>
+  <script src="js/background.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/particles.js"></script>
+  <script src="js/entities.js"></script>
+  <script src="js/enemies.js"></script>
+  <script src="js/heroes.js"></script>
+  <script src="js/levels.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

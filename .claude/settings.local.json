@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(node --version)",
+      "PowerShell(python --version)",
+      "PowerShell(\"----\")",
+      "PowerShell(\"node done\")",
+      "PowerShell(foreach\\($c in 'node','deno','bun','py','python3','npx'\\){ $p=\\(Get-Command $c -ErrorAction SilentlyContinue\\); if\\($p\\){ \"$c -> $\\($p.Source\\)\" } else { \"$c -> \\(ausente\\)\" } })",
+      "PowerShell(try { $v = & py -3 --version 2>&1; \"py-3: $v\" } catch { \"py-3 falhou: $_\" }; try { $list = & py --list 2>&1; \"list: $list\" } catch { \"list falhou\" })",
+      "mcp__Claude_Preview__preview_start"
+    ]
+  }
+}
