@@ -30,7 +30,15 @@ class FX {
     ctx.globalAlpha = 1;
   }
 
-  _add(p) { if (this.parts.length < 1400) this.parts.push(p); }
+  _add(p) { if (this.parts.length < 2600) this.parts.push(p); }
+
+  // chunky death burst: blood spray + flying bone shards (+ a few that stay)
+  gib(x, y, color = '#7a1a14', n = 20) {
+    for (let i = 0; i < n; i++) { const a = rand(0, TAU), sp = rand(120, 460); this._add({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - rand(40, 160), life: rand(0.4, 1.1), max: 1.1, r: rand(2, 5), c: color, g: 1700, shrink: true }); }
+    const bone = '#e8e0cf';
+    for (let i = 0; i < n * 0.5; i++) if (this.debris.length < 360) this.debris.push({ x, y, vx: rand(-220, 220), vy: -rand(120, 360), s: rand(2.5, 5), c: i % 3 ? bone : color, life: rand(0.8, 1.6), max: 1.6, rot: rand(0, TAU), vr: rand(-16, 16) });
+    for (let i = 0; i < 4; i++) this._pushDecal({ t: 'rect', x: x + rand(-16, 16), y: y + rand(-4, 10), s: rand(2.5, 4.5), c: i % 2 ? bone : color, rot: rand(0, TAU), a: rand(0.6, 0.9) });
+  }
 
   spark(x, y, c, n = 6) {
     for (let i = 0; i < n; i++) this._add({
@@ -72,13 +80,14 @@ class FX {
   }
   explosion(x, y, radius) {
     this.rings.push({ x, y, r: 6, max: radius * 1.3, life: 0.35, t: 0.35, color: '#ff8a3c' });
-    for (let i = 0; i < 26; i++) this._add({
-      x, y, vx: rand(-1, 1) * rand(120, 460), vy: rand(-1, 1) * rand(120, 460) - 80,
-      life: rand(0.25, 0.6), max: 0.6, r: rand(3, 7), c: pick(['#ffd86b', '#ff8a3c', '#ff5b2c', '#fff']),
+    for (let i = 0; i < 44; i++) this._add({
+      x, y, vx: rand(-1, 1) * rand(120, 520), vy: rand(-1, 1) * rand(120, 520) - 80,
+      life: rand(0.25, 0.7), max: 0.7, r: rand(3, 8), c: pick(['#ffd86b', '#ff8a3c', '#ff5b2c', '#fff', '#caa33a']),
       g: 200, glow: true, shrink: true,
     });
-    this.smoke(x, y, 10);
-    for (let i = 0; i < 8; i++) this.debris.push(this._mkDebris(x, y, '#3a2c1c', 220));
+    this.smoke(x, y, 16);
+    for (let i = 0; i < 14; i++) this.debris.push(this._mkDebris(x, y, '#3a2c1c', 260));
+    this.scorch(x, y, radius);     // permanent burn mark on the ground
   }
   text(x, y, str, c = '#fff') {
     this.texts.push({ x, y, str, c, life: 0.8, max: 0.8, vy: -50 });

@@ -346,10 +346,11 @@ class Player extends Entity {
     this.swordMode = Math.max(0, (this.swordMode || 0) - dt);
     this.gainSpecial(dt * 6); // passive charge
 
-    // ---- aim toward mouse ----
+    // ---- aim toward mouse (pivot at the chest/hands) ----
     const mw = game.cam.mouseWorld();
-    this.aimAng = Math.atan2(mw.y - (this.y + this.h * 0.42), mw.x - this.cx);
     this.face = (mw.x >= this.cx) ? 1 : -1;
+    const ga = SPR.gunAnchor(this);
+    this.aimAng = Math.atan2(mw.y - ga.y, mw.x - ga.x);
 
     // ---- movement ----
     let move = (c.right ? 1 : 0) - (c.left ? 1 : 0);
@@ -396,14 +397,15 @@ class Player extends Entity {
       this.special -= this.hero.special.cost; this.specCool = this.hero.special.cd;
     }
 
-    // anim
-    this.anim += dt * (this.onGround ? (8 + Math.abs(this.vx) * 0.03) : 4);
+    // anim clocks: anim = seconds (idle), runDist = foot-locked distance (run cycle)
+    this.anim += dt;
+    if (this.onGround) this.runDist = (this.runDist || 0) + Math.abs(this.vx) * dt;
   }
 
   // helper used by hero weapon definitions
   muzzlePos() {
-    const len = this.gunLen + 4;
-    return { x: this.cx + Math.cos(this.aimAng) * len, y: this.y + this.h * 0.42 - 2 + Math.sin(this.aimAng) * len };
+    const ga = SPR.gunAnchor(this), len = this.gunLen + 4;
+    return { x: ga.x + Math.cos(this.aimAng) * len, y: ga.y + Math.sin(this.aimAng) * len };
   }
   shoot(game, opts, spread = 0, count = 1) {
     const m = this.muzzlePos();

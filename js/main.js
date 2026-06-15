@@ -40,6 +40,7 @@
     menu.appendChild(btn('▶  INICIAR CRUZADA', () => startLevel(0)));
     menu.appendChild(btn('☰  SELECIONAR FASE', showLevelSelect));
     menu.appendChild(btn('♟  HERÓIS', showHeroes));
+    menu.appendChild(btn('🛠  FASE DE TESTES', () => startLevel(LEVELS.length - 1)));
     showScreen(true);
   }
 
@@ -47,7 +48,7 @@
     appState = 'levelselect'; subtitle.textContent = 'ESCOLHA O CAMPO DE BATALHA';
     menu.innerHTML = '';
     const grid = document.createElement('div'); grid.className = 'lvgrid';
-    LEVELS.forEach((L, i) => {
+    LEVELS.slice(0, 4).forEach((L, i) => {   // campaign levels only (test stage is on the main menu)
       const locked = i > highestLevel;
       const b = btn(`${i + 1}. ${L.name}${locked ? '  🔒' : ''}`, () => startLevel(i), locked);
       b.style.fontSize = '15px';

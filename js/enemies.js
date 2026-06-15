@@ -33,17 +33,26 @@ class Enemy extends Entity {
     this.score = t.score;
   }
   hurt(dmg, dir, game) {
+    if (this.dying != null) return;
     this.hp -= dmg; this.flash = 0.1; this.stagger = 0.06;
     this.vx += dir * (this.boss ? 6 : (this.mini ? 22 : 70));
-    game.fx.blood(this.cx, this.cy, dir, 6, this.def.gore);
-    if (this.hp <= 0) this.die(game);
+    game.fx.blood(this.cx, this.cy, dir, this.boss ? 10 : 6, this.def.gore);
+    if (this.hp <= 0) this.die(game, dir);
     else game.fx.text(this.cx, this.y - 4, '' + dmg, '#ffd86b');
   }
-  die(game) {
-    this.alive = false;
-    game.fx.blood(this.cx, this.cy, 0, 12, this.def.gore); game.fx.chips(this.cx, this.cy, this.def.gore, 8);
-    game.fx.smoke(this.cx, this.cy, 5); game.cam.addShake(this.boss ? 16 : 4); Sound.flesh();
-    if (this.boss || this.type === 'flayer') game.fx.magic(this.cx, this.cy, '#b07bff', 16);
+  die(game, dir = 0) {
+    if (this.dying != null) return;
+    this.dying = this.dyingMax = (this.boss ? 1.2 : 0.55); this.dead = true;
+    this.vx = (dir || sign(this.vx) || 1) * (this.boss ? 40 : 160); this.vy = -200;
+    const gore = this.def.gore, big = this.boss ? 3 : this.mini ? 2 : 1;
+    // a big burst of blood + bones, plus a permanent pool/splatter on the ground
+    game.fx.gib(this.cx, this.cy, gore, 22 * big);                 // chunky gore
+    game.fx.blood(this.cx, this.cy, dir, 26 * big, gore);          // spray
+    game.fx.smoke(this.cx, this.cy, 6 * big);
+    game.fx.bloodPool(this.cx, this.y + this.h - 2, gore, 7 * big);// persistent splatter
+    game.fx.rubble(this.cx, this.y + this.h - 2, '#e8e0cf');       // scattered bones stay
+    game.cam.addShake(this.boss ? 16 : 5); Sound.flesh();
+    if (this.boss || this.type === 'flayer') game.fx.magic(this.cx, this.cy, '#b07bff', 20);
     game.onEnemyKilled(this);
     if (this.boss) game.world.explode(this.cx, this.cy, 110, 30);
     if (Math.random() < (this.boss ? 1 : this.mini ? 0.6 : 0.12)) game.pickups.push(new Pickup(this.cx, this.cy, 'health'));
@@ -54,13 +63,21 @@ class Enemy extends Entity {
 
   update(dt, game) {
     this.flash = Math.max(0, this.flash - dt);
+    if (this.dying != null) {                 // collapsing corpse: fall, fade, then vanish
+      this.dying -= dt; this.anim += dt;
+      this.vx *= 0.92; this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, CONFIG.TERMINAL_VY);
+      game.world.moveAndCollide(this, dt);
+      if (this.onGround && Math.random() < 0.15) game.fx.bloodPool(this.cx, this.y + this.h - 2, this.def.gore, 1);
+      if (this.dying <= 0) this.alive = false;
+      return;
+    }
     this.stagger = Math.max(0, this.stagger - dt);
     this.attackT = Math.max(0, this.attackT - dt * 5);
     this.fireT -= dt; this.touchCd = Math.max(0, this.touchCd - dt);
     const p = game.player, target = (p && !p.dead) ? p : null;
     const dx = target ? target.cx - this.cx : 0, dy = target ? target.cy - this.cy : 0, adx = Math.abs(dx);
     this.face = dx >= 0 ? 1 : -1;
-    if (target) this.aimAng = Math.atan2((target.y + target.h * 0.4) - (this.y + this.h * 0.42), target.cx - this.cx);
+    if (target) { const tg = SPR.gunAnchor(target), sg = SPR.gunAnchor(this); this.aimAng = Math.atan2(tg.y - sg.y, tg.x - sg.x); }
     const def = this.def;
 
     if (this.stagger <= 0 && target && adx < def.aggro) {
@@ -82,11 +99,13 @@ class Enemy extends Entity {
       this.attackT = 1; target.hurt(def.touch, sign(dx) || 1, game);
       this.touchCd = 0.7; this.vx -= sign(dx) * 60;
     }
-    this.anim += dt * (this.onGround ? 8 : 4);
+    this.anim += dt;
+    if (this.onGround) this.runDist = (this.runDist || 0) + Math.abs(this.vx) * dt;
   }
 
   attack(game, target) {
-    const m = { x: this.cx + Math.cos(this.aimAng) * (this.gunLen + 4), y: this.y + this.h * 0.42 + Math.sin(this.aimAng) * (this.gunLen + 4) };
+    const ga = SPR.gunAnchor(this);
+    const m = { x: ga.x + Math.cos(this.aimAng) * (this.gunLen + 4), y: ga.y + Math.sin(this.aimAng) * (this.gunLen + 4) };
     const atk = this.def.atk;
     if (this.boss) { this.bossAttack(game, target, m); return; }
     if (atk === 'blast') {

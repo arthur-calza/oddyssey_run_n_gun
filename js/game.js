@@ -33,6 +33,7 @@ class Game {
     world.game = this;
     this.world = world; this.cam.world = world;
     this.bullets = []; this.enemies = []; this.allies = []; this.pickups = [];
+    this.fx = new FX(this);   // fresh particles/decals per level
     this.explosionQ = []; this.exits = []; this.boss = null; this.decor = [];
     this.prisonersTotal = 0; this.prisonersRescued = 0;
     const T = world.T;
@@ -295,6 +296,7 @@ class Game {
       ctx.fillStyle = '#fff'; ctx.font = 'bold 11px "Trebuchet MS"'; ctx.textAlign = 'center'; ctx.fillText('SAÍDA', x + T / 2, y - 4); ctx.textAlign = 'left';
     }
 
+    this.fx.drawDecals(ctx, this.cam);   // persistent blood/rubble/scorch — trail of destruction
     for (const k of this.pickups) k.draw(ctx, this.cam);
     for (const a of this.allies) a.draw(ctx, this.cam);
     for (const e of this.enemies) if (this.cam.visible(e.x, e.y, e.w, e.h)) e.draw(ctx, this.cam);
