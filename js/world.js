@@ -124,9 +124,13 @@ class World {
     if (this.hp[i] <= 0) {
       this.mat[i] = 0; this.hp[i] = 0;
       if (this.game) {
-        this.game.fx.chips(c * this.T + 14, r * this.T + 14, m.c, 5);
-        this.game.fx.debrisBurst(c * this.T + 14, r * this.T + 14, m.c2, opts.power || 60);
-        if (m.gold) { this.game.fx.spark(c * this.T + 14, r * this.T + 14, '#ffe27a', 8); this.game.spawnCoins(c * this.T + this.T / 2, r * this.T + this.T / 2, 3 + (Math.random() * 3 | 0)); }
+        const T = this.T;
+        this.game.fx.chips(c * T + T / 2, r * T + T / 2, m.c, 10);
+        this.game.fx.chips(c * T + T / 2, r * T + T / 2, m.c2, 6);
+        this.game.fx.debrisBurst(c * T + T / 2, r * T + T / 2, m.c2, opts.power || 70);
+        this.game.fx.smoke(c * T + T / 2, r * T + T / 2, 2, 'rgba(120,110,95,');
+        this.game.fx.rubble(c * T + T / 2, (r + 1) * T - 3, m.c2);   // persistent rubble on the ground below
+        if (m.gold) { this.game.fx.spark(c * T + 14, r * T + 14, '#ffe27a', 8); this.game.spawnCoins(c * T + T / 2, r * T + T / 2, 3 + (Math.random() * 3 | 0)); }
       }
       if (m.barrel && !opts.noBarrelChain) {
         // chained explosion (queued to avoid deep recursion)
@@ -225,9 +229,9 @@ class World {
     if (!TEX.ready) TEX.build();
     const T = this.T;
     const c0 = Math.max(0, Math.floor(cam.x / T));
-    const c1 = Math.min(this.cols - 1, Math.floor((cam.x + CONFIG.W) / T) + 1);
+    const c1 = Math.min(this.cols - 1, Math.floor((cam.x + cam.vw) / T) + 1);
     const r0 = Math.max(0, Math.floor(cam.y / T));
-    const r1 = Math.min(this.rows - 1, Math.floor((cam.y + CONFIG.H) / T) + 1);
+    const r1 = Math.min(this.rows - 1, Math.floor((cam.y + cam.vh) / T) + 1);
     const ox = cam.ox, oy = cam.oy;
     for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
       const i = this.idx(c, r); const id = this.mat[i];

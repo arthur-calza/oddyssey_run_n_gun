@@ -6,7 +6,7 @@ class Game {
   constructor(canvas) {
     this.canvas = canvas; this.ctx = canvas.getContext('2d');
     this.cam = new Camera(); this.controller = new Controller(); this.fx = new FX(this);
-    this.roster = [0];          // unlocked hero indices (start with the Warrior)
+    this.roster = [0, 1];       // both heroes available (Ragnarok & Zracks)
     this.currentHero = 0;
     this.lives = 3; this.score = 0; this.coins = 0; this.nextLifeAt = 50;
     this.state = 'playing'; this.paused = false;
@@ -269,8 +269,11 @@ class Game {
   // ---- draw ------------------------------------------------
   draw() {
     const ctx = this.ctx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);   // hard reset so no transform can ever compound across frames
+    ctx.globalAlpha = 1;
     ctx.clearRect(0, 0, CONFIG.W, CONFIG.H);
     BG.draw(ctx, this.cam, this.level, this.time);
+    ctx.save(); ctx.imageSmoothingEnabled = false; ctx.scale(CONFIG.ZOOM, CONFIG.ZOOM);
     this.world.draw(ctx, this.cam);
 
     // decorations (torches, banners, windows, pillars, vines...)
@@ -298,6 +301,7 @@ class Game {
     if (this.player) this.player.draw(ctx, this.cam);
     for (const b of this.bullets) if (this.cam.visible(b.x, b.y, 8, 8)) b.draw(ctx, this.cam);
     this.fx.draw(ctx, this.cam);
+    ctx.restore();   // end world zoom
 
     if (this.boss && this.boss.alive) this._drawBossBar(ctx);
     if (this.paused) this._drawPaused(ctx);
@@ -334,8 +338,8 @@ class Game {
     h.lives.textContent = '♥'.repeat(Math.max(0, this.lives));
     h.coins.textContent = '⛀ ' + this.coins + '  (vida em ' + this.nextLifeAt + ')';
     let obj;
-    if (this.level.win === 'boss') obj = this.boss ? 'Derrube ' + (this.boss.name || 'o chefe') : 'Chefe abatido! Saia →';
-    else obj = `Resgatados ${this.prisonersRescued}/${this.prisonersTotal} · Alcance a SAÍDA →`;
+    if (this.level.win === 'boss') obj = this.boss ? 'Derrote ' + (this.boss.name || 'o chefe') : 'Chefe abatido! Saia →';
+    else obj = 'Alcance a SAÍDA →';
     h.obj.textContent = obj;
     // roster chips
     if (h.roster.childElementCount !== this.roster.length || h._cur !== this.currentHero) {
@@ -352,9 +356,12 @@ class Game {
   _drawPortrait() {
     const c = this._hud.portrait, x = c.getContext('2d');
     x.clearRect(0, 0, 62, 62);
-    const fake = { x: 12, y: 0, w: 38, h: 52, face: 1, vx: 0, onGround: true, anim: 0, aimAng: 0, gunLen: 0, skin: HEROES[this.currentHero].skin };
-    const cam0 = { ox: 0, oy: 6 };
-    drawFighter(x, fake, cam0, false);
+    const key = HEROES[this.currentHero].spr;
+    if (typeof SPR !== 'undefined' && SPR.ready && SPR.sheets[key]) {
+      const img = SPR.sheets[key].idle[0];
+      x.imageSmoothingEnabled = false;
+      x.drawImage(img, 0, 0, img.width, img.height, 1, 4, 58, 58);
+    }
   }
 
   showHUD(v) { this._hud.box.style.display = v ? 'block' : 'none'; }

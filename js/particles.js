@@ -11,6 +11,23 @@ class FX {
     this.texts = [];   // floating combat text
     this.slashes = []; // melee swoosh arcs
     this.bolts = [];   // lightning bolts
+    this.decals = [];  // PERSISTENT marks (blood, rubble, scorch) — the trail of destruction
+  }
+
+  _pushDecal(o) { this.decals.push(o); const max = 1800; if (this.decals.length > max) this.decals.splice(0, this.decals.length - max); }
+  bloodPool(x, y, c, n = 6) { for (let i = 0; i < n; i++) this._pushDecal({ t: 'blob', x: x + rand(-12, 12), y: y + rand(-3, 4), r: rand(3, 8), c: c || '#6a160e', a: rand(0.5, 0.85) }); }
+  rubble(x, y, c) { for (let i = 0; i < 3; i++) this._pushDecal({ t: 'rect', x: x + rand(-11, 11), y: y + rand(-9, 9), s: rand(2, 4.5), c, rot: rand(0, TAU), a: rand(0.55, 0.9) }); }
+  scorch(x, y, radius) { this._pushDecal({ t: 'scorch', x, y, r: radius * 0.7, a: 0.5 }); for (let i = 0; i < 5; i++) this._pushDecal({ t: 'rect', x: x + rand(-radius, radius) * 0.6, y: y + rand(-radius, radius) * 0.6, s: rand(2, 4), c: '#1a1410', rot: rand(0, TAU), a: 0.6 }); }
+  drawDecals(ctx, cam) {
+    const ox = cam.ox, oy = cam.oy, vw = cam.vw, vh = cam.vh;
+    for (const d of this.decals) {
+      if (d.x < cam.x - 30 || d.x > cam.x + vw + 30 || d.y < cam.y - 30 || d.y > cam.y + vh + 30) continue;
+      const x = d.x + ox, y = d.y + oy;
+      if (d.t === 'blob') { ctx.fillStyle = d.c; ctx.globalAlpha = d.a; ctx.beginPath(); ctx.ellipse(x, y, d.r, d.r * 0.55, 0, 0, TAU); ctx.fill(); }
+      else if (d.t === 'rect') { ctx.save(); ctx.globalAlpha = d.a; ctx.fillStyle = d.c; ctx.translate(x, y); ctx.rotate(d.rot); ctx.fillRect(-d.s / 2, -d.s / 2, d.s, d.s); ctx.restore(); }
+      else if (d.t === 'scorch') { ctx.globalAlpha = d.a; const gr = ctx.createRadialGradient(x, y, 1, x, y, d.r); gr.addColorStop(0, 'rgba(10,8,6,0.7)'); gr.addColorStop(1, 'rgba(10,8,6,0)'); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, d.r, 0, TAU); ctx.fill(); }
+    }
+    ctx.globalAlpha = 1;
   }
 
   _add(p) { if (this.parts.length < 1400) this.parts.push(p); }
@@ -181,5 +198,6 @@ class FX {
       ctx.stroke(); ctx.restore();
     }
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    ctx.restore();   // balance the save() opened for the rings (was leaking the zoom transform every frame)
   }
 }

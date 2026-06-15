@@ -8,6 +8,8 @@
   const subtitle = document.querySelector('.subtitle');
   const controlsBox = document.getElementById('controlsBox');
   Input.init(canvas);
+  SPR.build();        // bake procedural fallbacks + hit-flash silhouettes
+  SPR.loadImages();   // load the concept-art assets (assets/*.png)
 
   let game = new Game(canvas);
   window.GAME = game; // debug handle
@@ -72,7 +74,7 @@
 
   function startLevel(i) {
     appState = 'playing';
-    game.roster = [0]; game.currentHero = 0; game.lives = 3; game.score = 0;
+    game.roster = [0, 1]; game.currentHero = 0; game.lives = 3; game.score = 0;
     game.coins = 0; game.nextLifeAt = 50;
     game.onEnd = onGameEnd;
     game.loadLevel(i);

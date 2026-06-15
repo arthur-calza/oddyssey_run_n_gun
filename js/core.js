@@ -6,6 +6,7 @@
 const CONFIG = {
   W: 1280, H: 720,           // canvas resolution (internal) — higher fidelity
   TILE: 32,
+  ZOOM: 1.7,                 // world render zoom (bigger, detailed sprites)
   GRAVITY: 2500,
   TERMINAL_VY: 1500,
   MAX_DT: 1 / 30,            // clamp big frame gaps
@@ -91,14 +92,17 @@ class Controller {
 // ---- Camera --------------------------------------------------
 class Camera {
   constructor() { this.x = 0; this.y = 0; this.shake = 0; this._sx = 0; this._sy = 0; this.world = null; }
+  get z() { return CONFIG.ZOOM || 1; }
+  get vw() { return CONFIG.W / this.z; }   // visible world width
+  get vh() { return CONFIG.H / this.z; }
   follow(target, dt) {
-    const tx = target.x + target.w / 2 - CONFIG.W / 2;
-    const ty = target.y + target.h / 2 - CONFIG.H / 2 - 40;
+    const tx = target.x + target.w / 2 - this.vw / 2;
+    const ty = target.y + target.h / 2 - this.vh / 2 - 30;
     this.x = lerp(this.x, tx, 1 - Math.pow(0.0008, dt));
     this.y = lerp(this.y, ty, 1 - Math.pow(0.0008, dt));
     if (this.world) {
-      this.x = clamp(this.x, 0, Math.max(0, this.world.pixelW - CONFIG.W));
-      this.y = clamp(this.y, 0, Math.max(0, this.world.pixelH - CONFIG.H));
+      this.x = clamp(this.x, 0, Math.max(0, this.world.pixelW - this.vw));
+      this.y = clamp(this.y, 0, Math.max(0, this.world.pixelH - this.vh));
     }
     // shake decays
     this.shake = Math.max(0, this.shake - dt * 32);
@@ -108,10 +112,10 @@ class Camera {
   addShake(v) { this.shake = Math.min(26, this.shake + v); }
   get ox() { return -this.x + this._sx; }
   get oy() { return -this.y + this._sy; }
-  // world coords of the mouse
-  mouseWorld() { return { x: Input.mouse.x + this.x - this._sx, y: Input.mouse.y + this.y - this._sy }; }
+  // world coords of the mouse (account for zoom)
+  mouseWorld() { return { x: Input.mouse.x / this.z + this.x - this._sx, y: Input.mouse.y / this.z + this.y - this._sy }; }
   visible(x, y, w, h) {
-    return x + w > this.x - 40 && x < this.x + CONFIG.W + 40 &&
-           y + h > this.y - 40 && y < this.y + CONFIG.H + 40;
+    return x + w > this.x - 40 && x < this.x + this.vw + 40 &&
+           y + h > this.y - 40 && y < this.y + this.vh + 40;
   }
 }

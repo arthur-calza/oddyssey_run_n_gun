@@ -75,12 +75,10 @@ const LEVELS = (function () {
     for (let c = 3; c < W - 3; c += 6) air(g, c, top[c] - 1, 'G');
     // actors
     put(g, 3, S(3) - 1, 'P'); put(g, W - 5, S(W - 5) - 1, 'E');
-    put(g, 53, S(53) - 1, '2');                        // Ladina
-    [14, 30, 50, 78, 92, 110, 128, 152].forEach(c => put(g, c, S(c) - 1, 'g'));
-    [22, 66, 104, 138].forEach(c => put(g, c, S(c) - 1, 's'));
-    put(g, 41, S(40) - 11, 'a'); put(g, 107, S(106) - 11, 'a');
-    [84, 124].forEach(c => put(g, c, S(c) - 1, 'c'));
-    return { name: 'MURALHAS DE FERRO', sub: 'Escale as muralhas, salve a Ladina e alcance a saída.', win: 'exit', biome: 'castle', sky: ['#3a4a6e', '#15182a'], bannerColor: '#8a2b2b', rows: toRows(g) };
+    [14, 30, 50, 78, 92, 110, 128, 152].forEach(c => put(g, c, S(c) - 1, 'z'));
+    [22, 104, 138].forEach(c => put(g, c, S(c) - 1, 'w'));
+    put(g, 84, S(84) - 1, 'r');
+    return { name: 'MURALHAS DE FERRO', sub: 'Tome as muralhas infestadas e alcance a saída.', win: 'exit', biome: 'castle', sky: ['#3a4a6e', '#15182a'], bannerColor: '#8a2b2b', rows: toRows(g) };
   }
 
   // ---------- LEVEL 2 — village, hills & cellars ---------------
@@ -103,12 +101,10 @@ const LEVELS = (function () {
     put(g, 168, S(168) - 1, '$'); put(g, 169, S(169) - 1, '$');
     for (let c = 3; c < W - 3; c += 6) air(g, c, top[c] - 1, 'G');
     put(g, 3, S(3) - 1, 'P'); put(g, W - 5, S(W - 5) - 1, 'E');
-    put(g, 39, S(39) - 1, '3'); put(g, 145, S(145) - 1, '4');
-    [12, 28, 66, 88, 116, 150, 172].forEach(c => put(g, c, S(c) - 1, 'g'));
-    [40, 104, 132].forEach(c => put(g, c, S(c) - 1, 'l'));
-    [20, 74, 124, 160].forEach(c => put(g, c, S(c) - 1, 'c'));
-    [58, 108].forEach(c => put(g, c, S(c) - 1, 's'));
-    return { name: 'VILA DOS LAMENTOS', sub: 'Suba pelos telhados e desça aos becos; salve o Mago e a Barda.', win: 'exit', biome: 'village', sky: ['#5a4a3a', '#1a1410'], bannerColor: '#7a2a4a', rows: toRows(g) };
+    [12, 28, 66, 88, 116, 150, 172].forEach(c => put(g, c, S(c) - 1, 'z'));
+    [40, 104, 132].forEach(c => put(g, c, S(c) - 1, 'w'));
+    put(g, 74, S(74) - 1, 'r'); put(g, 124, S(124) - 1, 'r');
+    return { name: 'VILA DOS LAMENTOS', sub: 'Suba pelos telhados e desça aos becos tomados pelos mortos.', win: 'exit', biome: 'village', sky: ['#5a4a3a', '#1a1410'], bannerColor: '#7a2a4a', rows: toRows(g) };
   }
 
   // ---------- LEVEL 3 — dungeon, shafts & chasms --------------
@@ -130,13 +126,11 @@ const LEVELS = (function () {
     [30, 86, 140].forEach(c => put(g, c, S(c) - 1, 'X'));
     put(g, 36, S(36) - 1, 'm'); put(g, 37, S(37) - 1, 'm'); put(g, 96, S(96) - 1, 'm');
     put(g, 3, S(3) - 1, 'P'); put(g, W - 5, S(W - 5) - 1, 'E');
-    put(g, 45, S(45) - 1, '5'); put(g, 150, S(150) - 1, '6');
-    [12, 32, 64, 84, 110, 138, 164].forEach(c => put(g, c, S(c) - 1, 's'));
-    [52, 108, 144].forEach(c => put(g, c, S(c) - 1, 'a'));
-    [42, 92, 126].forEach(c => put(g, c, S(c) - 6, 'w'));
-    [70, 120].forEach(c => put(g, c, S(c) - 1, 'z'));
-    put(g, 100, S(100) - 1, 'M');
-    return { name: 'CATACUMBAS PROFUNDAS', sub: 'Galerias verticais — solte o Bárbaro e a Druida. Cuidado com o ogro.', win: 'exit', biome: 'dungeon', sky: ['#1a1622', '#0a070e'], bannerColor: '#3a2a5a', rows: toRows(g) };
+    [12, 32, 64, 84, 110, 138, 164].forEach(c => put(g, c, S(c) - 1, 'w'));
+    [52, 108, 144].forEach(c => put(g, c, S(c) - 1, 'z'));
+    [70, 126].forEach(c => put(g, c, S(c) - 1, 'r'));
+    put(g, 100, S(100) - 1, 'd');
+    return { name: 'CATACUMBAS PROFUNDAS', sub: 'Galerias verticais infestadas de feras. Cuidado com o demônio.', win: 'exit', biome: 'dungeon', sky: ['#1a1622', '#0a070e'], bannerColor: '#3a2a5a', rows: toRows(g) };
   }
 
   // ---------- LEVEL 4 — battlefield & throne ------------------
@@ -163,13 +157,12 @@ const LEVELS = (function () {
     [28, 56, 96, 126].forEach(c => { put(g, c, S(c) - 1, 'X'); put(g, c + 1, S(c) - 1, 'X'); });
     for (let c = 3; c < 176; c += 7) air(g, c, top[c] - 1, 'G');
     put(g, 3, S(3) - 1, 'P'); put(g, 170, S(170) - 1, 'E');
-    put(g, 35, S(35) - 1, '7');
-    [12, 30, 60, 104, 144].forEach(c => put(g, c, S(c) - 1, 'k'));
-    [46, 90, 120, 156].forEach(c => put(g, c, S(c) - 1, 'z'));
-    [54, 98, 134].forEach(c => put(g, c, S(c) - 6, 'w'));
-    put(g, 110, S(110) - 1, 'M');
+    [12, 30, 60, 144].forEach(c => put(g, c, S(c) - 1, 'z'));
+    [46, 90, 120, 156].forEach(c => put(g, c, S(c) - 1, 'r'));
+    [54, 98, 134].forEach(c => put(g, c, S(c) - 1, 'w'));
+    put(g, 104, S(104) - 1, 'd'); put(g, 150, S(150) - 1, 'd');
     put(g, 188, kb - 1, 'O');
-    return { name: 'O TRONO DO LICH-REI', sub: 'Cruze o campo dilacerado e destrua o Lich-Rei.', win: 'boss', biome: 'battlefield', sky: ['#5a2018', '#160808'], bannerColor: '#6a1a1a', rows: toRows(g) };
+    return { name: 'O TRONO DO DEVORADOR', sub: 'Cruze o campo dilacerado e destrua o Devorador de Mentes.', win: 'boss', biome: 'battlefield', sky: ['#5a2018', '#160808'], bannerColor: '#6a1a1a', rows: toRows(g) };
   }
 
   return [lvl1(), lvl2(), lvl3(), lvl4()];

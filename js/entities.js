@@ -109,6 +109,7 @@ class Bullet {
 const MELEE_WEAPONS = { sword: 1, greatsword: 1, axe: 1, spear: 1, claws: 1, scythe: 1, fists: 1 };
 
 function drawFighter(ctx, e, cam, look) {
+  if (e.spr && typeof SPR !== 'undefined' && SPR.defs[e.spr]) { SPR.draw(ctx, e, cam); return; }
   const s = e.skin || {};
   if (s.custom) { s.custom(ctx, e, cam); return; }   // non-humanoid (slimes, etc.)
   const W = e.w, H = e.h, f = e.face;
@@ -314,7 +315,7 @@ class Player extends Entity {
     this.maxhp = H.hp; this.hp = H.hp;
     this.speed = H.speed; this.jumpV = H.jumpV; this.maxJumps = H.jumps;
     this.clip = H.clip; this.reloadTime = H.reload;
-    this.skin = H.skin; this.gunLen = H.gunLen || 16;
+    this.skin = H.skin; this.spr = H.spr; this.gunLen = H.gunLen || 16;
     this.ammo = H.clip;
   }
   hurt(dmg, dir, game) {
@@ -342,6 +343,7 @@ class Player extends Entity {
     this.specCool = Math.max(0, this.specCool - dt);
     this.dashCd = Math.max(0, this.dashCd - dt);
     this.attackT = Math.max(0, this.attackT - dt * 5); // melee swing decay
+    this.swordMode = Math.max(0, (this.swordMode || 0) - dt);
     this.gainSpecial(dt * 6); // passive charge
 
     // ---- aim toward mouse ----
