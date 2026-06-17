@@ -17,9 +17,11 @@ const MAT = [
   { name: 'mossy',     hp: 72,  solid: true,  c: '#4a463f', c2: '#3a3631', edge: '#5b5550' },
   { name: 'sand',      hp: 14,  solid: true,  c: '#d8c07a', c2: '#b89a52', edge: '#e8d49a', soft: true, falls: true },
   { name: 'gravel',    hp: 22,  solid: true,  c: '#6a6258', c2: '#4a463e', edge: '#7d756a', falls: true },
+  { name: 'rocket',    hp: 12,  solid: true,  c: '#b1322c', c2: '#3a1410', edge: '#e0843a', rocket: true },   // launches a rocket when destroyed
+  { name: 'ladder',    hp: 1e9, solid: false, c: '#6a4a28', c2: '#3a2a14', edge: '#8a6438', ladder: true, indestructible: true },
 ];
 // char -> material id (used by level loader)
-const CHAR2MAT = { '#': 2, 'D': 1, 'B': 3, '=': 4, '~': 5, 'X': 6, '$': 7, 'C': 8, 'S': 9, 'm': 10, 'A': 11, 'R': 12 };
+const CHAR2MAT = { '#': 2, 'D': 1, 'B': 3, '=': 4, '~': 5, 'X': 6, '$': 7, 'C': 8, 'S': 9, 'm': 10, 'A': 11, 'R': 12, 'K': 13, 'h': 14 };
 
 /* a single tile detached by gravity, falling until it lands & re-deposits */
 class FallingBlock {
@@ -107,6 +109,7 @@ class World {
   at(c, r) { return this.inBounds(c, r) ? this.mat[this.idx(c, r)] : 2; } // OOB = solid wall
   solid(c, r) { const m = this.at(c, r); return m !== 0 && MAT[m] && MAT[m].solid; }
   solidPx(x, y) { return this.solid(Math.floor(x / this.T), Math.floor(y / this.T)); }
+  ladderAt(x, y) { const m = this.at(Math.floor(x / this.T), Math.floor(y / this.T)); return m && MAT[m] && MAT[m].ladder; }
 
   // ---- destruction ------------------------------------------
   // returns true if tile was destroyed this call
@@ -130,11 +133,17 @@ class World {
         this.game.fx.debrisBurst(c * T + T / 2, r * T + T / 2, m.c2, opts.power || 70);
         this.game.fx.smoke(c * T + T / 2, r * T + T / 2, 2, 'rgba(120,110,95,');
         this.game.fx.rubble(c * T + T / 2, (r + 1) * T - 3, m.c2);   // persistent rubble on the ground below
-        if (m.gold) { this.game.fx.spark(c * T + 14, r * T + 14, '#ffe27a', 8); this.game.spawnCoins(c * T + T / 2, r * T + T / 2, 3 + (Math.random() * 3 | 0)); }
+        if (m.gold) { this.game.fx.spark(c * T + 14, r * T + 14, '#ffe27a', 8); this.game.spawnOregano(c * T + T / 2, r * T + T / 2, 3 + (Math.random() * 3 | 0)); }
       }
       if (m.barrel && !opts.noBarrelChain) {
         // chained explosion (queued to avoid deep recursion)
-        if (this.game) this.game.queueExplosion(c * this.T + this.T / 2, r * this.T + this.T / 2, 78, 60);
+        if (this.game) this.game.queueExplosion(c * this.T + this.T / 2, r * this.T + this.T / 2, 86, 64);
+      }
+      if (m.rocket && this.game) {  // launch a rocket toward the player
+        const px = c * this.T + this.T / 2, py = r * this.T + this.T / 2;
+        const dir = this.game.player ? sign(this.game.player.cx - px) || 1 : 1;
+        this.game.spawnRocket(px, py, dir);
+        this.game.queueExplosion(px, py, 44, 30);
       }
       this.maybeFall(c, r - 1);  // unsupported gravity blocks above collapse
       return true;
@@ -241,6 +250,7 @@ class World {
       const variant = ((c * 2 + r * 3) % TEX.V + TEX.V) % TEX.V;
       const img = TEX.tiles[id] && TEX.tiles[id][variant];
       if (img) ctx.drawImage(img, x, y); else { ctx.fillStyle = m.c; ctx.fillRect(x, y, T, T); }
+      if (!m.solid) continue;   // ladders & other non-solid props: no block shading/cracks
       const openAbove = !this.solid(c, r - 1);
       // shade neighbours that face open space for depth
       if (openAbove) { ctx.fillStyle = 'rgba(255,255,255,0.10)'; ctx.fillRect(x, y, T, 2); }

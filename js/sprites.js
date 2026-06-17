@@ -311,6 +311,7 @@ const SPR = {
 
   // chest/hands anchor where the weapon is held (world coords, no camera)
   gunAnchor(e) {
+    if (typeof RIG !== 'undefined' && RIG.has(e.spr)) return RIG.gunAnchor(e);
     const d = this.defs[e.spr];
     if (!d) return { x: e.cx, y: e.y + e.h * 0.32 };
     const H = d.ch || 132, scale = e.h * (d.artK || 1.7) / H, s = d.scale || 1;
@@ -360,8 +361,8 @@ SPR.define('ragnarok', {
   head: 'human', weapon: 'shotgun', artK: 1.7,
   pal: { skin: '#d8a273', skinSh: '#b07c50', hair: '#5a3a22',
     torso: '#aab2be', torsoHi: '#dde3ec', torsoSh: '#6a727e', armor: '#aab2be', armorHi: '#e2e8f0', armorSh: '#6a727e',
-    leg: '#9aa2ae', legSh: '#727a86', arm: '#aab2be', pauldron: '#cdd4de', plate: '#cdd4de',
-    glove: '#5a4a32', boot: '#3a2a18', belt: '#5a4127', buckle: '#caa33a', cape: '#7a2222', capeSh: '#561414',
+    leg: '#787f8a', legSh: '#525863', legHi: '#aeb6c2', arm: '#aab2be', pauldron: '#cdd4de', plate: '#cdd4de',
+    glove: '#5a4a32', boot: '#33271a', belt: '#5a4127', buckle: '#caa33a', cape: '#7a2222', capeSh: '#561414',
     metal: '#3a3e44', metalSh: '#20242a', wood: '#6a4424' },
 });
 SPR.define('zracks', {
@@ -375,7 +376,7 @@ SPR.define('zombie', {
   head: 'zombie', weapon: 'musket', artK: 1.66,
   pal: { skin: '#6f9450', skinSh: '#466030', skinHi: '#88a464', hood: '#3a2e1e',
     torso: '#4a3a26', torsoHi: '#5e4a30', torsoSh: '#2e2416', armor: '#6a5a44', armorHi: '#7e6c52', armorSh: '#46382a',
-    leg: '#3a4a28', legSh: '#26331a', arm: '#6f9450', boot: '#3a2a18', belt: '#4a3318',
+    leg: '#4a4230', legSh: '#2e2818', legHi: '#5e553c', arm: '#6f9450', boot: '#33261a', belt: '#4a3318',
     metal: '#4a4438', metalSh: '#2a261e', wood: '#5a3a1e' },
 });
 SPR.define('werewolf', {
@@ -384,6 +385,18 @@ SPR.define('werewolf', {
     torso: '#3a2e22', torsoHi: '#4e4030', torsoSh: '#221a12', armor: '#4a3a28', armorHi: '#5e4c36', armorSh: '#2a2014',
     leg: '#3a3026', legSh: '#221a12', arm: '#4a3e30', foot: '#1a1410', claw: '#e8e0cf', belt: '#3a2a18',
     metal: '#2a2a2e', metalSh: '#16161a' },
+});
+SPR.define('wolf', {
+  head: 'wolf', digi: true, tail: true, scale: 0.92, artK: 1.5,
+  pal: { skin: '#5a4a3a', skinSh: '#382a1e', skinHi: '#7a6850', eye: '#f0e050',
+    torso: '#4a3c2c', torsoHi: '#5e4c38', torsoSh: '#2e2418', armor: '#4a3c2c', armorHi: '#6a5640', armorSh: '#2e2418',
+    leg: '#4a3c2c', legSh: '#2e2418', arm: '#5a4a3a', foot: '#1a1410', claw: '#e8e0cf' },
+});
+SPR.define('direwolf', {
+  head: 'wolf', digi: true, tail: true, scale: 1.22, bulk: 1.15, cw: 150, ch: 158, artK: 1.6,
+  pal: { skin: '#3a2e26', skinSh: '#221813', skinHi: '#564438', eye: '#ff5b3a',
+    torso: '#3a2e22', torsoHi: '#4e4030', torsoSh: '#221a12', armor: '#3a2e22', armorHi: '#56463a', armorSh: '#1e160f',
+    leg: '#3a2e22', legSh: '#221a12', arm: '#3a2e26', foot: '#120d0a', claw: '#e8e0cf' },
 });
 SPR.define('dragonman', {
   head: 'dragon', weapon: 'rifle', digi: true, tail: true, scale: 1.12, cw: 142, ch: 150, artK: 1.66,

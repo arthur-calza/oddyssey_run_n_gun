@@ -109,6 +109,7 @@ class Bullet {
 const MELEE_WEAPONS = { sword: 1, greatsword: 1, axe: 1, spear: 1, claws: 1, scythe: 1, fists: 1 };
 
 function drawFighter(ctx, e, cam, look) {
+  if (e.spr && typeof RIG !== 'undefined' && RIG.has(e.spr)) { RIG.draw(ctx, e, cam); return; }
   if (e.spr && typeof SPR !== 'undefined' && SPR.defs[e.spr]) { SPR.draw(ctx, e, cam); return; }
   const s = e.skin || {};
   if (s.custom) { s.custom(ctx, e, cam); return; }   // non-humanoid (slimes, etc.)
@@ -344,6 +345,7 @@ class Player extends Entity {
     this.dashCd = Math.max(0, this.dashCd - dt);
     this.attackT = Math.max(0, this.attackT - dt * 5); // melee swing decay
     this.swordMode = Math.max(0, (this.swordMode || 0) - dt);
+    this.powered = Math.max(0, (this.powered || 0) - dt); // magic-potion buff timer
     this.gainSpecial(dt * 6); // passive charge
 
     // ---- aim toward mouse (pivot at the chest/hands) ----
@@ -367,22 +369,40 @@ class Player extends Entity {
       else this.vx = approach(this.vx, 0, (this.onGround ? 3400 : 1200) * dt);
     }
 
-    // jump / double-jump / hover
-    if (this.onGround) this.jumps = this.maxJumps;
-    if (c.jumpPressed() && this.jumps > 0) {
-      this.vy = -this.jumpV; this.jumps--; Sound.jump();
-      game.fx.smoke(this.cx, this.y + this.h, 3);
-    }
-    // variable jump height
-    if (!c.jumpHeld && this.vy < -120) this.vy = -120;
-    // hover (heroes with canHover)
-    if (this.hero.canHover && c.jumpHeld && this.vy > 40 && this.jumps <= 0) {
-      this.vy = Math.min(this.vy, 90); this.hoverT += dt;
-      if (Math.random() < 0.4) game.fx.muzzle(this.cx + rand(-6, 6), this.y + this.h, Math.PI / 2);
+    // ---- ladders: grab when overlapping ladder tiles and pressing up/down ----
+    const onLadderTile = game.world.ladderAt(this.cx, this.cy) || game.world.ladderAt(this.cx, this.y + this.h - 6) || game.world.ladderAt(this.cx, this.y + 4);
+    if (onLadderTile && (c.up || c.down)) this.onLadder = true;
+    if (!onLadderTile) this.onLadder = false;
+    const onLadder = this.onLadder;
+
+    const jumpEdge = c.jumpPressed();
+    if (onLadder) {
+      this.jumps = this.maxJumps; this.clinging = false;
+      this.vy = (c.up ? -1 : c.down ? 1 : 0) * 190;
+      if (jumpEdge) { this.onLadder = false; this.vy = -this.jumpV * 0.8; Sound.jump(); }
+      if (Math.abs(this.vy) > 10 && Math.random() < 0.2) game.fx.spark(this.cx, this.cy, '#caa07a', 1);
+    } else {
+      // ---- wall-cling / wall-climb / wall-jump (Broforce-style) ----
+      const pushDir = (c.right ? 1 : 0) - (c.left ? 1 : 0);
+      const onWall = !this.onGround && this.hitWall !== 0 && pushDir === this.hitWall && this.vy > -80;
+      if (onWall) {
+        this.clinging = true; this.wallSide = this.hitWall;
+        if (jumpEdge) { this.vy = -this.jumpV; this.vx = -this.hitWall * this.speed * 1.15; Sound.jump(); game.fx.smoke(this.cx, this.cy, 3); }
+        else if (c.up) this.vy = -150;              // climb up
+        else if (c.down) this.vy = 300;             // slide down fast
+        else this.vy = Math.min(this.vy, 70);       // cling & slow-slide
+        if (Math.random() < 0.3) game.fx.spark(this.cx + this.hitWall * 8, this.cy + rand(-8, 10), '#caa07a', 1);
+      } else {
+        this.clinging = false;
+        if (this.onGround) this.jumps = this.maxJumps;
+        if (jumpEdge && this.jumps > 0) { this.vy = -this.jumpV; this.jumps--; Sound.jump(); game.fx.smoke(this.cx, this.y + this.h, 3); }
+        if (!c.jumpHeld && this.vy < -120) this.vy = -120;
+        if (this.hero.canHover && c.jumpHeld && this.vy > 40 && this.jumps <= 0) { this.vy = Math.min(this.vy, 90); }
+      }
     }
 
-    // gravity
-    this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, CONFIG.TERMINAL_VY);
+    // gravity (off while climbing a ladder)
+    if (!onLadder) this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, CONFIG.TERMINAL_VY);
     game.world.moveAndCollide(this, dt);
 
     // ---- weapons ----
@@ -430,6 +450,12 @@ class Player extends Entity {
       drawFighter(ctx, this, cam, false);
       ctx.globalAlpha = 1; return;
     }
+    if (this.powered > 0) {                  // magic-potion aura
+      const gx = this.cx + cam.ox, gy = this.cy + cam.oy, pr = 18 + Math.sin(this.powered * 8) * 3;
+      const gr = ctx.createRadialGradient(gx, gy, 2, gx, gy, pr);
+      gr.addColorStop(0, 'rgba(110,180,255,0.35)'); gr.addColorStop(1, 'rgba(110,180,255,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(gx, gy, pr, 0, TAU); ctx.fill();
+    }
     if (this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0) ctx.globalAlpha = 0.5;
     drawFighter(ctx, this, cam, true);
     ctx.globalAlpha = 1;
@@ -467,47 +493,62 @@ class Ally extends Entity {
   }
 }
 
-/* ---------------- Pickup (health / coin / life) ----------- */
+/* ---------- Pickup: health / oregano / life / potion / token --- */
 class Pickup extends Entity {
   constructor(x, y, kind) {
-    const s = kind === 'coin' ? 13 : 16;
+    const s = kind === 'oregano' ? 14 : kind === 'token' ? 20 : 16;
     super(x - s / 2, y - s / 2, s, s);
     this.kind = kind; this.t = rand(0, 6); this.vy = -rand(120, 240); this.vx = rand(-80, 80);
-    this.settle = 0;
   }
+  get magnetic() { return this.kind === 'oregano' || this.kind === 'token'; }
   update(dt, game) {
     this.t += dt;
     const p = game.player;
-    // coins are magnetic once they have settled a touch
-    if (this.kind === 'coin' && p && !p.dead) {
+    if (this.magnetic && p && !p.dead) {
       const d = Math.hypot(p.cx - this.cx, p.cy - this.cy);
-      if (d < 150) { const a = Math.atan2(p.cy - this.cy, p.cx - this.cx); this.vx += Math.cos(a) * 900 * dt; this.vy += Math.sin(a) * 900 * dt; this.vx *= 0.9; this.vy *= 0.9; }
-      else { this.vy = Math.min(this.vy + 1400 * dt, 600); }
-    } else { this.vy = Math.min(this.vy + 1400 * dt, 600); }
+      if (d < 160) { const a = Math.atan2(p.cy - this.cy, p.cx - this.cx); this.vx += Math.cos(a) * 950 * dt; this.vy += Math.sin(a) * 950 * dt; this.vx *= 0.9; this.vy *= 0.9; }
+      else this.vy = Math.min(this.vy + 1400 * dt, 600);
+    } else this.vy = Math.min(this.vy + 1400 * dt, 600);
     game.world.moveAndCollide(this, dt);
-    if (this.onGround) { this.vx *= 0.8; }
+    if (this.onGround) this.vx *= 0.8;
     if (p && !p.dead && aabb(this, p)) {
-      if (this.kind === 'health') { p.hp = clamp(p.hp + 25, 0, p.maxhp); game.fx.text(p.cx, p.y - 6, '+25', '#7be08a'); Sound.rescue(); }
-      else if (this.kind === 'coin') { game.collectCoin(this); }
-      else if (this.kind === 'life') { game.lives++; game.fx.text(p.cx, p.y - 6, '+1 VIDA', '#ff5b6e'); game.fx.spark(this.cx, this.cy, '#ff5b6e', 14); Sound.heal(); }
-      if (this.kind !== 'coin') this.alive = false;
+      if (this.kind === 'health') { p.hp = clamp(p.hp + 30, 0, p.maxhp); game.fx.text(p.cx, p.y - 6, '+30', '#7be08a'); Sound.rescue(); this.alive = false; }
+      else if (this.kind === 'oregano') { game.collectOregano(this); }
+      else if (this.kind === 'life') { game.lives++; game.fx.text(p.cx, p.y - 6, '+1 VIDA', '#ff5b6e'); game.fx.spark(this.cx, this.cy, '#ff5b6e', 14); Sound.heal(); this.alive = false; }
+      else if (this.kind === 'potion') { game.applyPotion(p); this.alive = false; }
+      else if (this.kind === 'token') { game.collectToken(this); }
     }
   }
   draw(ctx, cam) {
     const x = this.cx + cam.ox, y = this.cy + cam.oy + Math.sin(this.t * 4) * 2;
-    if (this.kind === 'coin') {
-      const sx = Math.abs(Math.cos(this.t * 5));
-      ctx.fillStyle = '#8a6a14'; ctx.beginPath(); ctx.ellipse(x, y, 6 * sx + 0.5, 6, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#f4d35e'; ctx.beginPath(); ctx.ellipse(x, y, 5 * sx, 5, 0, 0, TAU); ctx.fill();
-      if (sx > 0.4) { ctx.fillStyle = '#fff7cf'; ctx.fillRect(x - 1, y - 2.5, 1.5, 5); }
+    if (this.kind === 'oregano') {                       // a sprig of oregano (currency)
+      ctx.strokeStyle = '#2f6a2a'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.lineTo(x, y - 6); ctx.stroke();
+      ctx.fillStyle = '#5ea83c'; for (let i = -2; i <= 2; i++) { const ly = y - i * 2.4, side = i % 2 ? 1 : -1; ctx.beginPath(); ctx.ellipse(x + side * 3.5, ly, 3, 1.7, side * 0.6, 0, TAU); ctx.fill(); }
+      ctx.fillStyle = '#8ed86a'; ctx.beginPath(); ctx.arc(x, y - 6, 1.6, 0, TAU); ctx.fill();
+    } else if (this.kind === 'potion') {                 // blue magic potion (power buff)
+      const g2 = 0.6 + 0.4 * Math.sin(this.t * 5);
+      ctx.fillStyle = `rgba(90,170,255,${0.35})`; ctx.beginPath(); ctx.arc(x, y, 11, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#2a3a5a'; ctx.fillRect(x - 4, y - 9, 8, 4);                 // cork/neck
+      ctx.fillStyle = '#6a4a2a'; ctx.fillRect(x - 2.5, y - 12, 5, 3);
+      ctx.fillStyle = '#1e3a6a'; ctx.beginPath(); ctx.ellipse(x, y + 1, 7, 8, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = `rgba(90,180,255,${0.8})`; ctx.beginPath(); ctx.ellipse(x, y + 2, 5.5, 6, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = `rgba(200,235,255,${g2})`; ctx.beginPath(); ctx.arc(x - 2, y, 1.8, 0, TAU); ctx.fill();
+    } else if (this.kind === 'token') {                  // "Rei do Picadão" hexagonal pizza box
+      ctx.save(); ctx.translate(x, y); ctx.rotate(Math.sin(this.t * 1.5) * 0.15);
+      ctx.fillStyle = '#b5642a'; ctx.beginPath();
+      for (let i = 0; i < 6; i++) { const a = i / 6 * TAU - Math.PI / 2, r = 11; const px = Math.cos(a) * r, py = Math.sin(a) * r; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#7a3e16'; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.fillStyle = '#e8b94a'; ctx.font = 'bold 9px "Trebuchet MS"'; ctx.textAlign = 'center'; ctx.fillText('♛', 0, 3.5);
+      ctx.restore(); ctx.textAlign = 'left';
     } else if (this.kind === 'life') {
       const s = 1 + Math.sin(this.t * 5) * 0.08;
       ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
       ctx.fillStyle = '#15110e'; ctx.fillRect(-7, -3, 14, 5); ctx.fillRect(-3, -7, 6, 13);
       ctx.fillStyle = '#ff5b6e'; ctx.fillRect(-6, -2, 12, 4); ctx.fillRect(-2, -6, 4, 12);
       ctx.fillStyle = '#ffd0d6'; ctx.fillRect(-4, -1, 3, 2); ctx.restore();
-    } else {
-      ctx.fillStyle = '#15110e'; ctx.fillRect(x - 7, -3 + y, 14, 5); ctx.fillRect(x - 3, y - 7, 6, 13);
+    } else {                                             // health cross
+      ctx.fillStyle = '#15110e'; ctx.fillRect(x - 7, y - 3, 14, 5); ctx.fillRect(x - 3, y - 7, 6, 13);
       ctx.fillStyle = '#7be08a'; ctx.fillRect(x - 6, y - 2, 12, 4); ctx.fillRect(x - 2, y - 6, 4, 12);
       ctx.fillStyle = '#fff'; ctx.fillRect(x - 5, y - 1, 10, 2); ctx.fillRect(x - 1, y - 5, 2, 10);
     }

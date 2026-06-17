@@ -28,6 +28,13 @@ const TEX = {
 
   _paint(g, id, T, v) {
     const m = MAT[id]; const rng = this._rng(id * 97 + v * 31 + 7);
+    if (m.ladder) {   // transparent ladder: two rails + rungs
+      const x0 = 6, x1 = T - 6;
+      g.fillStyle = '#3a2814'; g.fillRect(x0 - 2, 0, 4, T); g.fillRect(x1 - 2, 0, 4, T);
+      g.fillStyle = m.c; g.fillRect(x0 - 2, 0, 2, T); g.fillRect(x1 - 2, 0, 2, T);
+      for (let y = 3; y < T; y += 7) { g.fillStyle = '#3a2814'; g.fillRect(x0, y, x1 - x0, 4); g.fillStyle = m.edge; g.fillRect(x0, y, x1 - x0, 2); }
+      return;
+    }
     g.fillStyle = m.c; g.fillRect(0, 0, T, T);
     const speck = (n, dark, lite) => {
       for (let i = 0; i < n; i++) {
@@ -121,6 +128,15 @@ const TEX = {
         g.fillStyle = '#caa33a'; g.fillRect(T / 2 - 1, 0, 2, 5); // fuse
         break;
       }
+      case 'rocket': {     // red rocket-barrel with a warhead nose + fins
+        g.fillStyle = '#2a1410'; g.fillRect(0, 0, T, T);
+        g.fillStyle = '#9a2a22'; g.fillRect(4, 2, T - 8, T - 4);
+        g.fillStyle = '#b1322c'; g.fillRect(6, 2, T - 14, T - 4);
+        g.fillStyle = '#e0843a'; g.beginPath(); g.moveTo(T - 6, 3); g.lineTo(T - 1, T / 2); g.lineTo(T - 6, T - 3); g.closePath(); g.fill(); // nose
+        g.fillStyle = '#2c2622'; g.fillRect(3, 5, T - 6, 2); g.fillRect(3, T - 7, T - 6, 2);
+        g.fillStyle = '#1b1714'; g.beginPath(); g.moveTo(3, 4); g.lineTo(0, 1); g.lineTo(4, 9); g.fill(); g.beginPath(); g.moveTo(3, T - 4); g.lineTo(0, T - 1); g.lineTo(4, T - 9); g.fill(); // fins
+        g.fillStyle = '#ffd86b'; g.fillRect(2, T / 2 - 1, 3, 2); break;
+      }
       case 'vault': {
         g.fillStyle = '#7a5e1a'; g.fillRect(0, 0, T, T);
         g.fillStyle = '#caa33a'; g.fillRect(2, 2, T - 4, T - 4);
@@ -203,6 +219,24 @@ const TEX = {
       case 'grass': {
         ctx.strokeStyle = '#4a7a3a'; ctx.lineWidth = 2;
         for (let k = 0; k < 4; k++) { const gx = x + 4 + k * 7, sway = Math.sin(time * 2 + gx) * 2; ctx.beginPath(); ctx.moveTo(gx, y + T); ctx.quadraticCurveTo(gx + sway, y + T - 8, gx + sway * 2, y + T - 14); ctx.stroke(); }
+        break;
+      }
+      case 'bars': {   // prison cell iron bars
+        ctx.fillStyle = '#2a2c30'; ctx.fillRect(x, y - 1, T, 3); ctx.fillRect(x, y + T - 2, T, 3);
+        for (let k = 3; k < T; k += 6) { ctx.fillStyle = '#3a3e44'; ctx.fillRect(x + k, y, 3, T); ctx.fillStyle = '#565c64'; ctx.fillRect(x + k, y, 1, T); }
+        break;
+      }
+      case 'rack': {   // arsenal weapon rack
+        ctx.fillStyle = '#3a2a18'; ctx.fillRect(x + 2, y + 2, T - 4, T - 4);
+        ctx.fillStyle = '#5a4226'; ctx.fillRect(x + 3, y + 3, T - 6, 3); ctx.fillRect(x + 3, y + T - 8, T - 6, 3);
+        ctx.strokeStyle = '#9aa2ae'; ctx.lineWidth = 2;
+        for (let k = 0; k < 3; k++) { const sx = x + 7 + k * 7; ctx.beginPath(); ctx.moveTo(sx, y + T - 6); ctx.lineTo(sx + 2, y + 6); ctx.stroke(); ctx.fillStyle = '#cfd2d6'; ctx.beginPath(); ctx.moveTo(sx + 2, y + 6); ctx.lineTo(sx - 1, y + 2); ctx.lineTo(sx + 5, y + 4); ctx.fill(); }
+        break;
+      }
+      case 'crate': {  // supply crate
+        ctx.fillStyle = '#5a4226'; ctx.fillRect(x + 2, y + 4, T - 4, T - 5);
+        ctx.fillStyle = '#3a2a18'; ctx.fillRect(x + 2, y + 4, T - 4, 2); ctx.fillRect(x + 2, y + T - 3, T - 4, 2);
+        ctx.strokeStyle = '#3a2a18'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + 3, y + 5); ctx.lineTo(x + T - 3, y + T - 2); ctx.moveTo(x + T - 3, y + 5); ctx.lineTo(x + 3, y + T - 2); ctx.stroke();
         break;
       }
     }

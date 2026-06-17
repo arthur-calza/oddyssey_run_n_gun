@@ -1,6 +1,12 @@
-# PÓLVORA & AÇO — Cruzada de Ferro e Fogo
+# ODDYSSEY CHRONICLES — Crônicas de Ferro e Sangue
 
-Run-and-gun 2D destrutivo, inspirado na sensação de *Broforce*, em um **mundo dark-fantasy medieval com pólvora**. Feito em **HTML5 Canvas + JavaScript puro**, sem build e sem dependências. Roda a **1280×720 com zoom 1.7×**, usando a **arte dos concepts como sprites** (processados em `assets/`), texturas de bloco e fundos em parallax por bioma.
+Run-and-gun 2D destrutivo e frenético, inspirado em *Broforce*, num **mundo medieval-fantasia sombrio e adulto**. Feito em **HTML5 Canvas + JavaScript puro**, sem build e sem dependências (duplo-clique em `index.html`). Roda a **1280×720 com zoom 1.7×**.
+
+## Progressão (salva na memória — `localStorage`)
+- **Orégano 🌿** é a moeda: colete nas fases e ao **completar** uma fase ele é **acumulado no perfil**.
+- **Loja do Mercador** (menu): gaste orégano em **perks permanentes** (vida extra, vigor, bandoleira, saqueador).
+- **Tokens "Rei do Picadão" ⬡** — artefatos colecionáveis (caixa de pizza hexagonal) que se **acumulam no menu** para recompensas futuras.
+- **Poções mágicas azuis ⚗** — *power-up* temporário que turbina o ataque-base (Ragnarok → bala explosiva; Zracks → orbe de veneno).
 
 ## Como jogar
 
@@ -16,6 +22,8 @@ Basta **abrir `index.html` no navegador** (duplo-clique). Não precisa de Node, 
 | Mira | **Mouse** |
 | Atirar | Botão esquerdo / `J` |
 | Especial | Botão direito / `K` |
+| Subir/descer ESCADAS · escalar PAREDES | `W` / `S` (segure) |
+| Wall-jump | Pular encostado na parede |
 | Trocar de herói | `Q` / `E` |
 | Pausar | `P` / `Esc` |
 
@@ -29,8 +37,11 @@ Basta **abrir `index.html` no navegador** (duplo-clique). Não precisa de Node, 
 - **Fases verticais e exploráveis**: terreno ondulado com colinas e vales (sempre transponível por *auto-step*), **rotas elevadas** com recompensas e **descidas** com tesouros.
 - **Moedas** espalhadas e largadas por inimigos/baús: a cada **50 moedas você ganha 1 vida**; há também **corações de 1-up** escondidos nas alturas.
 - **Barris de pólvora** que detonam em **reação em cadeia**.
-- **Bestiário monstruoso** (baseado nos concepts) com IA: **zumbi** (mosquete), **lobisomem** (rápido, saltador), **homem-dragão** (rifle preciso), **demônio** (canhão, mini-chefe) e o **Devorador de Mentes** (chefe — orbes arcanos + invoca servos).
-- **Sprites animados quadro-a-quadro** (`sprites.js`): corpo desenhado por partes com **formas arredondadas e sombreamento** (cabeças ovais, membros afunilados, contorno escuro), em maior resolução. A corrida é **travada ao passo** (`runDist`), então a velocidade das pernas casa com o deslocamento (sem o "pisca-pisca" anterior). Spritesheets de idle/corrida/pulo/queda/dano/**morte**. O **braço+arma fica na altura do peito/mãos** (`gunAnchor`), com mira em 360° e recuo. Concepts (`assets/`) viram o **retrato do HUD**.
+- **Mobilidade vertical (Broforce-like)**: **escadas** (suba/desça), **escalada de paredes** (gruda, sobe e *wall-jump*) e *auto-step*. Abrem caminhos por cima, por baixo e por dentro das construções.
+- **Fases funcionais e temáticas** (6 + fase de testes): cada trecho é um lugar de verdade — **portão/quartel**, **bloco de celas (prisão)**, **arsenal** (pólvora e foguetes), **catacumbas**. Cada fase **começa numa falésia** e tem **vários caminhos** (terraças por cima, chão, valas/túneis por baixo, prédios por dentro). Duas fases novas focam essas mecânicas: **A Prisão de Pedra** e **O Arsenal**.
+- **Tiroteio frenético**: **barris de pólvora** (reação em cadeia) e **barris-foguete 🚀** (lançam um foguete teleguiado ao serem destruídos), blocos que **desabam**, e muitos inimigos.
+- **Bestiário** com IA: **zumbi** (mosquete), **lobisomem**, **lobo** e **lobo-gigante** (feras rápidas), **homem-dragão** (rifle), **demônio** (canhão, mini-chefe) e o **Devorador de Mentes** (chefe).
+- **Personagens em cut-out da arte dos concepts** (`rig.js`): a arte detalhada do concept (tronco + cabeça + braços + arma) é fatiada (`tools/build_parts.py` → `assets/parts/` + `js/rigdata.js`) e desenhada como peça única, **posada** por estado (balanço, inclinação para mirar, recuo do tiro, tombo na morte), enquanto **duas pernas blindadas casadas à armadura** oscilam do quadril (corrida **travada ao passo** via `runDist`). Resultado: o realismo "ameaçador" da concept art **com** animação. Fallback procedural (`sprites.js`) até a arte carregar; concepts inteiros viram o **retrato do HUD**.
 - **Fase de testes** (botão 🛠 no menu): corrida longa, plataformas, pulos e quedas para avaliar/calibrar as animações.
 - **Rastro de destruição persistente**: mortes geram fartas partículas de **sangue e ossos** que ficam no chão (*decals*); explosões deixam **marcas de queimadura** — o cenário muda visivelmente conforme você avança.
 - **Fundos em parallax por bioma** (castelo, vila, masmorra, campo de guerra) com lua, estrelas, nuvens, névoa, vaga-lumes e relâmpagos; **decoração** de tochas, estandartes, janelas, pilares, vinhas, teias e grama.
@@ -45,8 +56,10 @@ Basta **abrir `index.html` no navegador** (duplo-clique). Não precisa de Node, 
 | `audio.js` | SFX procedurais via WebAudio (sem arquivos) |
 | `textures.js` | **texturas de bloco pré-renderizadas** (offscreen) + arte de decoração |
 | `background.js` | **fundos em parallax por bioma** (castelo/vila/masmorra/campo/floresta) |
-| `sprites.js` | **animador de sprites quadro-a-quadro** (corpo por partes, contorno) + braço-arma no peito (`gunAnchor`) |
-| `tools/build_assets.py` | pipeline (Python/Pillow): recorta o fundo dos concepts → `assets/` (retratos do HUD) |
+| `rig.js` + `rigdata.js` | **cut-out da concept art**: topo detalhado posado + pernas blindadas animadas (os personagens em jogo) |
+| `sprites.js` | renderizador procedural de *fallback* + paletas/`gunAnchor` |
+| `tools/build_assets.py` | Python/Pillow: chroma-key dos concepts → `assets/` (retratos do HUD) |
+| `tools/build_parts.py` | Python/Pillow: fatia os assets em partes do rig → `assets/parts/` + `js/rigdata.js` |
 | `world.js` | **tilemap destrutível**, física/colisão (auto-step), explosões, desabamento |
 | `particles.js` | partículas, detritos, **decals persistentes** (sangue/ossos/queimadura), golpes, magia, raios |
 | `entities.js` | `Entity`, `Bullet`, **`Player`**, `Pickup` |

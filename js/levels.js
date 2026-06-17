@@ -1,13 +1,16 @@
 /* ============================================================
-   levels.js — large, vertical, explorable campaign maps
-   The rolling ground at the bottom is the guaranteed path to the
-   exit (±1 tile/col, always walkable). Above it, multi-tier
-   fortress floors, towers and climbs fill the (3x taller) space
-   with optional exploration: enemies, coins and 1-ups.
+   levels.js — Oddyssey Chronicles campaign: functional, themed,
+   Broforce-style levels. Each stretch reads as a real place —
+   gatehouse, barracks, PRISON cell-blocks, ARSENAL, catacombs —
+   linked by ladders, climbable walls and trenches. The continuous
+   ground is the guaranteed route to the exit; buildings, ladders
+   and tunnels are the explorable verticality.
 
-   Legend: terrain # D B = ~ X $ C S m   A sand(falls) R gravel(falls)
-           decor t L N I V Y G   coin o   life H
-           enemies z zombie w werewolf r dragonman d demon  O boss
+   Legend: terrain # D B = ~ C S m  X barril K foguete $ tesouro
+           A sand R gravel  h ESCADA(climb)
+           decor t L N I V Y G  J grades(prisão)  U rack(arsenal)  M caixa
+           oregano o  potion Q  token T  life H
+           enemies z zombie w werewolf f wolf F direwolf r dragonman d demon O boss
            P start  E exit
    ============================================================ */
 
@@ -22,9 +25,9 @@ const LEVELS = (function () {
   const toRows = g => g.map(a => a.join(''));
 
   function rollingGround(g, W, H, matFn, amp, seed, pits) {
-    const top = new Array(W), rng = mul(seed); let gr = H - 9, target = gr;
+    const top = new Array(W), rng = mul(seed); let gr = H - 12, target = gr;
     for (let c = 0; c < W; c++) {
-      if (c % 5 === 0) target = Math.max(H - 16, Math.min(H - 4, Math.round((H - 9) - (Math.sin(c * 0.05 + seed) * amp + Math.sin(c * 0.13) * amp * 0.5 + (rng() * 2 - 1) * 1.2))));
+      if (c % 6 === 0) target = Math.max(H - 18, Math.min(H - 7, Math.round((H - 12) - (Math.sin(c * 0.045 + seed) * amp + Math.sin(c * 0.12) * amp * 0.5 + (rng() * 2 - 1) * 1.1))));
       if (gr < target) gr++; else if (gr > target) gr--;
       top[c] = gr;
       for (let r = gr; r < H - 2; r++) put(g, c, r, matFn(r - gr));
@@ -34,201 +37,204 @@ const LEVELS = (function () {
     return top;
   }
   function platform(g, c, r, w, mat) { hline(g, r, c, c + w - 1, mat); }
-  // a solid fortress floor (2 thick) with optional battlements / torches
-  function terrace(g, c0, w, r, mat, o) {
-    o = o || {}; hline(g, r, c0, c0 + w - 1, mat); hline(g, r + 1, c0, c0 + w - 1, mat);
-    if (o.batt) for (let i = 0; i < w; i += 3) put(g, c0 + i, r - 1, mat);
-    if (o.torch) { put(g, c0 + 2, r - 1, 't'); put(g, c0 + w - 3, r - 1, 't'); }
-    if (o.window) put(g, c0 + (w >> 1), r - 2, 'N');
-    if (o.banner) put(g, c0 + (w >> 1) - 4, r - 1, 'L');
-  }
-  // a climbable zig-zag of platforms from fromR up to toR
-  function climb(g, c, fromR, toR, mat, dir) {
-    dir = dir || 1; let r = fromR, x = c;
-    while (r > toR) { platform(g, x, r, 5, mat); x += dir * 4; r -= 3; }
-    return { x, r };
-  }
-  function tower(g, c, baseR, topR, mat, o) {
-    o = o || {}; const w = o.w || 4;
-    rect(g, c, topR, w, (baseR - 3) - topR, mat);
-    for (let i = 0; i < w; i += 2) put(g, c + i, topR - 1, mat);
-    if (o.window) { put(g, c + (w >> 1), topR + 3, 'N'); put(g, c + (w >> 1), topR + 9, 'N'); }
-    if (o.banner) put(g, c + (w >> 1), topR + 1, 'L');
-    if (o.torch) { put(g, c - 1, baseR - 5, 't'); put(g, c + w, baseR - 5, 't'); }
-  }
-  function sandColumn(g, c, baseR, h, mat) { for (let i = 1; i <= h; i++) put(g, c, baseR - i, mat); }
+  function ladder(g, c, r0, r1) { for (let r = r0; r <= r1; r++) put(g, c, r, 'h'); }
+  function climb(g, c, fromR, toR, mat, dir) { dir = dir || 1; let r = fromR, x = c; while (r > toR) { platform(g, x, r, 5, mat); x += dir * 4; r -= 3; } }
+  function startCliff(g, S, mat) { const r = S(8) - 8; rect(g, 0, r, 13, 2, mat); for (let i = 0; i < 13; i += 3) put(g, i, r - 1, mat); put(g, 2, r - 1, 't'); ladder(g, 6, r + 1, S(6) - 1); return r; }
   const coinAt = (g, c, r) => air(g, c, r, 'o');
   function coinLine(g, r, c0, c1, step) { for (let c = c0; c <= c1; c += (step || 1)) coinAt(g, c, r); }
-  function coinArc(g, cx, baseR, span, hgt) { for (let i = -span; i <= span; i++) { const r = baseR - Math.round(hgt * (1 - (i / span) * (i / span))); coinAt(g, cx + i, r); } }
-  function sandBridge(g, c0, w, r, sandH, mat) { hline(g, r, c0, c0 + w - 1, '='); for (let i = 0; i < sandH; i++) hline(g, r - 1 - i, c0, c0 + w - 1, mat || 'A'); }
+  function barrels(g, S, cols, ch) { cols.forEach(c => { put(g, c, S(c) - 1, ch || 'X'); put(g, c + 1, S(c) - 1, ch || 'X'); }); }
   const enemies = (g, S, cols, ch) => cols.forEach(c => put(g, c, S(c) - 1, ch));
   const enemiesAt = (g, cols, r, ch) => cols.forEach(c => put(g, c, r, ch));
 
-  const TIERS = H => [H - 24, H - 44, H - 64];  // three fortress floors up the height
-
-  // ---------- LEVEL 1 — castle (sky fortress) -----------------
-  function lvl1() {
-    const W = 336, H = 90, g = blank(W, H);
-    const top = rollingGround(g, W, H, d => d < 2 ? 'D' : (d < 8 ? 'D' : '#'), 7, 3, [[120, 2], [212, 2], [288, 3]]);
-    const S = c => top[c], T = TIERS(H);
-    // big towers spanning ground to the sky
-    [40, 110, 196, 268, 320].forEach((c, i) => tower(g, c, S(c), T[2] - 6, 'B', { w: 5, window: true, banner: i % 2 === 0, torch: true }));
-    // tier floors (battlements) + connecting climbs from the ground
-    terrace(g, 24, 40, T[0], 'B', { batt: true, torch: true, window: true });
-    terrace(g, 150, 60, T[0], 'B', { batt: true, torch: true, banner: true });
-    terrace(g, 250, 60, T[0], 'B', { batt: true, torch: true });
-    terrace(g, 60, 50, T[1], '#', { batt: true, torch: true, banner: true });
-    terrace(g, 190, 70, T[1], '#', { batt: true, torch: true, window: true });
-    terrace(g, 110, 60, T[2], 'B', { batt: true, torch: true, window: true });
-    climb(g, 14, S(14) - 4, T[0] + 1, '=', 1); climb(g, 70, T[0] - 2, T[1] + 1, '=', 1);
-    climb(g, 150, T[1] - 2, T[2] + 1, '=', 1); climb(g, 232, S(232) - 4, T[0] + 1, '=', -1);
-    climb(g, 270, T[0] - 2, T[1] + 1, '=', -1);
-    // collapsing sand + bridges over pits
-    sandColumn(g, 100, S(100), 2, 'A'); sandColumn(g, 101, S(101), 2, 'A');
-    sandBridge(g, 120, 2, S(120) - 5, 3, 'A'); coinLine(g, S(120) - 9, 120, 121);
-    sandBridge(g, 212, 2, S(212) - 5, 3, 'A');
-    // loot: coins along ground + tiers, 1-ups high
-    for (let c = 6; c < W - 6; c += 5) coinAt(g, c, top[c] - 2);
-    coinLine(g, T[0] - 2, 26, 60); coinLine(g, T[0] - 2, 152, 205); coinLine(g, T[1] - 2, 62, 105);
-    coinLine(g, T[2] - 2, 114, 165); put(g, 138, T[2] - 2, 'H'); put(g, 86, T[1] - 2, 'H');
-    [50, 130, 230, 300].forEach(c => { put(g, c, S(c) - 1, 'X'); put(g, c + 1, S(c) - 1, 'X'); });
-    put(g, 308, S(308) - 1, '$'); put(g, 309, S(309) - 1, '$'); put(g, 140, T[2] - 2, '$');
-    for (let c = 3; c < W - 3; c += 6) air(g, c, top[c] - 1, 'G');
-    put(g, 3, S(3) - 1, 'P'); put(g, W - 5, S(W - 5) - 1, 'E');
-    // enemies — ground + tiers
-    enemies(g, S, [16, 34, 56, 96, 132, 168, 184, 224, 256, 296, 318], 'z');
-    enemies(g, S, [78, 144, 240, 284], 'w');
-    enemies(g, S, [62, 176, 260], 'r');
-    enemiesAt(g, [30, 48, 160, 180, 200], T[0] - 1, 'z'); enemiesAt(g, [40, 170], T[0] - 1, 'w');
-    enemiesAt(g, [70, 90, 210, 240], T[1] - 1, 'w'); enemiesAt(g, [200], T[1] - 1, 'r');
-    enemiesAt(g, [120, 140, 160], T[2] - 1, 'z'); enemiesAt(g, [150], T[2] - 1, 'd');
-    return { name: 'MURALHAS DE FERRO', sub: 'Escale a fortaleza infestada até a saída.', win: 'exit', biome: 'castle', sky: ['#3a4a6e', '#15182a'], bannerColor: '#8a2b2b', rows: toRows(g) };
+  // a multi-floor building you climb with the inner ladder; floors hold themed
+  // content. Open at ground level so the walking route passes straight through.
+  function building(g, S, c0, w, floors, fh, mat, content, o) {
+    o = o || {}; const baseR = S(c0), lc = c0 + 1, topR = baseR - floors * fh;
+    vline(g, c0, topR, baseR - 3, mat); vline(g, c0 + w - 1, topR, baseR - 3, mat);     // overhead side walls
+    hline(g, topR, c0, c0 + w - 1, mat); for (let i = 0; i < w; i += 3) put(g, c0 + i, topR - 1, mat); // roof + battlements
+    for (let f = 1; f <= floors; f++) {
+      const fr = baseR - f * fh;
+      hline(g, fr, c0, c0 + w - 1, mat); hline(g, fr + 1, c0, c0 + w - 1, mat);
+      put(g, lc, fr, '.'); put(g, lc, fr + 1, '.');                                     // ladder hole
+      put(g, c0 + (w >> 1), fr - 2, 'N');
+      if (content) content(g, fr, f, c0, w, lc);
+    }
+    ladder(g, lc, topR + 1, baseR - 1);
+    if (o.banner) put(g, c0 + (w >> 1) - 2, topR + 1, 'L');
+    put(g, c0 + 2, baseR - 4, 't');
+  }
+  // prison content: barred cells with a reward locked inside
+  const prison = loot => (g, fr, f, c0, w, lc) => {
+    for (let c = c0 + 2; c < c0 + w - 1; c++) if (c !== lc && c !== lc + 1) put(g, c, fr - 2, 'J');
+    put(g, c0 + 3, fr - 1, f === 1 ? 'T' : (f % 2 ? 'Q' : loot || 'o'));
+    coinAt(g, c0 + w - 3, fr - 1);
+  };
+  // arsenal content: racks + powder & rocket barrels
+  const arsenal = (g, fr, f, c0, w, lc) => {
+    put(g, c0 + 3, fr - 1, 'U'); put(g, c0 + w - 3, fr - 1, 'U');
+    put(g, c0 + 4, fr - 1, f % 2 ? 'X' : 'K'); put(g, c0 + w - 4, fr - 1, f % 2 ? 'K' : 'X');
+    put(g, c0 + (w >> 1) + 1, fr - 1, 'M');
+  };
+  // barracks content: guards + crates
+  const barracks = mob => (g, fr, f, c0, w, lc) => {
+    enemiesAt(g, [c0 + 3, c0 + w - 3], fr - 1, mob || 'z'); put(g, c0 + (w >> 1) + 1, fr - 1, 'M');
+    if (f === 1) put(g, c0 + w - 4, fr - 1, 'X');
+  };
+  // ramped trench / catacomb passage (always walkable; terraces above are the high road)
+  function tunnel(g, S, c0, c1, mat, loot) {
+    const depth = 5, bottom = Math.min(g.length - 4, Math.max(S(c0), S(c1)) + depth);
+    for (let c = c0; c <= c1; c++) { let wh = (c <= c0 + depth) ? S(c0) + (c - c0) : (c >= c1 - depth) ? S(c1) + (c1 - c) : bottom; if (wh > bottom) wh = bottom; for (let r = S(c); r < wh; r++) put(g, c, r, '.'); }
+    if (loot) put(g, (c0 + c1) >> 1, bottom - 1, loot);
+    for (let c = c0 + depth + 1; c < c1 - depth; c += 3) coinAt(g, c, bottom - 1);
+  }
+  // a tall wall with a 2-tile doorway at the bottom: walk under it OR jump into
+  // the doorway and WALL-CLIMB up its face to reach the high route/loot on top.
+  function climbWall(g, S, c, h, mat, loot) {
+    const baseR = S(c);
+    vline(g, c, baseR - h, baseR - 3, mat); vline(g, c + 1, baseR - h, baseR - 3, mat);
+    hline(g, baseR - h - 1, c - 1, c + 2, mat);             // a small ledge on top
+    if (loot) put(g, c, baseR - h - 2, loot); coinAt(g, c + 1, baseR - h - 2);
   }
 
-  // ---------- LEVEL 2 — village (tiered rooftops) -------------
-  function lvl2() {
-    const W = 368, H = 90, g = blank(W, H);
-    const top = rollingGround(g, W, H, d => d < 2 ? 'D' : 'S', 8, 7, [[150, 2], [250, 2]]);
-    const S = c => top[c], T = TIERS(H);
-    // houses along the ground
-    for (let c = 16; c < W - 20; c += 34) { rect(g, c, S(c) - 8, 9, 3, 'S'); hline(g, S(c) - 9, c, c + 8, '='); put(g, c + 4, S(c) - 7, 'N'); put(g, c + 2, S(c) - 10, 't'); if ((c / 34 | 0) % 2) put(g, c + 4, S(c) - 10, 'L'); }
-    // tiered terraces (market galleries) + climbs
-    terrace(g, 40, 70, T[0], 'S', { torch: true, banner: true });
-    terrace(g, 180, 80, T[0], 'S', { torch: true, window: true });
-    terrace(g, 90, 90, T[1], 'S', { torch: true, window: true });
-    terrace(g, 240, 70, T[1], '#', { torch: true });
-    terrace(g, 150, 70, T[2], 'S', { torch: true, banner: true });
-    climb(g, 20, S(20) - 4, T[0] + 1, '=', 1); climb(g, 110, T[0] - 2, T[1] + 1, '=', 1);
-    climb(g, 180, T[1] - 2, T[2] + 1, '=', 1); climb(g, 300, S(300) - 4, T[0] + 1, '=', -1);
-    sandColumn(g, 70, S(70), 2, 'A'); sandColumn(g, 71, S(71), 2, 'A');
-    sandColumn(g, 200, S(200), 2, 'R'); sandColumn(g, 201, S(201), 2, 'R');
-    sandBridge(g, 150, 2, S(150) - 5, 3, 'A'); sandBridge(g, 250, 2, S(250) - 5, 3, 'R');
-    for (let c = 6; c < W - 6; c += 5) coinAt(g, c, top[c] - 2);
-    coinLine(g, T[0] - 2, 42, 105); coinLine(g, T[1] - 2, 92, 175); coinLine(g, T[2] - 2, 152, 215);
-    put(g, 188, T[2] - 2, 'H'); put(g, 130, T[1] - 2, 'H');
-    [30, 100, 200, 280, 340].forEach(c => { put(g, c, S(c) - 1, 'X'); put(g, c + 1, S(c) - 1, 'X'); });
-    [10, 160, 300].forEach(c => put(g, c, S(c) - 1, 'V'));
-    put(g, 350, S(350) - 1, '$'); put(g, 351, S(351) - 1, '$'); put(g, 190, T[2] - 2, '$');
-    for (let c = 3; c < W - 3; c += 6) air(g, c, top[c] - 1, 'G');
-    put(g, 3, S(3) - 1, 'P'); put(g, W - 5, S(W - 5) - 1, 'E');
-    enemies(g, S, [14, 28, 58, 96, 132, 168, 196, 224, 268, 312, 348], 'z');
-    enemies(g, S, [44, 120, 188, 256, 320], 'w');
-    enemies(g, S, [80, 210, 290], 'r');
-    enemiesAt(g, [50, 70, 200, 230], T[0] - 1, 'z'); enemiesAt(g, [60, 220], T[0] - 1, 'w');
-    enemiesAt(g, [100, 130, 250, 280], T[1] - 1, 'w'); enemiesAt(g, [120], T[1] - 1, 'r');
-    enemiesAt(g, [160, 190, 210], T[2] - 1, 'z'); enemiesAt(g, [180], T[2] - 1, 'd');
-    return { name: 'VILA DOS LAMENTOS', sub: 'Suba pelos telhados tomados pelos mortos.', win: 'exit', biome: 'village', sky: ['#5a4a3a', '#1a1410'], bannerColor: '#7a2a4a', rows: toRows(g) };
+  function grnd(g, S) { for (let c = 6; c < g[0].length - 6; c += 5) coinAt(g, c, S(c) - 2); for (let c = 3; c < g[0].length - 3; c += 7) air(g, c, S(c) - 1, 'G'); }
+
+  // ===================== CAMPAIGN ============================
+  function lvl1() { // castle base: gatehouse → barracks → armory → ramparts
+    const W = 360, H = 92, g = blank(W, H);
+    const top = rollingGround(g, W, H, d => d < 2 ? 'D' : (d < 8 ? 'D' : '#'), 6, 3, [[150, 2], [256, 2]]);
+    const S = c => top[c]; const startR = startCliff(g, S, 'B');
+    building(g, S, 40, 13, 3, 5, 'B', barracks('z'), { banner: true });   // barracks
+    building(g, S, 120, 14, 3, 5, 'B', prison('Q'), { banner: true });    // prison block
+    building(g, S, 230, 14, 4, 5, 'B', arsenal, { banner: true });        // armory (explosive!)
+    climbWall(g, S, 200, 16, 'B'); climbWall(g, S, 312, 18, 'B');
+    tunnel(g, S, 90, 116, 'D', 'T');
+    barrels(g, S, [70, 180, 300], 'X'); barrels(g, S, [100, 210, 330], 'K');
+    grnd(g, S); put(g, 86, S(86) - 1, 'H'); put(g, 305, S(305) - 6, 'Q');
+    put(g, 4, startR - 1, 'P'); put(g, W - 5, S(W - 5) - 1, 'E');
+    enemies(g, S, [34, 70, 108, 168, 224, 296, 330], 'z'); enemies(g, S, [56, 144, 260], 'w');
+    enemies(g, S, [88, 188, 280], 'f'); enemies(g, S, [200], 'r'); put(g, 250, S(250) - 1, 'F');
+    return { name: 'PORTÃO DE FERRO', sub: 'Tome a base: quartel, prisão e arsenal. Suba pelas escadas e muralhas.', win: 'exit', biome: 'castle', sky: ['#1e2740', '#080a14'], bannerColor: '#6a1a1a', rows: toRows(g) };
   }
 
-  // ---------- LEVEL 3 — dungeon (deep shafts) ----------------
-  function lvl3() {
-    const W = 352, H = 90, g = blank(W, H);
-    const top = rollingGround(g, W, H, d => d < 1 ? 'C' : (d % 4 === 3 ? 'm' : 'C'), 8, 13, [[110, 2], [220, 2], [300, 2]]);
-    const S = c => top[c], T = TIERS(H);
+  function lvl2() { // village: houses → ransacked prison → cellars
+    const W = 372, H = 92, g = blank(W, H);
+    const top = rollingGround(g, W, H, d => d < 2 ? 'D' : 'S', 7, 7, [[160, 2], [266, 2]]);
+    const S = c => top[c]; const startR = startCliff(g, S, 'S');
+    building(g, S, 36, 12, 2, 5, 'S', barracks('z'), {});
+    building(g, S, 96, 14, 3, 5, 'S', prison('o'), { banner: true });
+    building(g, S, 210, 13, 2, 5, 'S', barracks('w'), {});
+    building(g, S, 300, 14, 3, 5, 'S', arsenal, {});
+    climbWall(g, S, 150, 15, 'S'); climbWall(g, S, 256, 16, 'S');
+    tunnel(g, S, 130, 156, 'S', 'Q'); tunnel(g, S, 230, 260, 'S', 'T');
+    barrels(g, S, [60, 190, 340], 'X'); barrels(g, S, [120, 280], 'K');
+    grnd(g, S); put(g, 86, S(86) - 1, 'H'); put(g, 350, S(350) - 1, '$');
+    put(g, 4, startR - 1, 'P'); put(g, W - 5, S(W - 5) - 1, 'E');
+    enemies(g, S, [28, 70, 132, 196, 312, 348], 'z'); enemies(g, S, [120, 256], 'w');
+    enemies(g, S, [80, 190, 290], 'f'); enemies(g, S, [210], 'F'); enemies(g, S, [180, 320], 'r');
+    return { name: 'VILA DOS LAMENTOS', sub: 'Casas, a prisão saqueada e os porões — vários caminhos até a saída.', win: 'exit', biome: 'village', sky: ['#3a2e26', '#100a08'], bannerColor: '#5a1e34', rows: toRows(g) };
+  }
+
+  function lvl3() { // catacombs: descending tunnels, dungeon cells, climb shafts
+    const W = 356, H = 92, g = blank(W, H);
+    const top = rollingGround(g, W, H, d => d < 1 ? 'C' : (d % 4 === 3 ? 'm' : 'C'), 8, 13, [[120, 2], [300, 2]]);
+    const S = c => top[c]; const startR = startCliff(g, S, 'C');
     hline(g, 0, 0, W - 1, 'm'); hline(g, 1, 0, W - 1, 'm');
-    for (let c = 14; c < W - 10; c += 24) { vline(g, c, 2, 6, 'C'); air(g, c + 1, 7, 'Y'); put(g, c, S(c) - 4, 't'); }
-    terrace(g, 30, 70, T[0], 'C', { torch: true }); terrace(g, 200, 90, T[0], 'm', { torch: true, window: true });
-    terrace(g, 100, 90, T[1], 'C', { torch: true, window: true }); terrace(g, 250, 70, T[1], 'C', { torch: true });
-    terrace(g, 150, 80, T[2], 'm', { torch: true, banner: true });
-    climb(g, 18, S(18) - 4, T[0] + 1, 'C', 1); climb(g, 120, T[0] - 2, T[1] + 1, 'C', 1);
-    climb(g, 190, T[1] - 2, T[2] + 1, 'C', 1); climb(g, 290, S(290) - 4, T[0] + 1, 'C', -1);
-    sandColumn(g, 90, S(90), 2, 'R'); sandColumn(g, 91, S(91), 2, 'R');
-    sandBridge(g, 110, 2, S(110) - 5, 3, 'R'); sandBridge(g, 220, 2, S(220) - 5, 3, 'A');
-    for (let c = 6; c < W - 6; c += 5) coinAt(g, c, top[c] - 2);
-    coinLine(g, T[0] - 2, 32, 95); coinLine(g, T[1] - 2, 102, 185); coinLine(g, T[2] - 2, 152, 225);
-    put(g, 188, T[2] - 2, 'H'); put(g, 140, T[1] - 2, 'H');
-    [60, 160, 280].forEach(c => put(g, c, S(c) - 1, 'X'));
-    put(g, 320, S(320) - 1, '$'); put(g, 190, T[2] - 2, '$');
-    put(g, 3, S(3) - 1, 'P'); put(g, W - 5, S(W - 5) - 1, 'E');
-    enemies(g, S, [40, 70, 130, 170, 200, 240, 300, 330], 'z');
-    enemies(g, S, [22, 96, 150, 196, 264, 316], 'w');
-    enemies(g, S, [56, 190, 280], 'r');
-    enemiesAt(g, [50, 70, 220, 250], T[0] - 1, 'w'); enemiesAt(g, [40, 240], T[0] - 1, 'z');
-    enemiesAt(g, [110, 140, 260, 290], T[1] - 1, 'z'); enemiesAt(g, [130, 270], T[1] - 1, 'r');
-    enemiesAt(g, [160, 190, 210], T[2] - 1, 'w'); enemiesAt(g, [180], T[2] - 1, 'd');
-    put(g, 240, S(240) - 1, 'd');
-    return { name: 'CATACUMBAS PROFUNDAS', sub: 'Desça e suba pelas galerias. Cuidado com os demônios.', win: 'exit', biome: 'dungeon', sky: ['#1a1622', '#0a070e'], bannerColor: '#3a2a5a', rows: toRows(g) };
+    for (let c = 14; c < W - 10; c += 26) { vline(g, c, 2, 6, 'C'); air(g, c + 1, 7, 'Y'); }
+    building(g, S, 40, 14, 3, 5, 'C', prison('o'), {});       // dungeon cell-block
+    building(g, S, 200, 16, 4, 5, 'C', prison('Q'), { banner: true });
+    climbWall(g, S, 100, 18, 'C'); climbWall(g, S, 168, 18, 'C'); climbWall(g, S, 280, 20, 'C');
+    ladder(g, 110, S(110) - 18, S(110) - 1); ladder(g, 286, S(286) - 20, S(286) - 1);
+    tunnel(g, S, 130, 200, 'C', 'T'); tunnel(g, S, 260, 320, 'm', 'Q');
+    barrels(g, S, [60, 250], 'X'); barrels(g, S, [160, 300], 'K');
+    grnd(g, S); put(g, 86, S(86) - 1, 'H');
+    put(g, 4, startR - 1, 'P'); put(g, W - 5, S(W - 5) - 1, 'E');
+    enemies(g, S, [40, 130, 240, 330], 'z'); enemies(g, S, [22, 96, 264], 'w');
+    enemies(g, S, [70, 150, 290], 'f'); enemies(g, S, [320], 'F'); enemies(g, S, [56, 190, 280], 'r');
+    put(g, 100, S(100) - 1, 'd'); put(g, 240, S(240) - 1, 'd');
+    return { name: 'CATACUMBAS PROFUNDAS', sub: 'Desça pelos poços e escale as paredes. Blocos de celas e a matilha.', win: 'exit', biome: 'dungeon', sky: ['#14101c', '#060409'], bannerColor: '#2a1e44', rows: toRows(g) };
   }
 
-  // ---------- LEVEL 4 — battlefield & throne -----------------
-  function lvl4() {
-    const W = 420, H = 90, g = blank(W, H);
-    const top = rollingGround(g, W, H, d => d < 2 ? 'D' : 'B', 7, 21, [[150, 2], [270, 2], [350, 3]]);
-    const S = c => top[c], T = TIERS(H);
-    [40, 120, 220, 320].forEach((c, i) => tower(g, c, S(c), T[2] - 6, 'B', { w: 5, window: true, banner: true, torch: true }));
-    terrace(g, 24, 60, T[0], 'B', { batt: true, torch: true, banner: true });
-    terrace(g, 170, 80, T[0], 'B', { batt: true, torch: true, window: true });
-    terrace(g, 90, 70, T[1], '#', { batt: true, torch: true });
-    terrace(g, 240, 80, T[1], 'B', { batt: true, torch: true, window: true });
-    terrace(g, 150, 80, T[2], 'B', { batt: true, torch: true, banner: true });
-    climb(g, 14, S(14) - 4, T[0] + 1, '#', 1); climb(g, 110, T[0] - 2, T[1] + 1, '=', 1);
-    climb(g, 180, T[1] - 2, T[2] + 1, '#', 1); climb(g, 300, S(300) - 4, T[0] + 1, '#', -1);
-    sandColumn(g, 100, S(100), 2, 'R'); sandColumn(g, 101, S(101), 2, 'R');
-    sandBridge(g, 150, 2, S(150) - 5, 3, 'A'); sandBridge(g, 270, 2, S(270) - 5, 3, 'R');
-    for (let c = 6; c < W - 10; c += 5) coinAt(g, c, top[c] - 2);
-    coinLine(g, T[0] - 2, 26, 95); coinLine(g, T[1] - 2, 92, 175); coinLine(g, T[2] - 2, 152, 225);
-    put(g, 188, T[2] - 2, 'H'); put(g, 130, T[1] - 2, 'H');
-    // throne keep at the end
+  function lvl4() { // battlefield → arsenal → throne keep (BOSS)
+    const W = 420, H = 92, g = blank(W, H);
+    const top = rollingGround(g, W, H, d => d < 2 ? 'D' : 'B', 7, 21, [[150, 2], [270, 2]]);
+    const S = c => top[c]; const startR = startCliff(g, S, 'B');
+    building(g, S, 44, 13, 3, 5, 'B', barracks('r'), { banner: true });
+    building(g, S, 150, 16, 4, 5, 'B', arsenal, { banner: true });     // grand arsenal
+    building(g, S, 300, 14, 3, 5, 'B', prison('Q'), {});
+    climbWall(g, S, 110, 18, 'B'); climbWall(g, S, 250, 20, 'B');
+    tunnel(g, S, 200, 270, 'B', 'T');
+    barrels(g, S, [70, 230, 340], 'X'); barrels(g, S, [100, 200, 360], 'K');
+    grnd(g, S); put(g, 130, S(130) - 1, 'H');
     const kb = S(388);
-    rect(g, 380, kb - 14, 20, 3, 'B'); hline(g, kb - 15, 380, 399, 'B');
-    for (let i = 0; i < 20; i += 3) put(g, 380 + i, kb - 16, 'B');
-    vline(g, 399, kb - 14, kb - 1, 'B');
-    put(g, 384, kb - 13, 'N'); put(g, 394, kb - 13, 'N'); put(g, 389, kb - 14, 'L');
-    put(g, 379, kb - 4, 't'); put(g, 398, kb - 4, 't'); put(g, 397, kb - 2, '$'); put(g, 398, kb - 2, '$');
-    [60, 130, 230, 300].forEach(c => { put(g, c, S(c) - 1, 'X'); put(g, c + 1, S(c) - 1, 'X'); });
-    for (let c = 3; c < 376; c += 7) air(g, c, top[c] - 1, 'G');
-    put(g, 3, S(3) - 1, 'P'); put(g, 372, S(372) - 1, 'E');
-    enemies(g, S, [16, 40, 90, 130, 200, 260, 330], 'z');
-    enemies(g, S, [60, 110, 180, 240, 310], 'w');
-    enemies(g, S, [50, 140, 210, 290, 360], 'r');
-    enemiesAt(g, [40, 60, 180, 210], T[0] - 1, 'z'); enemiesAt(g, [50, 200], T[0] - 1, 'r');
-    enemiesAt(g, [100, 130, 260, 290], T[1] - 1, 'w'); enemiesAt(g, [120, 270], T[1] - 1, 'r');
-    enemiesAt(g, [160, 190, 210], T[2] - 1, 'z'); enemiesAt(g, [175], T[2] - 1, 'd');
-    put(g, 110, S(110) - 1, 'd'); put(g, 320, S(320) - 1, 'd');
-    put(g, 390, kb - 1, 'O');
-    return { name: 'O TRONO DO DEVORADOR', sub: 'Cruze o campo dilacerado e destrua o Devorador de Mentes.', win: 'boss', biome: 'battlefield', sky: ['#5a2018', '#160808'], bannerColor: '#6a1a1a', rows: toRows(g) };
+    rect(g, 380, kb - 16, 22, 3, 'B'); hline(g, kb - 17, 380, 401, 'B');
+    for (let i = 0; i < 22; i += 3) put(g, 380 + i, kb - 18, 'B');
+    vline(g, 401, kb - 16, kb - 1, 'B'); ladder(g, 382, kb - 15, kb - 1);
+    put(g, 384, kb - 13, 'N'); put(g, 394, kb - 13, 'N'); put(g, 389, kb - 16, 'L'); put(g, 397, kb - 2, '$');
+    put(g, 4, startR - 1, 'P'); put(g, 372, S(372) - 1, 'E');
+    enemies(g, S, [40, 90, 200, 260, 330], 'z'); enemies(g, S, [60, 180, 240, 310], 'w');
+    enemies(g, S, [50, 140, 210, 290, 360], 'r'); enemies(g, S, [110, 250], 'f'); enemies(g, S, [170, 300], 'F');
+    put(g, 110, S(110) - 1, 'd'); put(g, 320, S(320) - 1, 'd'); put(g, 390, kb - 1, 'O');
+    return { name: 'O TRONO DO DEVORADOR', sub: 'Atravesse o arsenal em chamas e destrua o Devorador de Mentes.', win: 'boss', biome: 'battlefield', sky: ['#3a1812', '#0c0605'], bannerColor: '#5a1414', rows: toRows(g) };
   }
 
-  // ---------- TEST STAGE — calibrate animations ---------------
+  function lvl5() { // THE STONE PRISON — vertical cell-blocks, ladders & wall-climb
+    const Wd = 340, H = 92, g = blank(Wd, H);
+    const top = rollingGround(g, Wd, H, d => d < 1 ? 'C' : '#', 5, 33, [[120, 2], [230, 2]]);
+    const S = c => top[c]; const startR = startCliff(g, S, 'C');
+    building(g, S, 30, 16, 5, 5, 'C', prison('Q'), { banner: true });     // tall cell-block A
+    building(g, S, 150, 18, 5, 5, 'C', prison('o'), { banner: true });    // cell-block B
+    building(g, S, 270, 16, 4, 5, 'C', arsenal, {});
+    climbWall(g, S, 100, 24, 'C'); climbWall(g, S, 210, 26, 'C'); climbWall(g, S, 320, 22, 'C');
+    ladder(g, 105, S(105) - 24, S(105) - 1); ladder(g, 214, S(214) - 26, S(214) - 1);
+    tunnel(g, S, 75, 140, 'C', 'T'); tunnel(g, S, 175, 250, '#', 'Q');
+    barrels(g, S, [60, 200, 300], 'X'); barrels(g, S, [110, 250], 'K');
+    grnd(g, S); put(g, 86, S(86) - 1, 'H'); put(g, 200, S(200) - 16, 'T');
+    put(g, 4, startR - 1, 'P'); put(g, Wd - 5, S(Wd - 5) - 1, 'E');
+    enemies(g, S, [40, 96, 168, 224, 296, 320], 'z'); enemies(g, S, [70, 190, 280], 'w');
+    enemies(g, S, [56, 144, 240], 'f'); enemies(g, S, [180], 'F'); enemies(g, S, [120, 260], 'r');
+    put(g, 200, S(200) - 1, 'd');
+    return { name: 'A PRISÃO DE PEDRA', sub: 'Escale os blocos de celas — escadas, paredes e poços por toda parte.', win: 'exit', biome: 'dungeon', sky: ['#161320', '#070509'], bannerColor: '#2a1e44', rows: toRows(g) };
+  }
+
+  function lvl6() { // THE ARSENAL — explosive chaos, racks, rocket walls
+    const W2 = 400, H = 92, g = blank(W2, H);
+    const top = rollingGround(g, W2, H, d => d < 2 ? 'D' : 'B', 6, 51, [[140, 2], [250, 3]]);
+    const S = c => top[c]; const startR = startCliff(g, S, 'B');
+    building(g, S, 34, 14, 4, 5, 'B', arsenal, { banner: true });
+    building(g, S, 130, 16, 5, 5, 'B', arsenal, { banner: true });
+    building(g, S, 250, 16, 4, 5, 'B', arsenal, { banner: true });
+    building(g, S, 330, 13, 3, 5, 'B', barracks('r'), {});
+    climbWall(g, S, 100, 20, 'B'); climbWall(g, S, 220, 22, 'B'); climbWall(g, S, 310, 18, 'B');
+    ladder(g, 105, S(105) - 20, S(105) - 1); ladder(g, 224, S(224) - 22, S(224) - 1);
+    tunnel(g, S, 170, 240, 'B', 'T');
+    // rocket-barrel walls — shoot one and watch the chain
+    for (let i = 0; i < 5; i++) put(g, 190 + i, S(190) - 1 - i, 'K');
+    for (let i = 0; i < 5; i++) put(g, 280 + i, S(280) - 1 - i, 'X');
+    barrels(g, S, [70, 160, 300, 360], 'K'); barrels(g, S, [110, 210, 340], 'X');
+    grnd(g, S); put(g, 86, S(86) - 1, 'H'); put(g, 360, S(360) - 1, 'Q'); put(g, 150, S(150) - 16, 'T');
+    put(g, 4, startR - 1, 'P'); put(g, W2 - 5, S(W2 - 5) - 1, 'E');
+    enemies(g, S, [40, 96, 168, 224, 296, 360], 'z'); enemies(g, S, [70, 190, 320], 'w');
+    enemies(g, S, [56, 144, 240], 'f'); enemies(g, S, [200, 300], 'F'); enemies(g, S, [120, 260, 350], 'r');
+    put(g, 180, S(180) - 1, 'd'); put(g, 320, S(320) - 1, 'd');
+    return { name: 'O ARSENAL', sub: 'Pólvora e foguetes por toda parte — provoque a reação em cadeia!', win: 'exit', biome: 'battlefield', sky: ['#2a1810', '#0a0604'], bannerColor: '#6a1a1a', rows: toRows(g) };
+  }
+
   function lvlTest() {
     const W = 340, H = 50, g = blank(W, H), gr = H - 6;
     for (let c = 0; c < W; c++) { for (let r = gr; r < H - 2; r++) put(g, c, r, r === gr ? 'D' : '#'); put(g, c, H - 2, '~'); put(g, c, H - 1, '~'); }
-    // small jumpable pit (run + jump test)
     for (let r = 0; r < H; r++) for (let k = 0; k < 3; k++) put(g, 130 + k, r, '.');
-    // raised mesa (climb + run + drop-off test)
     for (let c = 190; c < 250; c++) for (let r = gr - 8; r < gr; r++) put(g, c, r, r === gr - 8 ? 'D' : '#');
-    platform(g, 176, gr - 3, 6, '='); platform(g, 183, gr - 6, 6, '=');     // stairs up to mesa
-    // floating platforms (jump test) on the left
     platform(g, 40, gr - 5, 8, '='); platform(g, 56, gr - 9, 8, '#'); platform(g, 74, gr - 13, 8, '=');
-    // a tall ledge to fall from (fall test) on the right
-    platform(g, 285, gr - 17, 16, '#'); climb(g, 270, gr - 4, gr - 16, '=', 1);
+    ladder(g, 96, gr - 16, gr - 1); platform(g, 92, gr - 16, 8, '#');   // ladder test
+    vline(g, 170, gr - 14, gr - 3, '#'); vline(g, 171, gr - 14, gr - 3, '#'); // wall-climb test (doorway at bottom)
+    hline(g, gr - 15, 169, 172, '#'); put(g, 170, gr - 16, 'Q');
+    platform(g, 285, gr - 17, 16, '#');
     for (let c = 6; c < W - 6; c += 4) coinAt(g, c, gr - 2);
-    coinLine(g, gr - 6, 40, 47); coinLine(g, gr - 18, 285, 300);
-    // one of each enemy to watch them animate / die
-    put(g, 92, gr - 1, 'z'); put(g, 104, gr - 1, 'w'); put(g, 160, gr - 1, 'r'); put(g, 220, gr - 9, 'z'); put(g, 256, gr - 1, 'd');
+    put(g, 60, gr - 1, 'Q'); put(g, 110, gr - 1, 'T'); put(g, 100, gr - 1, 'X'); put(g, 115, gr - 1, 'K');
+    put(g, 30, gr - 1, 'z'); put(g, 124, gr - 1, 'f'); put(g, 160, gr - 1, 'r'); put(g, 230, gr - 1, 'F');
     put(g, 3, gr - 1, 'P'); put(g, W - 5, gr - 1, 'E');
-    return { name: 'FASE DE TESTES', sub: 'Corra longas distâncias, pule e caia para avaliar as animações.', win: 'exit', biome: 'castle', sky: ['#3a4a6e', '#15182a'], bannerColor: '#8a2b2b', rows: toRows(g) };
+    return { name: 'FASE DE TESTES', sub: 'Escada (col 96), parede para escalar (col 170), poções, tokens e barris.', win: 'exit', biome: 'castle', sky: ['#1e2740', '#080a14'], bannerColor: '#6a1a1a', rows: toRows(g) };
   }
 
-  return [lvl1(), lvl2(), lvl3(), lvl4(), lvlTest()];
+  return [lvl1(), lvl2(), lvl3(), lvl4(), lvl5(), lvl6(), lvlTest()];
 })();

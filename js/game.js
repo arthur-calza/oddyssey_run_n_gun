@@ -8,7 +8,7 @@ class Game {
     this.cam = new Camera(); this.controller = new Controller(); this.fx = new FX(this);
     this.roster = [0, 1];       // both heroes available (Ragnarok & Zracks)
     this.currentHero = 0;
-    this.lives = 3; this.score = 0; this.coins = 0; this.nextLifeAt = 50;
+    this.lives = 3; this.score = 0; this.oregano = 0; this.tokens = 0; this.nextLifeAt = 50;
     this.state = 'playing'; this.paused = false;
     this.freeze = 0; this.respawnT = 0; this.time = 0;
     this._hud = this._cacheHud();
@@ -19,7 +19,7 @@ class Game {
     return {
       box: $('hud'), name: $('hudName'), hp: $('hpFill'), hpTxt: $('hpTxt'),
       sp: $('spFill'), spTxt: $('spTxt'), lives: $('hudLives'), obj: $('hudObj'),
-      roster: $('hudRoster'), portrait: $('portrait'), coins: $('hudCoins'),
+      roster: $('hudRoster'), portrait: $('portrait'), coins: $('hudCoins'), tokens: $('hudTokens'), buff: $('hudBuff'),
     };
   }
 
@@ -37,7 +37,7 @@ class Game {
     this.explosionQ = []; this.exits = []; this.boss = null; this.decor = [];
     this.prisonersTotal = 0; this.prisonersRescued = 0;
     const T = world.T;
-    const DECOR = { 't': 'torch', 'L': 'banner', 'N': 'window', 'I': 'pillar', 'V': 'vines', 'Y': 'web', 'G': 'grass' };
+    const DECOR = { 't': 'torch', 'L': 'banner', 'N': 'window', 'I': 'pillar', 'V': 'vines', 'Y': 'web', 'G': 'grass', 'J': 'bars', 'U': 'rack', 'M': 'crate' };
 
     for (let r = 0; r < rows.length; r++) {
       const line = rows[r];
@@ -48,8 +48,10 @@ class Game {
         if (ch === 'P') { this.spawn = { x: px + (T - 24) / 2, y: (r + 1) * T - 42 }; }
         else if (ch === 'E') { this.exits.push({ x: px, y: py - T, w: T, h: T * 2 }); }
         else if (DECOR[ch]) { this.decor.push({ type: DECOR[ch], x: px, y: py, color: L.bannerColor }); }
-        else if (ch === 'o') { const k = new Pickup(px + T / 2, py + T / 2, 'coin'); k.vy = 0; k.vx = 0; this.pickups.push(k); }
+        else if (ch === 'o') { const k = new Pickup(px + T / 2, py + T / 2, 'oregano'); k.vy = 0; k.vx = 0; this.pickups.push(k); }
         else if (ch === 'H') { const k = new Pickup(px + T / 2, py + T / 2, 'life'); k.vy = 0; k.vx = 0; this.pickups.push(k); }
+        else if (ch === 'Q') { const k = new Pickup(px + T / 2, py + T / 2, 'potion'); k.vy = 0; k.vx = 0; this.pickups.push(k); }
+        else if (ch === 'T') { const k = new Pickup(px + T / 2, py + T / 2, 'token'); k.vy = 0; k.vx = 0; this.pickups.push(k); }
         else if (ch >= '1' && ch <= '9') {
           const hi = ch.charCodeAt(0) - 49; // '1'->0
           this.allies.push(new Ally(px + 1, (r + 1) * T - 30, hi));
@@ -76,7 +78,8 @@ class Game {
 
   spawnPlayer(fresh) {
     const p = new Player(this.spawn.x, this.spawn.y, this.currentHero);
-    if (!fresh && this.player) { /* keep nothing */ }
+    if (Save.hasPerk('vigor')) { p.maxhp += 40; p.hp = p.maxhp; }
+    if (Save.hasPerk('bandolier')) p.special = p.maxSpecial;
     this.player = p;
   }
 
@@ -131,17 +134,35 @@ class Game {
     this.cam.addShake(o.shake || 3);
   }
 
-  collectCoin(pk) {
+  collectOregano(pk) {
     if (pk) pk.alive = false;
-    this.coins++; this.score += 25; Sound.coin();
-    this.fx.spark(pk ? pk.cx : 0, pk ? pk.cy : 0, '#f4d35e', 5);
-    if (this.coins >= this.nextLifeAt) {
+    this.oregano++; this.score += 25; Sound.coin();
+    this.fx.spark(pk ? pk.cx : 0, pk ? pk.cy : 0, '#7be08a', 4);
+    if (this.oregano >= this.nextLifeAt) {
       this.lives++; this.nextLifeAt += 50;
       this.fx.text(this.player ? this.player.cx : 0, this.player ? this.player.y - 10 : 0, 'VIDA EXTRA!', '#ff5b6e');
       this.flashScreen(0.3); Sound.heal();
     }
   }
-  spawnCoins(x, y, n) { for (let i = 0; i < n; i++) this.pickups.push(new Pickup(x + rand(-6, 6), y + rand(-6, 6), 'coin')); }
+  spawnOregano(x, y, n) { if (Save.hasPerk('scavenger')) n *= 2; for (let i = 0; i < n; i++) this.pickups.push(new Pickup(x + rand(-6, 6), y + rand(-6, 6), 'oregano')); }
+  collectToken(pk) {
+    if (pk) pk.alive = false;
+    this.tokens++; Save.addTokens(1); Sound.rescue();
+    this.fx.spark(pk ? pk.cx : 0, pk ? pk.cy : 0, '#e0843a', 16);
+    this.fx.text(this.player ? this.player.cx : 0, this.player ? this.player.y - 12 : 0, 'REI DO PICADÃO!', '#e0843a');
+    this.flashScreen(0.35);
+  }
+  applyPotion(p) {
+    p.powered = 12;
+    this.fx.spark(p.cx, p.cy, '#6fd0ff', 22); this.fx.text(p.cx, p.y - 10, 'PODER MÁGICO!', '#6fd0ff');
+    this.cam.addShake(4); this.flashScreen(0.3); Sound.heal();
+  }
+  // a rocket fired from a destroyed rocket-barrel — flies straight, then detonates
+  spawnRocket(x, y, dir) {
+    const ang = dir < 0 ? Math.PI : 0;
+    this.bullets.push(new Bullet(x, y, ang, 460, { faction: 'enemy', kind: 'cannon', dmg: 26, r: 6, explosive: 80, tileDmg: 60, spin: 0, life: 2.6, knock: 220 }));
+    this.fx.muzzle(x, y, ang + Math.PI); this.cam.addShake(3); Sound.shot('shotgun');
+  }
 
   onEnemyKilled(e) {
     this.score += e.score || 0;
@@ -179,7 +200,7 @@ class Game {
     Sound.swap();
   }
 
-  win()  { if (this.state !== 'playing') return; this.state = 'win';  Sound.win(); if (this.onEnd) this.onEnd('win'); }
+  win()  { if (this.state !== 'playing') return; this.state = 'win'; Save.addOregano(this.oregano); Sound.win(); if (this.onEnd) this.onEnd('win'); }
   lose() { if (this.state !== 'playing') return; this.state = 'lose'; if (this.onEnd) this.onEnd('lose'); }
 
   flashScreen(a) {
@@ -338,7 +359,9 @@ class Game {
     const ready = p.special >= p.hero.special.cost;
     h.spTxt.textContent = p.reloading > 0 ? 'RECARREGANDO…' : (ready ? 'ESPECIAL PRONTO' : 'ESPECIAL');
     h.lives.textContent = '♥'.repeat(Math.max(0, this.lives));
-    h.coins.textContent = '⛀ ' + this.coins + '  (vida em ' + this.nextLifeAt + ')';
+    h.coins.textContent = '🌿 ' + this.oregano + '  (vida em ' + this.nextLifeAt + ')';
+    if (h.tokens) h.tokens.textContent = this.tokens > 0 ? ('⬡ ' + this.tokens + ' Rei do Picadão') : '';
+    if (h.buff) h.buff.textContent = (p.powered > 0) ? ('⚗ PODER MÁGICO ' + Math.ceil(p.powered) + 's') : '';
     let obj;
     if (this.level.win === 'boss') obj = this.boss ? 'Derrote ' + (this.boss.name || 'o chefe') : 'Chefe abatido! Saia →';
     else obj = 'Alcance a SAÍDA →';

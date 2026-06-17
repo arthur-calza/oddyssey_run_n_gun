@@ -15,10 +15,12 @@ const ENEMY_TYPES = {
   werewolf:  { spr: 'werewolf',  hp: 50,  w: 30, h: 44, speed: 235, aggro: 660, range: 360, fireCd: 0.7, touch: 16, score: 180, atk: 'smg', leaper: true, gore: '#7a2a2a' },
   dragonman: { spr: 'dragonman', hp: 140, w: 34, h: 54, speed: 112, aggro: 720, range: 580, fireCd: 1.2, touch: 18, score: 420, atk: 'rifle', kite: true, gore: '#6a1410' },
   demon:     { spr: 'demon',     hp: 230, w: 40, h: 58, speed: 70,  aggro: 780, range: 600, fireCd: 1.9, touch: 26, score: 760, atk: 'cannon', mini: true, gore: '#7a1a14' },
+  wolf:      { spr: 'wolf',      hp: 34,  w: 30, h: 36, speed: 285, aggro: 720, range: 0,   fireCd: 99,  touch: 14, score: 140, leaper: true, gore: '#6a3a2a' },        // feral, fast melee
+  direwolf:  { spr: 'direwolf',  hp: 90,  w: 40, h: 46, speed: 230, aggro: 820, range: 0,   fireCd: 99,  touch: 22, score: 360, leaper: true, mini: true, gore: '#5a2e22' }, // pack alpha
   flayer:    { spr: 'flayer',    hp: 720, w: 56, h: 74, speed: 56,  aggro: 1300, range: 1000, fireCd: 1.3, touch: 30, score: 3200, boss: true, name: 'O DEVORADOR DE MENTES', gore: '#7b3aff' },
 };
 
-const CHAR2ENEMY = { z: 'zombie', w: 'werewolf', r: 'dragonman', d: 'demon', O: 'flayer' };
+const CHAR2ENEMY = { z: 'zombie', w: 'werewolf', r: 'dragonman', d: 'demon', O: 'flayer', f: 'wolf', F: 'direwolf' };
 
 class Enemy extends Entity {
   constructor(x, y, type) {
@@ -57,7 +59,7 @@ class Enemy extends Entity {
     if (this.boss) game.world.explode(this.cx, this.cy, 110, 30);
     if (Math.random() < (this.boss ? 1 : this.mini ? 0.6 : 0.12)) game.pickups.push(new Pickup(this.cx, this.cy, 'health'));
     const coins = this.boss ? 35 : this.mini ? 14 : ((Math.random() < 0.45 ? 1 : 0) + (Math.random() < 0.18 ? 1 : 0));
-    if (coins) game.spawnCoins(this.cx, this.cy, coins);
+    if (coins) game.spawnOregano(this.cx, this.cy, coins);
     if ((this.boss || this.mini) && Math.random() < (this.boss ? 1 : 0.3)) game.pickups.push(new Pickup(this.cx, this.cy - 8, 'life'));
   }
 

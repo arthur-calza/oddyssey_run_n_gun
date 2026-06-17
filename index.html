@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PÓLVORA &amp; AÇO</title>
+<title>ODDYSSEY CHRONICLES</title>
 <style>
   :root{
     --stone:#2b2622; --gold:#e8b94a; --blood:#b1322c; --bone:#e8e0cf;
@@ -31,7 +31,9 @@
   .hname{font-size:15px;color:var(--gold);letter-spacing:1px;}
   .hud-tr{position:absolute;top:12px;right:16px;text-align:right;}
   .lives{font-size:22px;color:var(--blood);}
-  .coins{font-size:18px;color:var(--gold);margin-top:2px;}
+  .coins{font-size:18px;color:#7be08a;margin-top:2px;}
+  .tokens{font-size:14px;color:#e0843a;margin-top:1px;}
+  .buff{position:absolute;bottom:46px;left:14px;font-size:14px;color:#6fd0ff;text-shadow:0 0 8px #2b7fd0;}
   .obj{margin-top:6px;font-size:14px;color:var(--bone);max-width:340px;}
   .roster{position:absolute;bottom:10px;left:14px;display:flex;gap:6px;}
   .rchip{width:30px;height:30px;border:2px solid #000;border-radius:5px;background:#221a12;
@@ -73,16 +75,18 @@
     </div>
     <div class="hud-tr">
       <div class="lives" id="hudLives">♥♥♥</div>
-      <div class="coins" id="hudCoins">⛀ 0</div>
+      <div class="coins" id="hudCoins">🌿 0</div>
+      <div class="tokens" id="hudTokens"></div>
       <div class="obj" id="hudObj">Objetivo</div>
     </div>
     <div class="roster" id="hudRoster"></div>
+    <div class="buff" id="hudBuff"></div>
   </div>
 
   <!-- Menu / screens -->
   <div id="screen">
-    <div class="title">PÓLVORA &amp; AÇO</div>
-    <div class="subtitle">CRUZADA DE FERRO E FOGO</div>
+    <div class="title">ODDYSSEY CHRONICLES</div>
+    <div class="subtitle">CRÔNICAS DE FERRO E SANGUE</div>
     <div class="menu" id="menu"></div>
     <div class="controls" id="controlsBox">
       <b>Mover</b> A / D &nbsp;·&nbsp; <b>Pular</b> W / Espaço (duplo p/ alguns heróis) &nbsp;·&nbsp; <b>Mira</b> Mouse<br>
@@ -95,10 +99,13 @@
 
   <!-- modules (classic scripts; run by double-clicking index.html, no server needed) -->
   <script src="js/core.js"></script>
+  <script src="js/save.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/textures.js"></script>
   <script src="js/background.js"></script>
   <script src="js/sprites.js"></script>
+  <script src="js/rigdata.js"></script>
+  <script src="js/rig.js"></script>
   <script src="js/world.js"></script>
   <script src="js/particles.js"></script>
   <script src="js/entities.js"></script>
