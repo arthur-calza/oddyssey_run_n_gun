@@ -65,8 +65,7 @@ class Enemy extends Entity {
     game.fx.gib(this.cx, this.cy, gore, 22 * big);                 // chunky gore
     game.fx.blood(this.cx, this.cy, dir, 26 * big, gore);          // spray
     game.fx.smoke(this.cx, this.cy, 6 * big);
-    game.fx.bloodPool(this.cx, this.y + this.h - 2, gore, 7 * big);// persistent splatter
-    game.fx.rubble(this.cx, this.y + this.h - 2, '#e8e0cf');       // scattered bones stay
+    game.fx.goreBurst(this.cx, this.cy, dir, 48 * big, gore);      // red flesh + white bone bits fall & settle (3× particles per kill)
     game.cam.addShake(this.boss ? 16 : 5); Sound.flesh();
     if (this.boss || this.type === 'flayer') game.fx.magic(this.cx, this.cy, '#b07bff', 20);
     game.onEnemyKilled(this);
@@ -83,7 +82,7 @@ class Enemy extends Entity {
       this.dying -= dt; this.anim += dt;
       this.vx *= 0.92; this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, CONFIG.TERMINAL_VY);
       game.world.moveAndCollide(this, dt);
-      if (this.onGround && Math.random() < 0.15) game.fx.bloodPool(this.cx, this.y + this.h - 2, this.def.gore, 1);
+      if (this.onGround && Math.random() < 0.12) game.fx.goreBurst(this.cx, this.y + this.h - 4, sign(this.vx) || 1, 2, this.def.gore);
       if (this.dying <= 0) this.alive = false;
       return;
     }

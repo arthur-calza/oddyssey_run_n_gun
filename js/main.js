@@ -81,7 +81,7 @@
     menu.innerHTML = '';
     const grid = document.createElement('div'); grid.className = 'lvgrid';
     LEVELS.slice(0, LEVELS.length - 1).forEach((L, i) => {   // campaign levels (last entry is the test stage)
-      const locked = i > highestLevel;
+      const locked = false;   // todas as fases liberadas desde o início
       const b = btn(`${i + 1}. ${L.name}${locked ? '  🔒' : ''}`, () => startLevel(i), locked);
       b.style.fontSize = '15px';
       grid.appendChild(b);
@@ -163,7 +163,7 @@
     game.onEnd = onGameEnd;
     game.loadLevel(i);
     showScreen(false);
-    Sound.music && Sound.music.start();
+    Sound.music && Sound.music.start(i);   // trilha única por fase
   }
 
   function onGameEnd(result) {

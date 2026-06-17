@@ -5,7 +5,7 @@
 // material id -> definition. id 0 = empty.
 const MAT = [
   null, // 0 empty
-  { name: 'dirt',      hp: 22,  solid: true,  c: '#6b4a2c', c2: '#553a22', edge: '#7d5938', soft: true, cap: 'grass' },
+  { name: 'dirt',      hp: 22,  solid: true,  c: '#6b4a2c', c2: '#553a22', edge: '#7d5938', soft: true, cap: 'grass', noDebris: true },
   { name: 'stone',     hp: 46,  solid: true,  c: '#5b5550', c2: '#46413c', edge: '#6e6760' },
   { name: 'brick',     hp: 80,  solid: true,  c: '#7a3a30', c2: '#5e2a22', edge: '#8f463a' },
   { name: 'wood',      hp: 16,  solid: true,  c: '#7d5a2e', c2: '#5f4422', edge: '#946b39' },
@@ -23,7 +23,7 @@ const MAT = [
   { name: 'temple',    hp: 96,  solid: true,  c: '#5b6a4c', c2: '#3e4a36', edge: '#76886a' },                 // 15 pedra de templo esculpida, com musgo
   { name: 'plank',     hp: 18,  solid: true,  c: '#9a6e3a', c2: '#6f4f24', edge: '#bb8a4c', soft: true },     // 16 tábuas horizontais (passarelas)
   { name: 'leaf',      hp: 10,  solid: true,  c: '#2f6a2a', c2: '#1f4a1c', edge: '#46993a', soft: true },     // 17 folhagem densa (sebe)
-  { name: 'jungle',    hp: 24,  solid: true,  c: '#4a5a26', c2: '#374518', edge: '#5e7030', soft: true, cap: 'grass' }, // 18 terra de selva
+  { name: 'jungle',    hp: 24,  solid: true,  c: '#4a5a26', c2: '#374518', edge: '#5e7030', soft: true, cap: 'grass', noDebris: true }, // 18 terra de selva
   { name: 'darkstone', hp: 130, solid: true,  c: '#3a3e44', c2: '#26282d', edge: '#4c525a' },                 // 19 pedra escura de torre
   // === EXPANSÃO: paleta de construção (pintura genérica via "pattern") ===
   { name: 'claybrick', hp: 70,  solid: true,  c: '#9a4a32', c2: '#6e3422', edge: '#b85e42', pattern: 'brick' },   // 20 tijolo de barro (casas)
@@ -47,7 +47,7 @@ const MAT = [
   { name: 'bamboo',    hp: 20,  solid: true,  c: '#8a9a3a', c2: '#5e6e22', edge: '#aabf4e', pattern: 'panel', soft: true }, // 38 bambu
   { name: 'glass',     hp: 8,   solid: true,  c: '#9fd0e0', c2: '#5f96a8', edge: '#d8f4ff', pattern: 'glass', soft: true }, // 39 vidro/vitral
   { name: 'bonewall',  hp: 60,  solid: true,  c: '#cabfa0', c2: '#a89c7a', edge: '#e8e0cf', pattern: 'block' },   // 40 parede de ossos
-  { name: 'mud',       hp: 18,  solid: true,  c: '#5a4226', c2: '#3e2c16', edge: '#6e5230', pattern: 'flat', soft: true }, // 41 lama de selva
+  { name: 'mud',       hp: 18,  solid: true,  c: '#5a4226', c2: '#3e2c16', edge: '#6e5230', pattern: 'flat', soft: true, noDebris: true }, // 41 lama de selva
 ];
 // char -> material id (used by level loader)
 const CHAR2MAT = {
@@ -109,12 +109,36 @@ class World {
     this.pixelH = rows * this.T;
     this.mat = new Uint8Array(cols * rows);   // material id (solid/collidable layer)
     this.bg = new Uint8Array(cols * rows);    // background-fill layer (interiors/tunnels; non-collidable, drawn darker behind)
+    this.grass = new Uint8Array(cols * rows); // grass-cap flag: only the ORIGINAL surface layer grows grass (Minecraft-like)
     this.hp = new Int32Array(cols * rows);    // current hp
     this.fallers = [];                        // active FallingBlocks
     this.game = null;                         // set by Game
   }
   setBg(c, r, id) { if (this.inBounds(c, r)) this.bg[this.idx(c, r)] = id; }
   bgAt(c, r) { return this.inBounds(c, r) ? this.bg[this.idx(c, r)] : 0; }
+  // when a destructible (non-gravity) tile is removed, leave a painted "fundo" behind it,
+  // showing that a structure stood there (just like building interiors already do).
+  _ghostBg(c, r, id) {
+    if (!this.inBounds(c, r)) return;
+    const i = this.idx(c, r);
+    if (this.bg[i]) return;              // an interior fill is already painted here
+    const m = MAT[id];
+    if (!m || m.falls) return;           // gravity blocks (sand/gravel) leave no ghost
+    if (m.barrel || m.rocket) {          // bombs leave no block of their own behind —
+      const nb = this.bgAt(c - 1, r) || this.bgAt(c + 1, r) || this.bgAt(c, r - 1) || this.bgAt(c, r + 1);
+      if (nb) this.bg[i] = nb;           // inherit the surrounding interior shade, or none if outdoors
+      return;
+    }
+    this.bg[i] = id;
+  }
+  // mark every tile that is currently a sun-exposed earth surface as "grassy".
+  // Dirt later uncovered by digging/destruction is NOT marked → never grows grass.
+  markGrass() {
+    for (let c = 0; c < this.cols; c++) for (let r = 0; r < this.rows; r++) {
+      const id = this.at(c, r);
+      if (id && MAT[id] && MAT[id].cap === 'grass' && !this.solid(c, r - 1)) this.grass[this.idx(c, r)] = 1;
+    }
+  }
   // detach a gravity-affected tile (and cascade upward) when unsupported
   maybeFall(c, r) {
     if (!this.inBounds(c, r) || this.fallers.length > 400) return;
@@ -162,17 +186,17 @@ class World {
     this.hp[i] -= dmg;
     if (this.game) {
       Sound.crumble();
-      this.game.fx.chips(c * this.T + 14, r * this.T + 14, m.c, 2);
+      if (!m.noDebris) this.game.fx.chips(c * this.T + 14, r * this.T + 14, m.c, 2);
     }
     if (this.hp[i] <= 0) {
       this.mat[i] = 0; this.hp[i] = 0;
+      this._ghostBg(c, r, id);                                     // leave a painted background where the block stood
       if (this.game) {
         const T = this.T;
-        this.game.fx.chips(c * T + T / 2, r * T + T / 2, m.c, 10);
-        this.game.fx.chips(c * T + T / 2, r * T + T / 2, m.c2, 6);
-        this.game.fx.debrisBurst(c * T + T / 2, r * T + T / 2, m.c2, opts.power || 70);
+        // mini-block crumbs (≈1/10 of a tile) that fall with gravity and settle on the ground.
+        // Earth-type blocks (dirt, jungle, mud) drop no crumbs.
+        if (!m.noDebris) this.game.fx.crumbsBurst(c * T + T / 2, r * T + T / 2, m, opts.power || 70);
         this.game.fx.smoke(c * T + T / 2, r * T + T / 2, 2, 'rgba(120,110,95,');
-        this.game.fx.rubble(c * T + T / 2, (r + 1) * T - 3, m.c2);   // persistent rubble on the ground below
         if (m.gold) { this.game.fx.spark(c * T + 14, r * T + 14, '#ffe27a', 8); this.game.spawnOregano(c * T + T / 2, r * T + T / 2, 3 + (Math.random() * 3 | 0)); }
       }
       if (m.barrel && !opts.noBarrelChain) {
@@ -220,7 +244,8 @@ class World {
         if (!id || !MAT[id].soft) continue;
         if (!this.solid(c, r + 1) && r + 1 < this.rows) {
           this.mat[this.idx(c, r)] = 0; this.hp[this.idx(c, r)] = 0;
-          if (this.game) this.game.fx.debrisBurst(c * this.T + 14, r * this.T + 14, MAT[id].c2, 50);
+          this._ghostBg(c, r, id);
+          if (this.game && !MAT[id].noDebris) this.game.fx.crumbsBurst(c * this.T + 14, r * this.T + 14, MAT[id], 50);
           this.maybeFall(c, r - 1);
         }
       }
@@ -285,7 +310,7 @@ class World {
     // ---- background-fill layer (building interiors, tunnel walls): darker, behind solids ----
     for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
       const i = this.idx(c, r); const bid = this.bg[i];
-      if (!bid || this.mat[i]) continue;                       // a solid tile here will cover it anyway
+      if (!bid || (this.mat[i] && MAT[this.mat[i]] && MAT[this.mat[i]].solid)) continue;  // a SOLID tile covers it; ladders/props still show the shaded fill behind
       const x = Math.round(c * T + ox), y = Math.round(r * T + oy);
       const variant = ((c * 2 + r * 3) % TEX.V + TEX.V) % TEX.V;
       const img = TEX.tiles[bid] && TEX.tiles[bid][variant];
@@ -307,8 +332,9 @@ class World {
       // shade neighbours that face open space for depth
       if (openAbove) { ctx.fillStyle = 'rgba(255,255,255,0.10)'; ctx.fillRect(x, y, T, 2); }
       if (!this.solid(c, r + 1)) { ctx.fillStyle = 'rgba(0,0,0,0.30)'; ctx.fillRect(x, y + T - 3, T, 3); }
-      // grass cap on exposed earth
-      if (openAbove && m.cap === 'grass') {
+      // grass cap on exposed earth — ONLY on the original surface layer (this.grass flag),
+      // so dirt uncovered by digging stays bare dirt (Minecraft-style).
+      if (openAbove && m.cap === 'grass' && this.grass[i]) {
         ctx.fillStyle = '#4a7a3a'; ctx.fillRect(x, y, T, 4);
         ctx.fillStyle = '#5e9a46';
         for (let k = 0; k < T; k += 5) ctx.fillRect(x + k, y - 2 - ((c + k) % 2), 3, 4);

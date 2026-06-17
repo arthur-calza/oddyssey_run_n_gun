@@ -92,6 +92,7 @@ class Controller {
   jumpPressed() { return Input.once('w') || Input.once(' ') || Input.once('arrowup'); }
   get fire()    { return Input.mouse.down || Input.down('j'); }
   get special() { return Input.mouse.rdown || Input.down('k'); }
+  meleePressed(){ return Input.once('r'); }   // corpo-a-corpo com espada
   swapNext()    { return Input.once('e'); }
   swapPrev()    { return Input.once('q'); }
 }

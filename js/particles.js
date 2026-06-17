@@ -7,6 +7,7 @@ class FX {
     this.game = game;
     this.parts = [];   // {x,y,vx,vy,life,max,r,c,g,fade,glow,shrink}
     this.debris = [];  // physics chunks that collide with terrain
+    this.crumbs = [];  // PERSISTENT mini-blocks: destruction debris + gore that fall & settle in the scene
     this.rings = [];   // shockwave rings
     this.texts = [];   // floating combat text
     this.slashes = []; // melee swoosh arcs
@@ -30,14 +31,50 @@ class FX {
     ctx.globalAlpha = 1;
   }
 
+  // ---- persistent mini-block debris (fall with gravity, then stay) ----
+  _pushCrumb(k) { this.crumbs.push(k); if (this.crumbs.length > 1500) this.crumbs.splice(0, this.crumbs.length - 1500); }
+  // chunks of a shattered tile: ≈1/10 of a tile, scatter, fall and rest on the ground forever
+  crumbsBurst(x, y, m, power = 70) {
+    const n = 3 + (Math.random() * 4 | 0), sp = 26 + power * 0.5;
+    for (let i = 0; i < n; i++) this._pushCrumb({
+      x: x + rand(-7, 7), y: y + rand(-7, 7),
+      vx: rand(-sp, sp), vy: -rand(20, 50 + power),
+      s: rand(2.2, 3.6), c: Math.random() < 0.5 ? m.c : (m.c2 || m.c),
+      rot: rand(0, TAU), vr: rand(-12, 12), rest: false,
+    });
+  }
+  // gore: red flesh bits + white bone shards that fall and pool on the floor as real particles
+  goreBurst(x, y, dir = 0, n = 12, color = '#7a1a14') {
+    for (let i = 0; i < n; i++) {
+      const bone = Math.random() < 0.32;
+      this._pushCrumb({
+        x: x + rand(-9, 9), y: y + rand(-10, 6),
+        vx: rand(-140, 140) + dir * 70, vy: -rand(40, 230),
+        s: bone ? rand(1.8, 3.0) : rand(2.2, 4.2),
+        c: bone ? pick(['#e8e0cf', '#d8cdb4', '#fff4e2']) : color,
+        rot: rand(0, TAU), vr: rand(-16, 16), rest: false, blood: !bone,
+      });
+    }
+  }
+  drawCrumbs(ctx, cam) {
+    const ox = cam.ox, oy = cam.oy, vw = cam.vw, vh = cam.vh;
+    for (const k of this.crumbs) {
+      if (k.x < cam.x - 24 || k.x > cam.x + vw + 24 || k.y < cam.y - 24 || k.y > cam.y + vh + 24) continue;
+      ctx.save(); ctx.translate(k.x + ox, k.y + oy); ctx.rotate(k.rot);
+      ctx.fillStyle = k.c;
+      if (k.blood) { ctx.beginPath(); ctx.ellipse(0, 0, k.s * 0.62, k.s * 0.5, 0, 0, TAU); ctx.fill(); }
+      else { ctx.fillRect(-k.s / 2, -k.s / 2, k.s, k.s); ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(-k.s / 2, k.s * 0.18, k.s, k.s * 0.32); }
+      ctx.restore();
+    }
+  }
+
   _add(p) { if (this.parts.length < 2600) this.parts.push(p); }
 
   // chunky death burst: blood spray + bone shards. Pesado: cai rápido e assenta no chão.
   gib(x, y, color = '#7a1a14', n = 20) {
     for (let i = 0; i < n; i++) { const a = rand(-Math.PI, 0), sp = rand(80, 320); this._add({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - rand(10, 70), life: rand(0.35, 0.8), max: 0.8, r: rand(2, 5), c: color, g: 2600, shrink: true, land: true }); }
-    const bone = '#e8e0cf';
-    for (let i = 0; i < n * 0.5; i++) if (this.debris.length < 360) this.debris.push({ x, y, vx: rand(-180, 180), vy: -rand(80, 240), s: rand(2.5, 5), c: i % 3 ? bone : color, life: rand(0.8, 1.6), max: 1.6, rot: rand(0, TAU), vr: rand(-16, 16) });
-    for (let i = 0; i < 4; i++) this._pushDecal({ t: 'rect', x: x + rand(-16, 16), y: y + rand(-4, 10), s: rand(2.5, 4.5), c: i % 2 ? bone : color, rot: rand(0, TAU), a: rand(0.6, 0.9) });
+    // lasting red flesh + white bone particles that fall and settle (no painted splatter)
+    this.goreBurst(x, y, 0, Math.round(n * 2.1), color);
   }
 
   spark(x, y, c, n = 6) {
@@ -135,6 +172,32 @@ class FX {
       let ny = d.y + d.vy * dt;
       if (!world.solidPx(d.x, ny + d.s)) d.y = ny;
       else { if (d.vy > 60) { d.vy *= -0.32; d.vx *= 0.6; } else { d.vy = 0; d.vx *= 0.8; } }
+    }
+    // persistent mini-block crumbs: full gravity + terrain collision, then they rest & stay
+    const T = world ? world.T : 32;
+    for (let i = this.crumbs.length - 1; i >= 0; i--) {
+      const k = this.crumbs[i];
+      if (k.rest) {
+        // if the block holding it up was demolished, it must fall again — or despawn
+        // (35% chance) to keep the scene from drowning in stuck particles
+        if (world && !world.solid(k.supC, k.supR)) {
+          if (Math.random() < 0.35) { this.crumbs.splice(i, 1); continue; }
+          k.rest = false;
+        } else continue;
+      }
+      k.vy = Math.min(k.vy + CONFIG.GRAVITY * dt, CONFIG.TERMINAL_VY);
+      k.rot += k.vr * dt;
+      const nx = k.x + k.vx * dt;
+      if (!world || !world.solidPx(nx, k.y)) k.x = nx; else { k.vx *= -0.3; k.vr *= 0.5; }
+      const ny = k.y + k.vy * dt;
+      if (!world || !world.solidPx(k.x, ny + k.s)) { k.y = ny; }
+      else {
+        if (k.vy > 130) { k.vy *= -0.26; k.vx *= 0.55; k.vr *= 0.6; }      // small bounce on impact
+        else {
+          k.vy = 0; k.vx *= 0.5; k.vr = 0;
+          if (Math.abs(k.vx) < 8) { k.rest = true; k.vx = 0; k.supC = Math.floor(k.x / T); k.supR = Math.floor((ny + k.s) / T); }  // settle + remember support block
+        }
+      }
     }
     // rings
     for (let i = this.rings.length - 1; i >= 0; i--) {

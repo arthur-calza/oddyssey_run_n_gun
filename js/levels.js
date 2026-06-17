@@ -30,10 +30,14 @@ const LEVELS = (function () {
   const bgPut = (c, r, ch) => { if (CUR_BG && r >= 0 && r < CUR_BG.length && c >= 0 && c < CUR_BG[0].length) CUR_BG[r][c] = ch; };
   const bgRect = (c0, r0, w, h, ch) => { for (let r = r0; r < r0 + h; r++) for (let c = c0; c < c0 + w; c++) bgPut(c, r, ch); };
 
-  function rollingGround(g, W, H, matFn, amp, seed, pits) {
-    const top = new Array(W), rng = mul(seed); let gr = H - 12, target = gr;
+  // base de terra ESPESSA (≈ `depth` tiles abaixo da superfície) para encaixar
+  // construções subterrâneas. A superfície oscila ±amp em torno de (H - depth).
+  function rollingGround(g, W, H, matFn, amp, seed, pits, depth) {
+    depth = depth || 48;
+    const surf = H - depth;
+    const top = new Array(W), rng = mul(seed); let gr = surf, target = gr;
     for (let c = 0; c < W; c++) {
-      if (c % 6 === 0) target = Math.max(H - 18, Math.min(H - 7, Math.round((H - 12) - (Math.sin(c * 0.045 + seed) * amp + Math.sin(c * 0.12) * amp * 0.5 + (rng() * 2 - 1) * 1.1))));
+      if (c % 6 === 0) target = Math.max(surf - 6, Math.min(surf + 6, Math.round(surf - (Math.sin(c * 0.045 + seed) * amp + Math.sin(c * 0.12) * amp * 0.5 + (rng() * 2 - 1) * 1.1))));
       if (gr < target) gr++; else if (gr > target) gr--;
       top[c] = gr;
       for (let r = gr; r < H - 2; r++) put(g, c, r, matFn(r - gr));
@@ -109,6 +113,50 @@ const LEVELS = (function () {
     if (loot) put(g, c, baseR - h - 2, loot); coinAt(g, c + 1, baseR - h - 2);
   }
 
+  // ---- CONSTRUÇÕES SUBTERRÂNEAS ----------------------------------------------
+  // Uma sala "encravada" na terra, ABAIXO da superfície, com fundo sombreado e um
+  // ALÇAPÃO: um poço de escada que desce da superfície (atravessando o solo) até a sala.
+  // Como o topo da escada é "sólido", o jogador pisa nele e desce com a seta p/ baixo.
+  function underground(g, S, c0, w, roomH, mat, content, o) {
+    o = o || {}; const lc = c0 + 1; const surfR = S(lc);
+    // ancora o teto ABAIXO do ponto mais baixo da superfície no vão, p/ enterrar a sala inteira
+    let baseSurf = 0; for (let c = c0; c < c0 + w; c++) baseSurf = Math.max(baseSurf, S(c));
+    const ceil = baseSurf + (o.gap || 5), floor = ceil + roomH, bgm = o.bgMat || mat;
+    // escava a câmara e pinta o fundo sombreado (igual aos interiores das construções)
+    for (let r = ceil + 1; r < floor; r++) for (let c = c0 + 1; c < c0 + w - 1; c++) { put(g, c, r, '.'); bgPut(c, r, bgm); }
+    // paredes, teto e piso de pedra/tijolo
+    vline(g, c0, ceil, floor, mat); vline(g, c0 + w - 1, ceil, floor, mat);
+    hline(g, ceil, c0, c0 + w - 1, mat); hline(g, floor, c0, c0 + w - 1, mat);
+    // ALÇAPÃO: poço de escada da superfície até o piso (atravessa solo + teto da sala)
+    for (let r = surfR; r < floor; r++) { put(g, lc, r, 'h'); bgPut(lc, r, bgm); }
+    // patamares internos opcionais (salas mais altas)
+    if (o.mids) for (let f = 1; f <= o.mids; f++) { const fr = ceil + Math.round(roomH * f / (o.mids + 1)); hline(g, fr, c0 + 2, c0 + w - 2, mat); put(g, lc, fr, 'h'); }
+    if (content) content(g, floor, ceil, c0, w, lc);
+    return { ceil, floor, lc };
+  }
+  // conteúdos subterrâneos (≥5 tipos)
+  const ugCrypt = (g, floor, ceil, c0, w, lc) => {          // catacumba: caixões, ossos, teias, tesouro
+    for (let c = c0 + 3; c < c0 + w - 2; c += 3) air(g, c, floor - 1, "'");
+    put(g, c0 + w - 3, floor - 1, '$'); coinAt(g, c0 + 2, floor - 1);
+    air(g, c0 + 2, ceil + 1, 'Y'); air(g, c0 + w - 3, ceil + 1, 'Y'); put(g, c0 + w - 4, floor - 1, 'z');
+  };
+  const ugVault = (g, floor, ceil, c0, w, lc) => {          // cofre enterrado: ouro e token
+    hline(g, floor - 1, c0 + 3, c0 + w - 3, '$'); put(g, c0 + (w >> 1), floor - 1, 'T');
+    air(g, c0 + 2, floor - 2, 'W'); air(g, c0 + w - 3, floor - 2, 'W');
+  };
+  const ugPowder = (g, floor, ceil, c0, w, lc) => {         // paiol subterrâneo: pólvora e foguetes
+    ['X', 'K', 'X', 'K', 'X'].forEach((b, i) => put(g, c0 + 3 + i, floor - 1, b));
+    put(g, c0 + w - 3, floor - 1, 'M'); air(g, c0 + 2, ceil + 1, 't');
+  };
+  const ugCell = loot => (g, floor, ceil, c0, w, lc) => {   // masmorra/cela subterrânea
+    for (let c = c0 + 2; c < c0 + w - 1; c++) if (c !== lc) put(g, c, ceil + 2, 'J');
+    put(g, c0 + 3, floor - 1, loot || 'Q'); coinAt(g, c0 + w - 3, floor - 1); put(g, c0 + w - 4, floor - 1, 'z');
+  };
+  const ugGrotto = (g, floor, ceil, c0, w, lc) => {         // gruta de cristais
+    for (let c = c0 + 2; c < c0 + w - 1; c += 2) put(g, c, floor - 1, '<');
+    put(g, c0 + (w >> 1), floor - 1, 'Q'); air(g, c0 + 2, ceil + 1, 'V'); air(g, c0 + w - 3, ceil + 1, 'V');
+  };
+
   function grnd(g, S) { for (let c = 6; c < g[0].length - 6; c += 5) coinAt(g, c, S(c) - 2); for (let c = 3; c < g[0].length - 3; c += 7) air(g, c, S(c) - 1, 'G'); }
 
   // ===================== CAMPAIGN ============================
@@ -119,7 +167,8 @@ const LEVELS = (function () {
     building(g, S, 40, 13, 3, 5, 'B', barracks('z'), { banner: true });   // barracks
     building(g, S, 120, 14, 3, 5, 'B', prison('Q'), { banner: true });    // prison block
     building(g, S, 230, 14, 4, 5, 'B', arsenal, { banner: true });        // armory (explosive!)
-    climbWall(g, S, 200, 16, 'B'); climbWall(g, S, 312, 18, 'B');
+    underground(g, S, 64, 11, 6, 'B', ugCell('Q'), { bgMat: 'B' });        // masmorra enterrada
+    underground(g, S, 286, 10, 5, 'B', ugVault, { bgMat: 'D' });           // cofre enterrado
     tunnel(g, S, 90, 116, 'D', 'T');
     barrels(g, S, [70, 180, 300], 'X'); barrels(g, S, [100, 210, 330], 'K');
     grnd(g, S); put(g, 86, S(86) - 1, 'H'); put(g, 305, S(305) - 6, 'Q');
@@ -137,7 +186,8 @@ const LEVELS = (function () {
     building(g, S, 96, 14, 3, 5, 'S', prison('o'), { banner: true });
     building(g, S, 210, 13, 2, 5, 'S', barracks('w'), {});
     building(g, S, 300, 14, 3, 5, 'S', arsenal, {});
-    climbWall(g, S, 150, 15, 'S'); climbWall(g, S, 256, 16, 'S');
+    underground(g, S, 64, 12, 6, 'S', ugCrypt, { bgMat: 'D' });            // catacumba sob a vila
+    underground(g, S, 200, 11, 5, 'S', ugPowder, { bgMat: 'S' });          // paiol enterrado
     tunnel(g, S, 130, 156, 'S', 'Q'); tunnel(g, S, 230, 260, 'S', 'T');
     barrels(g, S, [60, 190, 340], 'X'); barrels(g, S, [120, 280], 'K');
     grnd(g, S); put(g, 86, S(86) - 1, 'H'); put(g, 350, S(350) - 1, '$');
@@ -155,8 +205,8 @@ const LEVELS = (function () {
     for (let c = 14; c < W - 10; c += 26) { vline(g, c, 2, 6, 'C'); air(g, c + 1, 7, 'Y'); }
     building(g, S, 40, 14, 3, 5, 'C', prison('o'), {});       // dungeon cell-block
     building(g, S, 200, 16, 4, 5, 'C', prison('Q'), { banner: true });
-    climbWall(g, S, 100, 18, 'C'); climbWall(g, S, 168, 18, 'C'); climbWall(g, S, 280, 20, 'C');
-    ladder(g, 110, S(110) - 18, S(110) - 1); ladder(g, 286, S(286) - 20, S(286) - 1);
+    underground(g, S, 70, 11, 6, 'C', ugGrotto, { bgMat: 'm' });           // gruta de cristais
+    underground(g, S, 238, 12, 6, 'C', ugCrypt, { bgMat: 'm' });           // catacumba profunda
     tunnel(g, S, 130, 200, 'C', 'T'); tunnel(g, S, 260, 320, 'm', 'Q');
     barrels(g, S, [60, 250], 'X'); barrels(g, S, [160, 300], 'K');
     grnd(g, S); put(g, 86, S(86) - 1, 'H');
@@ -174,7 +224,8 @@ const LEVELS = (function () {
     building(g, S, 44, 13, 3, 5, 'B', barracks('r'), { banner: true });
     building(g, S, 150, 16, 4, 5, 'B', arsenal, { banner: true });     // grand arsenal
     building(g, S, 300, 14, 3, 5, 'B', prison('Q'), {});
-    climbWall(g, S, 110, 18, 'B'); climbWall(g, S, 250, 20, 'B');
+    underground(g, S, 80, 11, 6, 'B', ugPowder, { bgMat: 'D' });           // paiol enterrado
+    underground(g, S, 348, 10, 5, 'B', ugVault, { bgMat: 'B' });           // cripta do tesouro
     tunnel(g, S, 200, 270, 'B', 'T');
     barrels(g, S, [70, 230, 340], 'X'); barrels(g, S, [100, 200, 360], 'K');
     grnd(g, S); put(g, 130, S(130) - 1, 'H');
@@ -197,8 +248,8 @@ const LEVELS = (function () {
     building(g, S, 30, 16, 5, 5, 'C', prison('Q'), { banner: true });     // tall cell-block A
     building(g, S, 150, 18, 5, 5, 'C', prison('o'), { banner: true });    // cell-block B
     building(g, S, 270, 16, 4, 5, 'C', arsenal, {});
-    climbWall(g, S, 100, 24, 'C'); climbWall(g, S, 210, 26, 'C'); climbWall(g, S, 320, 22, 'C');
-    ladder(g, 105, S(105) - 24, S(105) - 1); ladder(g, 214, S(214) - 26, S(214) - 1);
+    underground(g, S, 55, 10, 6, 'C', ugCell('Q'), { bgMat: 'C' });        // bloco de celas subterrâneo
+    underground(g, S, 252, 10, 6, 'C', ugGrotto, { bgMat: '#' });          // gruta sob a prisão
     tunnel(g, S, 75, 140, 'C', 'T'); tunnel(g, S, 175, 250, '#', 'Q');
     barrels(g, S, [60, 200, 300], 'X'); barrels(g, S, [110, 250], 'K');
     grnd(g, S); put(g, 86, S(86) - 1, 'H'); put(g, 200, S(200) - 16, 'T');
@@ -217,8 +268,8 @@ const LEVELS = (function () {
     building(g, S, 130, 16, 5, 5, 'B', arsenal, { banner: true });
     building(g, S, 250, 16, 4, 5, 'B', arsenal, { banner: true });
     building(g, S, 330, 13, 3, 5, 'B', barracks('r'), {});
-    climbWall(g, S, 100, 20, 'B'); climbWall(g, S, 220, 22, 'B'); climbWall(g, S, 310, 18, 'B');
-    ladder(g, 105, S(105) - 20, S(105) - 1); ladder(g, 224, S(224) - 22, S(224) - 1);
+    underground(g, S, 60, 10, 6, 'B', ugPowder, { bgMat: 'D' });           // depósito subterrâneo de pólvora
+    underground(g, S, 366, 10, 5, 'B', ugVault, { bgMat: 'B' });           // cofre enterrado
     tunnel(g, S, 170, 240, 'B', 'T');
     // rocket-barrel walls — shoot one and watch the chain
     for (let i = 0; i < 5; i++) put(g, 190 + i, S(190) - 1 - i, 'K');
@@ -241,8 +292,9 @@ const LEVELS = (function () {
     building(g, S, 40, 14, 4, 5, 'p', barracks('z'), { banner: true });
     building(g, S, 130, 16, 4, 5, 'k', prison('Q'), { banner: true, bgMat: 'p' });
     building(g, S, 250, 15, 5, 5, 'p', arsenal, { banner: true });
-    // paredes para escalar (faces de templo)
-    climbWall(g, S, 100, 18, 'p'); climbWall(g, S, 210, 20, 'k'); climbWall(g, S, 320, 18, 'p');
+    // câmaras subterrâneas do templo (escavadas na terra, com alçapão de escada)
+    underground(g, S, 64, 11, 6, 'p', ugCrypt, { bgMat: 'p' });            // tumba de pedra do templo
+    underground(g, S, 350, 10, 6, 'k', ugGrotto, { bgMat: 'p' });          // gruta de cristais
     // passarelas de tábua suspensas entre as estruturas
     platform(g, 58, S(58) - 13, 10, 'l'); platform(g, 182, S(182) - 16, 12, 'l'); platform(g, 300, S(300) - 12, 9, 'l');
     // folhagem densa como cobertura

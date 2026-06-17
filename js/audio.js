@@ -85,33 +85,89 @@ const Sound = {
 };
 
 /* ============================================================
-   Sound.music — trilha épica procedural (sem arquivos)
-   Loop heróico em Lá menor (i–VI–III–VII): baixo + acordes +
-   bateria + melodia. Ajuste tempo/volume/notas para refinar.
+   Sound.music — trilha procedural de BATALHA, uma por nível.
+   Step-sequencer em colcheias: baixo motor + tambores tribais
+   (bumbo, caixa, toms graves/agudos, chocalho) + pad de poder
+   + melodia modal. Cada faixa usa um modo/clima diferente para
+   soar épica, tensa e única.  start(levelIndex) escolhe a faixa.
    ============================================================ */
 Sound.music = {
-  playing: false, _timer: null, beat: 0, gain: null, spb: 0.6,
-  bpm: 100, vol: 0.5,                 // <<< volume da trilha (relativo ao master)
-  // notas (Hz)
-  N: { 'E2': 82.41, 'F2': 87.31, 'G2': 98.00, 'A2': 110.0, 'C3': 130.81, 'D3': 146.83, 'E3': 164.81,
-       'F3': 174.61, 'G3': 196.0, 'A3': 220.0, 'B3': 246.94, 'C4': 261.63, 'D4': 293.66, 'E4': 329.63,
-       'F4': 349.23, 'G4': 392.0, 'A4': 440.0 },
-  // 1 acorde por compasso (4 compassos): Am – F – C – G
-  bassN:   ['A2', 'F2', 'C3', 'G2'],
-  chordsN: [['A3', 'C4', 'E4'], ['F3', 'A3', 'C4'], ['C4', 'E4', 'G4'], ['G3', 'B3', 'D4']],
-  // melodia heróica (16 beats; null = pausa)
-  melN: ['E4', null, 'A4', 'C4', 'F4', null, 'C4', 'D4', 'E4', null, 'G4', 'E4', 'D4', null, 'B3', 'D4'],
+  playing: false, _timer: null, step: 0, gain: null, stepDur: 0.22, cur: 0,
 
-  start() {
+  // frequência (Hz) a partir do nome da nota, ex.: 'A2', 'C#3'
+  _SEMI: { 'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11 },
+  _f(name) {
+    if (!name) return 0;
+    const o = +name.slice(-1), n = name.slice(0, -1);
+    return 440 * Math.pow(2, ((o + 1) * 12 + this._SEMI[n] - 69) / 12);
+  },
+
+  // === FAIXAS (uma por fase) — len 16 colcheias (2 compassos). drum: K bumbo, S caixa,
+  // T tom agudo, t tom grave, H chocalho/prato, C palma; '.' = silêncio (combine, ex. 'Kt') ===
+  tracks: [
+    { // 0 — PORTÃO DE FERRO: marcha marcial heroica (Lá menor)
+      name: 'iron', bpm: 130, vol: 0.5, bassType: 'sawtooth', melType: 'square',
+      bass: ['A1','A2','A1','E2','F1','F2','F1','C2','C2','C3','C2','G2','G1','G2','D2','E2'],
+      chord: { 0:['A3','C4','E4'], 4:['F3','A3','C4'], 8:['C4','E4','G4'], 12:['G3','B3','D4'] },
+      mel:  ['E4',null,'A4','E4','F4',null,'C4','D4','E4',null,'G4','E4','D4','B3',null,'E4'],
+      drum: ['K','H','S','t','K','H','S','T','K','H','S','t','K','T','S','t'],
+    },
+    { // 1 — VILA DOS LAMENTOS: tensão sombria e lamentosa (Ré menor harmônica)
+      name: 'lament', bpm: 116, vol: 0.5, bassType: 'triangle', melType: 'triangle',
+      bass: ['D2','D2','A2','D2','Bb1','Bb1','F2','Bb1','C2','C2','G2','C2','A1','A1','E2','A1'],
+      chord: { 0:['D3','F3','A3'], 4:['Bb2','D3','F3'], 8:['C3','E3','G3'], 12:['A2','C#3','E3'] },
+      mel:  ['D4',null,'F4','E4','D4',null,'A3',null,'C4',null,'E4','D4','C#4',null,'A3',null],
+      drum: ['K','.','S','.','t','.','S','.','K','.','S','t','t','.','S','.'],
+    },
+    { // 2 — CATACUMBAS: drone exótico e ritualístico (Mi frígio)
+      name: 'crypt', bpm: 110, vol: 0.48, bassType: 'sawtooth', melType: 'triangle',
+      bass: ['E2','E2','E2','F2','E2','E2','C2','D2','E2','E2','E2','F2','G2','G2','F2','E2'],
+      chord: { 0:['E3','G3','B3'], 4:['F3','A3','C4'], 8:['E3','G3','B3'], 12:['D3','F3','A3'] },
+      mel:  ['E4',null,null,'F4',null,'E4',null,null,'G4',null,'F4','E4',null,'D4',null,null],
+      drum: ['K','.','.','t','.','.','S','.','K','.','t','.','.','.','S','.'],
+    },
+    { // 3 — O TRONO DO DEVORADOR: batalha frenética de chefe (Dó menor harmônica)
+      name: 'boss', bpm: 148, vol: 0.52, bassType: 'sawtooth', melType: 'square',
+      bass: ['C2','C2','G2','C2','Ab1','Ab1','Eb2','Ab1','F2','F2','C3','F2','G2','G2','B2','G2'],
+      chord: { 0:['C3','Eb3','G3'], 4:['Ab2','C3','Eb3'], 8:['F2','Ab2','C3'], 12:['G2','B2','D3'] },
+      mel:  ['C5',null,'G4','C5','Ab4',null,'Eb4','F4','G4',null,'C5','B4','C5',null,'G4','B4'],
+      drum: ['K','H','S','K','K','H','S','H','K','H','S','K','T','t','S','T'],
+    },
+    { // 4 — A PRISÃO DE PEDRA: tambores tribais motores (Sol menor)
+      name: 'stone', bpm: 126, vol: 0.5, bassType: 'sawtooth', melType: 'square',
+      bass: ['G1','G2','D2','G2','Eb2','Eb2','Bb1','Eb2','F1','F2','C2','F2','D2','D2','A2','D2'],
+      chord: { 0:['G3','Bb3','D4'], 4:['Eb3','G3','Bb3'], 8:['Bb2','D3','F3'], 12:['D3','F#3','A3'] },
+      mel:  ['G4',null,'Bb4','G4','D4',null,'Eb4','F4','G4',null,'D5','Bb4','A4',null,'F#4','A4'],
+      drum: ['K','t','S','t','K','T','S','t','K','t','S','t','T','t','S','T'],
+    },
+    { // 5 — O ARSENAL: caos exótico e veloz (Lá frígio dominante)
+      name: 'arsenal', bpm: 152, vol: 0.52, bassType: 'sawtooth', melType: 'square',
+      bass: ['A1','A2','A1','E2','Bb1','Bb1','F2','Bb1','A1','A2','C#2','E2','D2','D2','A1','E2'],
+      chord: { 0:['A2','C#3','E3'], 4:['Bb2','D3','F3'], 8:['D3','F3','A3'], 12:['E3','G#3','B3'] },
+      mel:  ['A4','Bb4','C#5','A4','E4',null,'F4','E4','D4','C#4','D4','E4','F4',null,'E4','A4'],
+      drum: ['K','H','S','H','K','H','S','K','K','H','S','H','K','T','S','T'],
+    },
+    { // 6 — TEMPLO NA SELVA: ritmo tribal de toms na mata (Mi dórico)
+      name: 'jungle', bpm: 122, vol: 0.5, bassType: 'triangle', melType: 'triangle',
+      bass: ['E2','E2','B2','E2','A1','A1','E2','A1','D2','D2','A2','D2','B1','B1','F#2','B1'],
+      chord: { 0:['E3','G3','B3'], 4:['A2','C#3','E3'], 8:['D3','F#3','A3'], 12:['B2','D3','F#3'] },
+      mel:  ['E4',null,'G4','A4','B4',null,'A4','G4','E4',null,'D4','E4','G4',null,'B4','A4'],
+      drum: ['K','T','t','T','S','T','t','T','K','T','t','T','S','T','t','T'],
+    },
+  ],
+
+  start(idx = 0) {
     Sound.ensure(); Sound.resume();
     if (!Sound.ctx || this.playing) return;
-    this.playing = true; this.beat = 0; this.spb = 60 / this.bpm;
+    this.cur = ((idx % this.tracks.length) + this.tracks.length) % this.tracks.length;
+    const tk = this.tracks[this.cur];
+    this.playing = true; this.step = 0; this.stepDur = 60 / tk.bpm / 2;   // colcheias
     this.gain = Sound.ctx.createGain();
     this.gain.gain.setValueAtTime(0.0001, Sound.ctx.currentTime);
-    this.gain.gain.linearRampToValueAtTime(this.vol, Sound.ctx.currentTime + 1.5);  // fade-in
+    this.gain.gain.linearRampToValueAtTime(tk.vol != null ? tk.vol : 0.5, Sound.ctx.currentTime + 1.8);  // fade-in
     this.gain.connect(Sound.master);
-    this._beat();
-    this._timer = setInterval(() => this._beat(), this.spb * 1000);
+    this._tick();
+    this._timer = setInterval(() => this._tick(), this.stepDur * 1000);
   },
   stop() {
     if (!this.playing) return;
@@ -126,6 +182,7 @@ Sound.music = {
   },
 
   _tone(t, type, f, dur, vol, attack) {
+    if (!f) return;
     const c = Sound.ctx, o = c.createOscillator(), g = c.createGain();
     o.type = type; o.frequency.value = f;
     g.gain.setValueAtTime(0.0001, t);
@@ -133,32 +190,50 @@ Sound.music = {
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(g); g.connect(this.gain); o.start(t); o.stop(t + dur + 0.03);
   },
+  _noiseSrc(dur) {
+    const c = Sound.ctx, n = Math.floor(c.sampleRate * dur), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    const s = c.createBufferSource(); s.buffer = buf; return s;
+  },
+  _env(node, t, v, dur) { const g = Sound.ctx.createGain(); g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); node.connect(g); g.connect(this.gain); return g; },
   _drum(t, kind) {
     const c = Sound.ctx;
-    if (kind === 'kick') {
-      const o = c.createOscillator(), g = c.createGain();
-      o.type = 'sine'; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
-      g.gain.setValueAtTime(0.6, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
-      o.connect(g); g.connect(this.gain); o.start(t); o.stop(t + 0.18);
-    } else { // snare
-      const n = Math.floor(c.sampleRate * 0.13), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
-      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
-      const s = c.createBufferSource(); s.buffer = buf;
-      const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 1100;
-      const g = c.createGain(); g.gain.value = 0.22;
-      s.connect(f); f.connect(g); g.connect(this.gain); s.start(t);
+    if (kind === 'K') {                                   // bumbo de guerra
+      const o = c.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(165, t); o.frequency.exponentialRampToValueAtTime(44, t + 0.13);
+      this._env(o, t, 0.75, 0.2); o.start(t); o.stop(t + 0.22);
+    } else if (kind === 'S') {                            // caixa
+      const n = this._noiseSrc(0.18), f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 1500;
+      n.connect(f); this._env(f, t, 0.3, 0.16); n.start(t);
+      const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = 190; this._env(o, t, 0.12, 0.1); o.start(t); o.stop(t + 0.12);
+    } else if (kind === 'T' || kind === 't') {            // toms tribais (agudo / grave)
+      const f0 = kind === 'T' ? 250 : 140, o = c.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * 0.5, t + 0.22);
+      this._env(o, t, 0.5, 0.26); o.start(t); o.stop(t + 0.3);
+      const n = this._noiseSrc(0.1), lf = c.createBiquadFilter(); lf.type = 'lowpass'; lf.frequency.value = f0 * 3.5;
+      n.connect(lf); this._env(lf, t, 0.07, 0.1); n.start(t);
+    } else if (kind === 'H') {                            // chocalho / prato
+      const n = this._noiseSrc(0.05), f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 6500;
+      n.connect(f); this._env(f, t, 0.1, 0.05); n.start(t);
+    } else if (kind === 'C') {                            // palma
+      const n = this._noiseSrc(0.12), f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1700; f.Q.value = 1.2;
+      n.connect(f); this._env(f, t, 0.22, 0.12); n.start(t);
     }
   },
-  _beat() {
+  _tick() {
     const c = Sound.ctx; if (!c || !this.playing || !this.gain) return;
-    const t = c.currentTime + 0.03, spb = this.spb, b = this.beat % 16, bar = (b / 4) | 0, bib = b % 4;
-    const N = this.N;
-    this._tone(t, 'triangle', N[this.bassN[bar]], spb * 0.95, 0.5, 0.01);          // baixo pulsante
-    if (bib === 0) this.chordsN[bar].forEach(nm => this._tone(t, 'triangle', N[nm], spb * 4 * 0.96, 0.085, 0.06)); // pad do compasso
-    if (bib === 0 || bib === 2) this._drum(t, 'kick');
-    if (bib === 1 || bib === 3) this._drum(t, 'snare');
-    const mel = this.melN[b];
-    if (mel) this._tone(t, 'square', N[mel], spb * 0.9, 0.14, 0.01);                // melodia heróica
-    this.beat++;
+    const t = c.currentTime + 0.04, tk = this.tracks[this.cur], sd = this.stepDur, s = this.step % 16;
+    // baixo motor
+    this._tone(t, tk.bassType || 'sawtooth', this._f(tk.bass[s % tk.bass.length]), sd * 1.35, 0.32, 0.005);
+    // pad de poder (sustentado por compasso, nos passos marcados)
+    const ch = tk.chord && tk.chord[s];
+    if (ch) ch.forEach(nm => this._tone(t, 'triangle', this._f(nm), sd * 8 * 0.96, 0.06, 0.05));
+    // melodia modal
+    const mn = tk.mel[s % tk.mel.length];
+    if (mn) this._tone(t, tk.melType || 'square', this._f(mn), sd * 1.5, 0.12, 0.008);
+    // percussão tribal
+    const dr = tk.drum[s % tk.drum.length];
+    if (dr && dr !== '.') for (const k of dr) this._drum(t, k);
+    this.step++;
   },
 };

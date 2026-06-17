@@ -67,6 +67,8 @@ class Game {
     }
     if (!this.spawn) this.spawn = { x: T * 2, y: T * 2 };
     world.settle();             // instantly rest any unsupported gravity blocks on load
+    world.markGrass();          // freeze grass onto the original surface only (no re-growth after digging)
+    this._anchorDecor();        // tie each suspended decoration to the block it hangs on
     this.spawnPlayer(true);
     this.cam.x = clamp(this.player.x - CONFIG.W / 2, 0, Math.max(0, world.pixelW - CONFIG.W));
     this.cam.y = clamp(this.player.y - CONFIG.H / 2, 0, Math.max(0, world.pixelH - CONFIG.H));
@@ -76,6 +78,29 @@ class Game {
 
   _setSky(L) {
     this.canvas.style.background = `linear-gradient(${L.sky[0]}, ${L.sky[1]})`;
+  }
+
+  // Anchor each suspended decoration (window, banner, candle, torch, vine…) to the nearest
+  // structural tile in its natural mounting direction. When that block is destroyed the
+  // decoration vanishes (see update()).
+  _anchorDecor() {
+    const T = this.world.T, W = this.world;
+    const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+    const MOUNT = {
+      banner: ['up'], lantern: ['up'], chain: ['up'], vines: ['up'], sign: ['up'], web: ['up', 'left', 'right'],
+      window: ['up', 'down', 'left', 'right'], shield: ['down', 'up', 'left', 'right'], bars: ['left', 'right', 'up', 'down'],
+    };
+    for (const d of this.decor) {
+      const c = (d.x / T) | 0, r = (d.y / T) | 0;
+      const order = MOUNT[d.type] || ['down', 'up', 'left', 'right'];   // most props sit on the block below
+      d.ac = null; d.ar = null;
+      for (let step = 1; step <= 3 && d.ac == null; step++) {
+        for (const dir of order) {
+          const dd = DIRS[dir], ac = c + dd[0] * step, ar = r + dd[1] * step;
+          if (W.solid(ac, ar)) { d.ac = ac; d.ar = ar; break; }
+        }
+      }
+    }
   }
 
   spawnPlayer(fresh) {
@@ -249,6 +274,9 @@ class Game {
       this.freeze = Math.max(this.freeze, 0.05);
     }
 
+    // suspended decorations fall away once the block they were mounted on is destroyed
+    if (this.decor.length) this.decor = this.decor.filter(d => d.ac == null || this.world.solid(d.ac, d.ar));
+
     // cull dead
     this.enemies = this.enemies.filter(e => e.alive);
     this.bullets = this.bullets.filter(b => b.alive);
@@ -322,7 +350,8 @@ class Game {
       ctx.fillStyle = '#fff'; ctx.font = 'bold 11px "Trebuchet MS"'; ctx.textAlign = 'center'; ctx.fillText('SAÍDA', x + T / 2, y - 4); ctx.textAlign = 'left';
     }
 
-    this.fx.drawDecals(ctx, this.cam);   // persistent blood/rubble/scorch — trail of destruction
+    this.fx.drawDecals(ctx, this.cam);   // persistent scorch marks — trail of destruction
+    this.fx.drawCrumbs(ctx, this.cam);   // settled mini-block debris & gore on the ground
     for (const k of this.pickups) k.draw(ctx, this.cam);
     for (const a of this.allies) a.draw(ctx, this.cam);
     for (const e of this.enemies) if (this.cam.visible(e.x, e.y, e.w, e.h)) e.draw(ctx, this.cam);

@@ -305,6 +305,7 @@ class Player extends Entity {
     this.ammo = this.clip; this.reloading = 0;
     this.jumps = 0; this.hoverT = 0; this.dashT = 0; this.dashCd = 0;
     this.aimAng = 0; this.dead = false; this.deathT = 0;
+    this.meleeCd = 0; this._prevFeet = null;
   }
   setHero(i) {
     this.heroIndex = i;
@@ -343,6 +344,7 @@ class Player extends Entity {
     this.cool = Math.max(0, this.cool - dt);
     this.specCool = Math.max(0, this.specCool - dt);
     this.dashCd = Math.max(0, this.dashCd - dt);
+    this.meleeCd = Math.max(0, this.meleeCd - dt);
     this.attackT = Math.max(0, this.attackT - dt * 5); // melee swing decay
     this.swordMode = Math.max(0, (this.swordMode || 0) - dt);
     this.powered = Math.max(0, (this.powered || 0) - dt); // magic-potion buff timer
@@ -369,16 +371,30 @@ class Player extends Entity {
       else this.vx = approach(this.vx, 0, (this.onGround ? 3400 : 1200) * dt);
     }
 
-    // ---- ladders: grab when overlapping ladder tiles and pressing up/down ----
-    const onLadderTile = game.world.ladderAt(this.cx, this.cy) || game.world.ladderAt(this.cx, this.y + this.h - 6) || game.world.ladderAt(this.cx, this.y + 4);
-    if (onLadderTile && (c.up || c.down)) this.onLadder = true;
-    if (!onLadderTile) this.onLadder = false;
+    // ---- ladders: climb, and STAND on the top rung until you actively press down ----
+    const T = game.world.T;
+    const feet = this.y + this.h;
+    const overlapLadder = game.world.ladderAt(this.cx, this.cy) || game.world.ladderAt(this.cx, feet - 6) || game.world.ladderAt(this.cx, this.y + 6);
+    // a ladder tile directly below the feet whose tile above is NOT a ladder = the top rung
+    const probeY = feet + 3;
+    const ladderTopBelow = game.world.ladderAt(this.cx, probeY) && !game.world.ladderAt(this.cx, probeY - T);
+
+    if (overlapLadder && (c.up || c.down)) this.onLadder = true;
+    if (!this.onLadder && ladderTopBelow && c.down) { this.y += 7; this.onLadder = true; }   // step down off the top
+    if (!overlapLadder && !ladderTopBelow) this.onLadder = false;
     const onLadder = this.onLadder;
 
     const jumpEdge = c.jumpPressed();
     if (onLadder) {
       this.jumps = this.maxJumps; this.clinging = false;
       this.vy = (c.up ? -1 : c.down ? 1 : 0) * 190;
+      // climbing past the very top: clamp the feet to the top rung so you stand on it like ground
+      if (c.up) {
+        let topRow = Math.floor(this.cy / T);
+        while (game.world.ladderAt(this.cx, (topRow - 1) * T + T / 2)) topRow--;
+        const surfaceY = topRow * T;
+        if (this.y + this.h <= surfaceY + 2) { this.y = surfaceY - this.h; this.vy = 0; this.onGround = true; this.onLadder = false; }
+      }
       if (jumpEdge) { this.onLadder = false; this.vy = -this.jumpV * 0.8; Sound.jump(); }
       if (Math.abs(this.vy) > 10 && Math.random() < 0.2) game.fx.spark(this.cx, this.cy, '#caa07a', 1);
     } else {
@@ -417,6 +433,18 @@ class Player extends Entity {
     }
     game.world.moveAndCollide(this, dt);
 
+    // one-way landing on a ladder's top rung: rest on it like solid ground (descend only via DOWN)
+    if (!this.onLadder && this.vy >= 0 && !c.down) {
+      const fy = this.y + this.h, pY = fy + 1;
+      if (game.world.ladderAt(this.cx, pY) && !game.world.ladderAt(this.cx, pY - T)) {
+        const surfaceY = Math.floor(pY / T) * T;
+        if (this._prevFeet != null && this._prevFeet <= surfaceY + 3) {
+          this.y = surfaceY - this.h; this.vy = 0; this.onGround = true; this.jumps = this.maxJumps;
+        }
+      }
+    }
+    this._prevFeet = this.y + this.h;
+
     // ---- weapons ----
     if (this.reloading > 0) {
       this.reloading -= dt;
@@ -427,6 +455,13 @@ class Player extends Entity {
     if (c.special && this.specCool <= 0 && this.special >= this.hero.special.cost) {
       this.hero.special.use(this, game);
       this.special -= this.hero.special.cost; this.specCool = this.hero.special.cd;
+    }
+
+    // ---- melee: sword strike (R), available to every hero ----
+    if (c.meleePressed() && this.meleeCd <= 0) {
+      this.meleeCd = 0.4; this.swordMode = 0.3; this.attackT = 1;   // swordMode makes the sprite draw a blade
+      game.meleeArc(this, { range: 54, arc: 1.15, dmg: 28, tileDmg: 22, knock: 250, color: 'rgba(230,238,255,0.95)', shake: 4 });
+      Sound.slash();
     }
 
     // anim clocks: anim = seconds (idle), runDist = foot-locked distance (run cycle)
