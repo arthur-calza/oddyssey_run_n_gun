@@ -49,6 +49,7 @@
     menu.appendChild(btn('☰  SELECIONAR FASE', showLevelSelect));
     menu.appendChild(btn('🛒  LOJA', showShop));
     menu.appendChild(btn('♟  HERÓIS', showHeroes));
+    menu.appendChild(btn('📖  ENCICLOPÉDIA VISUAL', showGallery));
     menu.appendChild(btn('🛠  FASE DE TESTES', () => startLevel(LEVELS.length - 1)));
     showScreen(true);
   }
@@ -104,17 +105,69 @@
     showScreen(true);
   }
 
+  function showGallery() {
+    appState = 'gallery';
+    screen.style.display = 'none';          // libera o canvas para o visualizador
+    controlsBox.style.display = 'none';
+    game.showHUD(false);
+    Gallery.open(canvas, () => { Gallery.close(); showMenu(); });
+  }
+
+  // ---- micromenu de PAUSA -----------------------------------
+  let pauseEl = null;
+  function buildPauseMenu() {
+    if (pauseEl) return pauseEl;
+    const ov = document.createElement('div');
+    ov.id = 'pauseMenu';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:60;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;';
+    const title = document.createElement('div');
+    title.style.cssText = 'color:#e8b94a;font-size:44px;letter-spacing:4px;text-shadow:2px 2px 0 #000;';
+    title.textContent = 'PAUSADO';
+    const box = document.createElement('div');
+    box.style.cssText = 'display:flex;flex-direction:column;gap:12px;width:min(360px,80vw);';
+    box.appendChild(btn('▶  Continuar', resumeGame));
+    const quit = btn('⌂  Retornar ao menu', quitToMenu);
+    quit.style.borderColor = '#b1322c';
+    box.appendChild(quit);
+    const warn = document.createElement('div');
+    warn.style.cssText = 'color:#9a8f7d;font-size:12px;margin-top:2px;';
+    warn.textContent = 'Ao retornar, o orégano e os tokens coletados NESTA fase serão perdidos.';
+    ov.appendChild(title); ov.appendChild(box); ov.appendChild(warn);
+    document.body.appendChild(ov);
+    pauseEl = ov; return ov;
+  }
+  function pauseGame() {
+    if (game.state !== 'playing' || game.paused) return;
+    game.paused = true; Sound.swap();
+    buildPauseMenu().style.display = 'flex';
+  }
+  function resumeGame() {
+    if (!game.paused) return;
+    game.paused = false;
+    if (pauseEl) pauseEl.style.display = 'none';
+  }
+  function quitToMenu() {
+    game.paused = false;
+    if (pauseEl) pauseEl.style.display = 'none';
+    Sound.music && Sound.music.stop();
+    showMenu();                       // progresso da fase (orégano/tokens) é descartado — não foi salvo
+  }
+  function toggleGamePause() { game.paused ? resumeGame() : pauseGame(); }
+
   function startLevel(i) {
     appState = 'playing';
+    resumeGame();                     // garante que o micromenu de pausa não fique aberto
     game.roster = [0, 1]; game.currentHero = 0; game.score = 0;
     game.oregano = 0; game.tokens = 0; game.nextLifeAt = 50;
     game.lives = 3 + (Save.hasPerk('extralife') ? 1 : 0);
     game.onEnd = onGameEnd;
     game.loadLevel(i);
     showScreen(false);
+    Sound.music && Sound.music.start();
   }
 
   function onGameEnd(result) {
+    Sound.music && Sound.music.stop();
     setTimeout(() => {
       appState = result;
       menu.innerHTML = '';
@@ -154,10 +207,12 @@
     if (dt > CONFIG.MAX_DT) dt = CONFIG.MAX_DT;
 
     if (appState === 'playing') {
-      if (Input.once('p') || Input.once('escape')) game.togglePause();
+      if (Input.once('p') || Input.once('escape')) toggleGamePause();
       game.update(dt);
       game.draw();
       game.updateHUD();
+    } else if (appState === 'gallery') {
+      Gallery.tick(dt);
     }
     Input.endFrame();
     requestAnimationFrame(frame);

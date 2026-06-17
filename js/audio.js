@@ -83,3 +83,82 @@ const Sound = {
   heal()  { this.ensure(); [523, 659, 880].forEach((f, i) => setTimeout(() => this._osc('sine', f, f * 1.3, 0.2, 0.12), i * 70)); },
   coin()  { if (!this._throttle('coin', 25)) return; this.ensure(); this._osc('square', 880, 1320, 0.07, 0.10); this._osc('square', 1320, 1760, 0.06, 0.07); },
 };
+
+/* ============================================================
+   Sound.music — trilha épica procedural (sem arquivos)
+   Loop heróico em Lá menor (i–VI–III–VII): baixo + acordes +
+   bateria + melodia. Ajuste tempo/volume/notas para refinar.
+   ============================================================ */
+Sound.music = {
+  playing: false, _timer: null, beat: 0, gain: null, spb: 0.6,
+  bpm: 100, vol: 0.5,                 // <<< volume da trilha (relativo ao master)
+  // notas (Hz)
+  N: { 'E2': 82.41, 'F2': 87.31, 'G2': 98.00, 'A2': 110.0, 'C3': 130.81, 'D3': 146.83, 'E3': 164.81,
+       'F3': 174.61, 'G3': 196.0, 'A3': 220.0, 'B3': 246.94, 'C4': 261.63, 'D4': 293.66, 'E4': 329.63,
+       'F4': 349.23, 'G4': 392.0, 'A4': 440.0 },
+  // 1 acorde por compasso (4 compassos): Am – F – C – G
+  bassN:   ['A2', 'F2', 'C3', 'G2'],
+  chordsN: [['A3', 'C4', 'E4'], ['F3', 'A3', 'C4'], ['C4', 'E4', 'G4'], ['G3', 'B3', 'D4']],
+  // melodia heróica (16 beats; null = pausa)
+  melN: ['E4', null, 'A4', 'C4', 'F4', null, 'C4', 'D4', 'E4', null, 'G4', 'E4', 'D4', null, 'B3', 'D4'],
+
+  start() {
+    Sound.ensure(); Sound.resume();
+    if (!Sound.ctx || this.playing) return;
+    this.playing = true; this.beat = 0; this.spb = 60 / this.bpm;
+    this.gain = Sound.ctx.createGain();
+    this.gain.gain.setValueAtTime(0.0001, Sound.ctx.currentTime);
+    this.gain.gain.linearRampToValueAtTime(this.vol, Sound.ctx.currentTime + 1.5);  // fade-in
+    this.gain.connect(Sound.master);
+    this._beat();
+    this._timer = setInterval(() => this._beat(), this.spb * 1000);
+  },
+  stop() {
+    if (!this.playing) return;
+    this.playing = false; clearInterval(this._timer); this._timer = null;
+    if (this.gain && Sound.ctx) {
+      const g = this.gain, t = Sound.ctx.currentTime;
+      g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value, t);
+      g.gain.linearRampToValueAtTime(0.0001, t + 0.5);
+      setTimeout(() => { try { g.disconnect(); } catch (e) {} }, 700);
+    }
+    this.gain = null;
+  },
+
+  _tone(t, type, f, dur, vol, attack) {
+    const c = Sound.ctx, o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + (attack || 0.01));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.gain); o.start(t); o.stop(t + dur + 0.03);
+  },
+  _drum(t, kind) {
+    const c = Sound.ctx;
+    if (kind === 'kick') {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+      g.gain.setValueAtTime(0.6, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      o.connect(g); g.connect(this.gain); o.start(t); o.stop(t + 0.18);
+    } else { // snare
+      const n = Math.floor(c.sampleRate * 0.13), buf = c.createBuffer(1, n, c.sampleRate), d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+      const s = c.createBufferSource(); s.buffer = buf;
+      const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 1100;
+      const g = c.createGain(); g.gain.value = 0.22;
+      s.connect(f); f.connect(g); g.connect(this.gain); s.start(t);
+    }
+  },
+  _beat() {
+    const c = Sound.ctx; if (!c || !this.playing || !this.gain) return;
+    const t = c.currentTime + 0.03, spb = this.spb, b = this.beat % 16, bar = (b / 4) | 0, bib = b % 4;
+    const N = this.N;
+    this._tone(t, 'triangle', N[this.bassN[bar]], spb * 0.95, 0.5, 0.01);          // baixo pulsante
+    if (bib === 0) this.chordsN[bar].forEach(nm => this._tone(t, 'triangle', N[nm], spb * 4 * 0.96, 0.085, 0.06)); // pad do compasso
+    if (bib === 0 || bib === 2) this._drum(t, 'kick');
+    if (bib === 1 || bib === 3) this._drum(t, 'snare');
+    const mel = this.melN[b];
+    if (mel) this._tone(t, 'square', N[mel], spb * 0.9, 0.14, 0.01);                // melodia heróica
+    this.beat++;
+  },
+};

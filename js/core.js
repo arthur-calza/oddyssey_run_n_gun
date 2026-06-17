@@ -7,9 +7,16 @@ const CONFIG = {
   W: 1280, H: 720,           // canvas resolution (internal) — higher fidelity
   TILE: 32,
   ZOOM: 1.7,                 // world render zoom (bigger, detailed sprites)
-  GRAVITY: 2500,
+  GRAVITY: 2500,             // queda-base (px/s²) — sobe afeta inimigos e queda dos heróis
+  FALL_MULT: 1.7,            // <<< TESTE: queda mais "pesada". 1 = simétrico; >1 = cai mais rápido que sobe (só herói)
   TERMINAL_VY: 1500,
   MAX_DT: 1 / 30,            // clamp big frame gaps
+  // ---- escalada de PAREDE (igual para todos os heróis; ajuste o "feeling" aqui) ----
+  WALL_JUMP_V:  760,         // impulso vertical do wall-jump
+  WALL_JUMP_VX: 270,         // empurrão horizontal ao saltar da parede
+  WALL_CLIMB_V: 150,         // velocidade ao subir a parede (segurando W)
+  WALL_SLIDE_V: 300,         // velocidade ao descer rápido (segurando S)
+  WALL_CLING_V: 70,          // deslize lento ao só se agarrar
 };
 
 // ---- math ----------------------------------------------------

@@ -200,6 +200,9 @@ class Game {
     Sound.swap();
   }
 
+  // tiros/explosões são "ouvidos" — alerta inimigos próximos (mesmo fora do campo de visão)
+  alertEnemies(x, y, radius) { for (const e of this.enemies) if (e.alive && e.hear) e.hear(x, y, radius); }
+
   win()  { if (this.state !== 'playing') return; this.state = 'win'; Save.addOregano(this.oregano); Sound.win(); if (this.onEnd) this.onEnd('win'); }
   lose() { if (this.state !== 'playing') return; this.state = 'lose'; if (this.onEnd) this.onEnd('lose'); }
 
@@ -340,12 +343,8 @@ class Game {
   }
 
   _drawPaused(ctx) {
+    // apenas escurece o cenário; o micromenu (título + botões) é desenhado em DOM por main.js
     ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, CONFIG.W, CONFIG.H);
-    ctx.fillStyle = '#e8b94a'; ctx.font = 'bold 48px "Trebuchet MS"'; ctx.textAlign = 'center';
-    ctx.fillText('PAUSADO', CONFIG.W / 2, CONFIG.H / 2);
-    ctx.font = '16px "Trebuchet MS"'; ctx.fillStyle = '#e8e0cf';
-    ctx.fillText('P / ESC para continuar', CONFIG.W / 2, CONFIG.H / 2 + 34);
-    ctx.textAlign = 'left';
   }
 
   // ---- HUD (DOM) -------------------------------------------

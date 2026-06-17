@@ -383,14 +383,21 @@ class Player extends Entity {
       if (Math.abs(this.vy) > 10 && Math.random() < 0.2) game.fx.spark(this.cx, this.cy, '#caa07a', 1);
     } else {
       // ---- wall-cling / wall-climb / wall-jump (Broforce-style) ----
+      // Tuning compartilhado (CONFIG.WALL_*) para que TODOS os heróis escalem
+      // de forma idêntica, independente da velocidade/pulo de cada um.
       const pushDir = (c.right ? 1 : 0) - (c.left ? 1 : 0);
-      const onWall = !this.onGround && this.hitWall !== 0 && pushDir === this.hitWall && this.vy > -80;
+      // permite agarrar enquanto sobe a parede (vy do climb = -WALL_CLIMB_V), mas não logo após um pulo forte
+      const onWall = !this.onGround && this.hitWall !== 0 && pushDir === this.hitWall && this.vy > -(CONFIG.WALL_CLIMB_V + 40);
       if (onWall) {
         this.clinging = true; this.wallSide = this.hitWall;
-        if (jumpEdge) { this.vy = -this.jumpV; this.vx = -this.hitWall * this.speed * 1.15; Sound.jump(); game.fx.smoke(this.cx, this.cy, 3); }
-        else if (c.up) this.vy = -150;              // climb up
-        else if (c.down) this.vy = 300;             // slide down fast
-        else this.vy = Math.min(this.vy, 70);       // cling & slow-slide
+        if (jumpEdge) {
+          this.vy = -CONFIG.WALL_JUMP_V; this.vx = -this.hitWall * CONFIG.WALL_JUMP_VX;
+          this.jumps = 0;                            // consome saltos (evita o "flutuar" do duplo-pulo do Zracks)
+          Sound.jump(); game.fx.smoke(this.cx, this.cy, 3);
+        }
+        else if (c.up) this.vy = -CONFIG.WALL_CLIMB_V;   // climb up
+        else if (c.down) this.vy = CONFIG.WALL_SLIDE_V;  // slide down fast
+        else this.vy = Math.min(this.vy, CONFIG.WALL_CLING_V); // cling & slow-slide
         if (Math.random() < 0.3) game.fx.spark(this.cx + this.hitWall * 8, this.cy + rand(-8, 10), '#caa07a', 1);
       } else {
         this.clinging = false;
@@ -401,8 +408,13 @@ class Player extends Entity {
       }
     }
 
-    // gravity (off while climbing a ladder)
-    if (!onLadder) this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, CONFIG.TERMINAL_VY);
+    // gravity (off while climbing a ladder). Queda "pesada": ao cair aplica FALL_MULT
+    // (pulo alto + queda acentuada). Ao agarrar a parede usa gravidade normal — o cap
+    // do deslize (WALL_*) controla a descida, então não acelera demais.
+    if (!onLadder) {
+      const mult = (this.vy > 0 && !this.clinging) ? CONFIG.FALL_MULT : 1;
+      this.vy = Math.min(this.vy + CONFIG.GRAVITY * mult * dt, CONFIG.TERMINAL_VY);
+    }
     game.world.moveAndCollide(this, dt);
 
     // ---- weapons ----
@@ -437,6 +449,7 @@ class Player extends Entity {
     game.fx.muzzle(m.x, m.y, this.aimAng);
     this.vx -= Math.cos(this.aimAng) * (opts.recoil || 0);
     game.cam.addShake(opts.shake || 1.2);
+    game.alertEnemies(this.cx, this.cy, 460);   // o barulho do tiro denuncia a posição
   }
   consumeAmmo(n = 1) {
     this.ammo -= n;

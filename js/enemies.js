@@ -33,10 +33,24 @@ class Enemy extends Entity {
     this.gunLen = t.boss ? 30 : (t.mini ? 24 : 18);
     this.aimAng = 0; this.stagger = 0; this.phase = 0; this.attackT = 0;
     this.score = t.score;
+    // --- percepção / patrulha ---
+    this.alert = 0;                 // >0 = está ciente do jogador (decai ao perdê-lo de vista)
+    this.patrolDir = pick([-1, 0, 1]);
+    this.patrolT = rand(0.6, 2.2);
+    this.react = 0;                 // pequeno atraso de reação antes de atirar ao avistar
+  }
+  // ouvir: alertado por tiros/explosões próximas (chamado pelo jogo)
+  hear(x, y, radius) {
+    if (this.dying != null || this.boss) return;
+    if (dist2(this.cx, this.cy, x, y) < radius * radius) {
+      if (this.alert <= 0) this.react = Math.max(this.react, 0.25);
+      this.alert = Math.max(this.alert, 3.5);
+    }
   }
   hurt(dmg, dir, game) {
     if (this.dying != null) return;
     this.hp -= dmg; this.flash = 0.1; this.stagger = 0.06;
+    this.alert = Math.max(this.alert, 4);   // levar um tiro alerta na hora
     this.vx += dir * (this.boss ? 6 : (this.mini ? 22 : 70));
     game.fx.blood(this.cx, this.cy, dir, this.boss ? 10 : 6, this.def.gore);
     if (this.hp <= 0) this.die(game, dir);
@@ -76,13 +90,30 @@ class Enemy extends Entity {
     this.stagger = Math.max(0, this.stagger - dt);
     this.attackT = Math.max(0, this.attackT - dt * 5);
     this.fireT -= dt; this.touchCd = Math.max(0, this.touchCd - dt);
+    this.alert = Math.max(0, this.alert - dt);
+    this.react = Math.max(0, this.react - dt);
     const p = game.player, target = (p && !p.dead) ? p : null;
     const dx = target ? target.cx - this.cx : 0, dy = target ? target.cy - this.cy : 0, adx = Math.abs(dx);
-    this.face = dx >= 0 ? 1 : -1;
     if (target) { const tg = SPR.gunAnchor(target), sg = SPR.gunAnchor(this); this.aimAng = Math.atan2(tg.y - sg.y, tg.x - sg.x); }
     const def = this.def;
 
-    if (this.stagger <= 0 && target && adx < def.aggro) {
+    // ---- PERCEPÇÃO: ver (cone à frente + linha de visão) ou ouvir (proximidade) ----
+    if (target && this.stagger <= 0) {
+      const los = lineClear(game.world, this.cx, this.cy, target.cx, target.cy);
+      const inFront = sign(dx) === this.face || adx < 40;          // está olhando para o jogador
+      const sightRange = def.range > 0 ? def.range : def.aggro;     // corpo-a-corpo "vê" até o aggro
+      const sees = inFront && los && adx < sightRange && Math.abs(dy) < 260;
+      const hears = los && dist2(this.cx, this.cy, target.cx, target.cy) < 150 * 150; // passos/respiração de perto
+      if (sees || hears) {
+        if (this.alert <= 0) this.react = Math.max(this.react, 0.28);  // tempo de "reação" ao avistar
+        this.alert = def.boss ? 1 : 3.5;                               // continua ciente por um tempo após perder de vista
+      }
+    }
+    const aware = this.boss || (target && this.alert > 0);
+
+    if (this.stagger <= 0 && aware) {
+      // CIENTE: caça o jogador e atira quando tiver linha de visão
+      this.face = dx >= 0 ? 1 : -1;
       let want = sign(dx);
       if (def.kite && adx < def.range * 0.5) want = -sign(dx);
       if (this.boss) want = adx > 150 ? sign(dx) : 0;
@@ -90,8 +121,11 @@ class Enemy extends Entity {
       if (this.hitWall === sign(this.vx) && this.onGround && this.vx !== 0) this.vy = -640;
       if (def.leaper && this.onGround && adx < 220 && Math.random() < 0.035) { this.vy = -460; this.vx = sign(dx) * this.speed * 1.3; }
       const inSight = def.range > 0 && adx < def.range && lineClear(game.world, this.cx, this.cy, target.cx, target.cy);
-      if (this.fireT <= 0 && inSight) { this.attack(game, target); this.fireT = def.fireCd * rand(0.85, 1.15); }
-    } else if (!target) this.vx = approach(this.vx, 0, 1500 * dt);
+      if (this.fireT <= 0 && this.react <= 0 && inSight) { this.attack(game, target); this.fireT = def.fireCd * rand(0.85, 1.15); }
+    } else if (this.stagger <= 0) {
+      // DESPERCEBIDO: patrulha tranquila (anda e para), sem atirar
+      this._patrol(dt, game);
+    }
 
     this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, CONFIG.TERMINAL_VY);
     game.world.moveAndCollide(this, dt);
@@ -103,6 +137,29 @@ class Enemy extends Entity {
     }
     this.anim += dt;
     if (this.onGround) this.runDist = (this.runDist || 0) + Math.abs(this.vx) * dt;
+  }
+
+  // anda-e-para de forma ociosa; vira em paredes e à beira de buracos (não cai do mapa)
+  _patrol(dt, game) {
+    this.patrolT -= dt;
+    if (this.patrolT <= 0) {
+      if (this.patrolDir === 0) { this.patrolDir = pick([-1, 1]); this.patrolT = rand(1.2, 2.8); }   // anda
+      else { this.patrolDir = 0; this.patrolT = rand(0.8, 2.0); }                                     // descansa
+    }
+    let dir = this.patrolDir;
+    if (dir !== 0) {
+      const T = game.world.T;
+      // bateu na parede → vira
+      if (this.hitWall === dir) dir = this.patrolDir = -dir;
+      // beira de buraco à frente → vira (só anda em chão firme)
+      if (this.onGround) {
+        const aheadX = this.cx + dir * (this.w / 2 + 6);
+        const footR = Math.floor((this.y + this.h + 6) / T);
+        if (!game.world.solid(Math.floor(aheadX / T), footR)) dir = this.patrolDir = -dir;
+      }
+      this.face = dir || this.face;
+    }
+    this.vx = approach(this.vx, dir * this.speed * 0.42, 900 * dt);   // passo lento e calmo
   }
 
   attack(game, target) {
