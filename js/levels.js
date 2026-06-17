@@ -24,6 +24,12 @@ const LEVELS = (function () {
   const rect = (g, c0, r0, w, h, ch) => { for (let r = r0; r < r0 + h; r++) hline(g, r, c0, c0 + w - 1, ch); };
   const toRows = g => g.map(a => a.join(''));
 
+  // ---- background-fill layer (interiores de construções e túneis) ----
+  // CUR_BG é a grade de fundo da fase em construção; os helpers escrevem nela.
+  let CUR_BG = null;
+  const bgPut = (c, r, ch) => { if (CUR_BG && r >= 0 && r < CUR_BG.length && c >= 0 && c < CUR_BG[0].length) CUR_BG[r][c] = ch; };
+  const bgRect = (c0, r0, w, h, ch) => { for (let r = r0; r < r0 + h; r++) for (let c = c0; c < c0 + w; c++) bgPut(c, r, ch); };
+
   function rollingGround(g, W, H, matFn, amp, seed, pits) {
     const top = new Array(W), rng = mul(seed); let gr = H - 12, target = gr;
     for (let c = 0; c < W; c++) {
@@ -50,17 +56,21 @@ const LEVELS = (function () {
   // content. Open at ground level so the walking route passes straight through.
   function building(g, S, c0, w, floors, fh, mat, content, o) {
     o = o || {}; const baseR = S(c0), lc = c0 + 1, topR = baseR - floors * fh;
+    const bgm = o.bgMat || mat;                                                          // material do interior (fundo)
+    bgRect(c0, topR, w, baseR - topR, bgm);                                              // <<< INTERIOR preenchido (fundo escuro)
     vline(g, c0, topR, baseR - 3, mat); vline(g, c0 + w - 1, topR, baseR - 3, mat);     // overhead side walls
     hline(g, topR, c0, c0 + w - 1, mat); for (let i = 0; i < w; i += 3) put(g, c0 + i, topR - 1, mat); // roof + battlements
     for (let f = 1; f <= floors; f++) {
       const fr = baseR - f * fh;
       hline(g, fr, c0, c0 + w - 1, mat); hline(g, fr + 1, c0, c0 + w - 1, mat);
       put(g, lc, fr, '.'); put(g, lc, fr + 1, '.');                                     // ladder hole
-      put(g, c0 + (w >> 1), fr - 2, 'N');
+      put(g, c0 + (w >> 1), fr - 2, 'N');                                               // window
+      air(g, c0 + 2, fr - 1, f % 2 ? 'V' : '.');                                        // hanging vines (alternating floors)
       if (content) content(g, fr, f, c0, w, lc);
     }
     ladder(g, lc, topR + 1, baseR - 1);
     if (o.banner) put(g, c0 + (w >> 1) - 2, topR + 1, 'L');
+    air(g, c0 + 1, topR, 'V'); air(g, c0 + w - 2, topR, 'V');                            // vines off the roof edges
     put(g, c0 + 2, baseR - 4, 't');
   }
   // prison content: barred cells with a reward locked inside
@@ -83,7 +93,10 @@ const LEVELS = (function () {
   // ramped trench / catacomb passage (always walkable; terraces above are the high road)
   function tunnel(g, S, c0, c1, mat, loot) {
     const depth = 5, bottom = Math.min(g.length - 4, Math.max(S(c0), S(c1)) + depth);
-    for (let c = c0; c <= c1; c++) { let wh = (c <= c0 + depth) ? S(c0) + (c - c0) : (c >= c1 - depth) ? S(c1) + (c1 - c) : bottom; if (wh > bottom) wh = bottom; for (let r = S(c); r < wh; r++) put(g, c, r, '.'); }
+    for (let c = c0; c <= c1; c++) {
+      let wh = (c <= c0 + depth) ? S(c0) + (c - c0) : (c >= c1 - depth) ? S(c1) + (c1 - c) : bottom; if (wh > bottom) wh = bottom;
+      for (let r = S(c); r < wh; r++) { put(g, c, r, '.'); bgPut(c, r, mat); }                  // <<< parede de fundo do túnel (cavado na terra)
+    }
     if (loot) put(g, (c0 + c1) >> 1, bottom - 1, loot);
     for (let c = c0 + depth + 1; c < c1 - depth; c += 3) coinAt(g, c, bottom - 1);
   }
@@ -100,7 +113,7 @@ const LEVELS = (function () {
 
   // ===================== CAMPAIGN ============================
   function lvl1() { // castle base: gatehouse → barracks → armory → ramparts
-    const W = 360, H = 92, g = blank(W, H);
+    const W = 360, H = 92, g = blank(W, H); const bg = blank(W, H); CUR_BG = bg;
     const top = rollingGround(g, W, H, d => d < 2 ? 'D' : (d < 8 ? 'D' : '#'), 6, 3, [[150, 2], [256, 2]]);
     const S = c => top[c]; const startR = startCliff(g, S, 'B');
     building(g, S, 40, 13, 3, 5, 'B', barracks('z'), { banner: true });   // barracks
@@ -113,11 +126,11 @@ const LEVELS = (function () {
     put(g, 4, startR - 1, 'P'); put(g, W - 5, S(W - 5) - 1, 'E');
     enemies(g, S, [34, 70, 108, 168, 224, 296, 330], 'z'); enemies(g, S, [56, 144, 260], 'w');
     enemies(g, S, [88, 188, 280], 'f'); enemies(g, S, [200], 'r'); put(g, 250, S(250) - 1, 'F');
-    return { name: 'PORTÃO DE FERRO', sub: 'Tome a base: quartel, prisão e arsenal. Suba pelas escadas e muralhas.', win: 'exit', biome: 'castle', sky: ['#1e2740', '#080a14'], bannerColor: '#6a1a1a', rows: toRows(g) };
+    return { name: 'PORTÃO DE FERRO', sub: 'Tome a base: quartel, prisão e arsenal. Suba pelas escadas e muralhas.', win: 'exit', biome: 'castle', sky: ['#1e2740', '#080a14'], bannerColor: '#6a1a1a', rows: toRows(g), bg: toRows(bg) };
   }
 
   function lvl2() { // village: houses → ransacked prison → cellars
-    const W = 372, H = 92, g = blank(W, H);
+    const W = 372, H = 92, g = blank(W, H); const bg = blank(W, H); CUR_BG = bg;
     const top = rollingGround(g, W, H, d => d < 2 ? 'D' : 'S', 7, 7, [[160, 2], [266, 2]]);
     const S = c => top[c]; const startR = startCliff(g, S, 'S');
     building(g, S, 36, 12, 2, 5, 'S', barracks('z'), {});
@@ -131,11 +144,11 @@ const LEVELS = (function () {
     put(g, 4, startR - 1, 'P'); put(g, W - 5, S(W - 5) - 1, 'E');
     enemies(g, S, [28, 70, 132, 196, 312, 348], 'z'); enemies(g, S, [120, 256], 'w');
     enemies(g, S, [80, 190, 290], 'f'); enemies(g, S, [210], 'F'); enemies(g, S, [180, 320], 'r');
-    return { name: 'VILA DOS LAMENTOS', sub: 'Casas, a prisão saqueada e os porões — vários caminhos até a saída.', win: 'exit', biome: 'village', sky: ['#3a2e26', '#100a08'], bannerColor: '#5a1e34', rows: toRows(g) };
+    return { name: 'VILA DOS LAMENTOS', sub: 'Casas, a prisão saqueada e os porões — vários caminhos até a saída.', win: 'exit', biome: 'village', sky: ['#3a2e26', '#100a08'], bannerColor: '#5a1e34', rows: toRows(g), bg: toRows(bg) };
   }
 
   function lvl3() { // catacombs: descending tunnels, dungeon cells, climb shafts
-    const W = 356, H = 92, g = blank(W, H);
+    const W = 356, H = 92, g = blank(W, H); const bg = blank(W, H); CUR_BG = bg;
     const top = rollingGround(g, W, H, d => d < 1 ? 'C' : (d % 4 === 3 ? 'm' : 'C'), 8, 13, [[120, 2], [300, 2]]);
     const S = c => top[c]; const startR = startCliff(g, S, 'C');
     hline(g, 0, 0, W - 1, 'm'); hline(g, 1, 0, W - 1, 'm');
@@ -151,11 +164,11 @@ const LEVELS = (function () {
     enemies(g, S, [40, 130, 240, 330], 'z'); enemies(g, S, [22, 96, 264], 'w');
     enemies(g, S, [70, 150, 290], 'f'); enemies(g, S, [320], 'F'); enemies(g, S, [56, 190, 280], 'r');
     put(g, 100, S(100) - 1, 'd'); put(g, 240, S(240) - 1, 'd');
-    return { name: 'CATACUMBAS PROFUNDAS', sub: 'Desça pelos poços e escale as paredes. Blocos de celas e a matilha.', win: 'exit', biome: 'dungeon', sky: ['#14101c', '#060409'], bannerColor: '#2a1e44', rows: toRows(g) };
+    return { name: 'CATACUMBAS PROFUNDAS', sub: 'Desça pelos poços e escale as paredes. Blocos de celas e a matilha.', win: 'exit', biome: 'dungeon', sky: ['#14101c', '#060409'], bannerColor: '#2a1e44', rows: toRows(g), bg: toRows(bg) };
   }
 
   function lvl4() { // battlefield → arsenal → throne keep (BOSS)
-    const W = 420, H = 92, g = blank(W, H);
+    const W = 420, H = 92, g = blank(W, H); const bg = blank(W, H); CUR_BG = bg;
     const top = rollingGround(g, W, H, d => d < 2 ? 'D' : 'B', 7, 21, [[150, 2], [270, 2]]);
     const S = c => top[c]; const startR = startCliff(g, S, 'B');
     building(g, S, 44, 13, 3, 5, 'B', barracks('r'), { banner: true });
@@ -174,11 +187,11 @@ const LEVELS = (function () {
     enemies(g, S, [40, 90, 200, 260, 330], 'z'); enemies(g, S, [60, 180, 240, 310], 'w');
     enemies(g, S, [50, 140, 210, 290, 360], 'r'); enemies(g, S, [110, 250], 'f'); enemies(g, S, [170, 300], 'F');
     put(g, 110, S(110) - 1, 'd'); put(g, 320, S(320) - 1, 'd'); put(g, 390, kb - 1, 'O');
-    return { name: 'O TRONO DO DEVORADOR', sub: 'Atravesse o arsenal em chamas e destrua o Devorador de Mentes.', win: 'boss', biome: 'battlefield', sky: ['#3a1812', '#0c0605'], bannerColor: '#5a1414', rows: toRows(g) };
+    return { name: 'O TRONO DO DEVORADOR', sub: 'Atravesse o arsenal em chamas e destrua o Devorador de Mentes.', win: 'boss', biome: 'battlefield', sky: ['#3a1812', '#0c0605'], bannerColor: '#5a1414', rows: toRows(g), bg: toRows(bg) };
   }
 
   function lvl5() { // THE STONE PRISON — vertical cell-blocks, ladders & wall-climb
-    const Wd = 340, H = 92, g = blank(Wd, H);
+    const Wd = 340, H = 92, g = blank(Wd, H); const bg = blank(Wd, H); CUR_BG = bg;
     const top = rollingGround(g, Wd, H, d => d < 1 ? 'C' : '#', 5, 33, [[120, 2], [230, 2]]);
     const S = c => top[c]; const startR = startCliff(g, S, 'C');
     building(g, S, 30, 16, 5, 5, 'C', prison('Q'), { banner: true });     // tall cell-block A
@@ -193,11 +206,11 @@ const LEVELS = (function () {
     enemies(g, S, [40, 96, 168, 224, 296, 320], 'z'); enemies(g, S, [70, 190, 280], 'w');
     enemies(g, S, [56, 144, 240], 'f'); enemies(g, S, [180], 'F'); enemies(g, S, [120, 260], 'r');
     put(g, 200, S(200) - 1, 'd');
-    return { name: 'A PRISÃO DE PEDRA', sub: 'Escale os blocos de celas — escadas, paredes e poços por toda parte.', win: 'exit', biome: 'dungeon', sky: ['#161320', '#070509'], bannerColor: '#2a1e44', rows: toRows(g) };
+    return { name: 'A PRISÃO DE PEDRA', sub: 'Escale os blocos de celas — escadas, paredes e poços por toda parte.', win: 'exit', biome: 'dungeon', sky: ['#161320', '#070509'], bannerColor: '#2a1e44', rows: toRows(g), bg: toRows(bg) };
   }
 
   function lvl6() { // THE ARSENAL — explosive chaos, racks, rocket walls
-    const W2 = 400, H = 92, g = blank(W2, H);
+    const W2 = 400, H = 92, g = blank(W2, H); const bg = blank(W2, H); CUR_BG = bg;
     const top = rollingGround(g, W2, H, d => d < 2 ? 'D' : 'B', 6, 51, [[140, 2], [250, 3]]);
     const S = c => top[c]; const startR = startCliff(g, S, 'B');
     building(g, S, 34, 14, 4, 5, 'B', arsenal, { banner: true });
@@ -216,11 +229,38 @@ const LEVELS = (function () {
     enemies(g, S, [40, 96, 168, 224, 296, 360], 'z'); enemies(g, S, [70, 190, 320], 'w');
     enemies(g, S, [56, 144, 240], 'f'); enemies(g, S, [200, 300], 'F'); enemies(g, S, [120, 260, 350], 'r');
     put(g, 180, S(180) - 1, 'd'); put(g, 320, S(320) - 1, 'd');
-    return { name: 'O ARSENAL', sub: 'Pólvora e foguetes por toda parte — provoque a reação em cadeia!', win: 'exit', biome: 'battlefield', sky: ['#2a1810', '#0a0604'], bannerColor: '#6a1a1a', rows: toRows(g) };
+    return { name: 'O ARSENAL', sub: 'Pólvora e foguetes por toda parte — provoque a reação em cadeia!', win: 'exit', biome: 'battlefield', sky: ['#2a1810', '#0a0604'], bannerColor: '#6a1a1a', rows: toRows(g), bg: toRows(bg) };
+  }
+
+  function lvlJungle() { // TEMPLO NA SELVA — ruínas de pedra tomadas pela mata (estilo Broforce)
+    const W = 384, H = 92, g = blank(W, H); const bg = blank(W, H); CUR_BG = bg;
+    // solo: terra de selva no topo, pedra de templo e terra abaixo
+    const top = rollingGround(g, W, H, d => d < 1 ? 'j' : (d < 4 ? 'j' : (d % 5 === 4 ? 'p' : 'D')), 9, 77, [[150, 3], [262, 2]]);
+    const S = c => top[c]; const startR = startCliff(g, S, 'p');
+    // zigurautes / templos: pedra de templo e pedra escura, com fundos de interior
+    building(g, S, 40, 14, 4, 5, 'p', barracks('z'), { banner: true });
+    building(g, S, 130, 16, 4, 5, 'k', prison('Q'), { banner: true, bgMat: 'p' });
+    building(g, S, 250, 15, 5, 5, 'p', arsenal, { banner: true });
+    // paredes para escalar (faces de templo)
+    climbWall(g, S, 100, 18, 'p'); climbWall(g, S, 210, 20, 'k'); climbWall(g, S, 320, 18, 'p');
+    // passarelas de tábua suspensas entre as estruturas
+    platform(g, 58, S(58) - 13, 10, 'l'); platform(g, 182, S(182) - 16, 12, 'l'); platform(g, 300, S(300) - 12, 9, 'l');
+    // folhagem densa como cobertura
+    for (let c = 72; c < 90; c += 2) put(g, c, S(c) - 1, 'v');
+    for (let c = 228; c < 244; c += 2) put(g, c, S(c) - 1, 'v');
+    tunnel(g, S, 150, 222, 'D', 'T');
+    barrels(g, S, [80, 200, 300], 'X'); barrels(g, S, [120, 260, 344], 'K');
+    grnd(g, S); put(g, 86, S(86) - 1, 'H'); put(g, 300, S(300) - 6, 'Q'); put(g, 182, S(182) - 17, 'T');
+    for (let c = 22; c < W - 12; c += 24) air(g, c, S(c) - 6, 'V');   // vinhas penduradas pela mata
+    put(g, 4, startR - 1, 'P'); put(g, W - 5, S(W - 5) - 1, 'E');
+    enemies(g, S, [34, 70, 110, 168, 224, 300, 342], 'z'); enemies(g, S, [56, 144, 262], 'w');
+    enemies(g, S, [88, 188, 282], 'f'); enemies(g, S, [200, 322], 'r'); put(g, 250, S(250) - 1, 'F');
+    put(g, 150, S(150) - 1, 'd');
+    return { name: 'TEMPLO NA SELVA', sub: 'Ruínas de pedra tomadas pela mata: zigurautes, passarelas de tábua e folhagem.', win: 'exit', biome: 'jungle', sky: ['#5aa0c8', '#23566b'], bannerColor: '#2a6a2a', rows: toRows(g), bg: toRows(bg) };
   }
 
   function lvlTest() {
-    const W = 340, H = 50, g = blank(W, H), gr = H - 6;
+    const W = 340, H = 50, g = blank(W, H), gr = H - 6; const bg = blank(W, H); CUR_BG = bg;
     for (let c = 0; c < W; c++) { for (let r = gr; r < H - 2; r++) put(g, c, r, r === gr ? 'D' : '#'); put(g, c, H - 2, '~'); put(g, c, H - 1, '~'); }
     for (let r = 0; r < H; r++) for (let k = 0; k < 3; k++) put(g, 130 + k, r, '.');
     for (let c = 190; c < 250; c++) for (let r = gr - 8; r < gr; r++) put(g, c, r, r === gr - 8 ? 'D' : '#');
@@ -233,8 +273,8 @@ const LEVELS = (function () {
     put(g, 60, gr - 1, 'Q'); put(g, 110, gr - 1, 'T'); put(g, 100, gr - 1, 'X'); put(g, 115, gr - 1, 'K');
     put(g, 30, gr - 1, 'z'); put(g, 124, gr - 1, 'f'); put(g, 160, gr - 1, 'r'); put(g, 230, gr - 1, 'F');
     put(g, 3, gr - 1, 'P'); put(g, W - 5, gr - 1, 'E');
-    return { name: 'FASE DE TESTES', sub: 'Escada (col 96), parede para escalar (col 170), poções, tokens e barris.', win: 'exit', biome: 'castle', sky: ['#1e2740', '#080a14'], bannerColor: '#6a1a1a', rows: toRows(g) };
+    return { name: 'FASE DE TESTES', sub: 'Escada (col 96), parede para escalar (col 170), poções, tokens e barris.', win: 'exit', biome: 'castle', sky: ['#1e2740', '#080a14'], bannerColor: '#6a1a1a', rows: toRows(g), bg: toRows(bg) };
   }
 
-  return [lvl1(), lvl2(), lvl3(), lvl4(), lvl5(), lvl6(), lvlTest()];
+  return [lvl1(), lvl2(), lvl3(), lvl4(), lvl5(), lvl6(), lvlJungle(), lvlTest()];
 })();

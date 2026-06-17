@@ -170,6 +170,39 @@ const BG = {
     this._embers(ctx, cam, W, H, t);
   },
 
+  // bright daytime jungle: layered canopy, ruined temple silhouettes, palms, haze
+  jungle(ctx, cam, L, t, W, H) {
+    this._clouds(ctx, cam, W, H, t, 'rgba(255,255,255,0.22)');
+    // far hazy canopy ridges
+    this._hills(ctx, cam, W, H, H * 0.5, '#3f6e6a', 0.10, 60, 130);
+    this._hills(ctx, cam, W, H, H * 0.6, '#2f5a52', 0.18, 50, 110);
+    // ruined temple silhouettes in the mist
+    const off = -cam.x * 0.22; ctx.fillStyle = 'rgba(40,66,58,0.85)';
+    for (let i = -1; i < 7; i++) {
+      const bx = i * 360 + (off % 360), by = H * 0.5;
+      // stepped ziggurat
+      for (let s = 0; s < 4; s++) ctx.fillRect(bx + s * 10, by + s * 18, 150 - s * 20, H);
+      ctx.fillStyle = 'rgba(34,56,48,0.9)';
+    }
+    // mid jungle tree wall
+    this._trees(ctx, cam, W, H, H * 0.66, '#1f4a2a', 0.34, 95, 60);
+    // foreground palms
+    this._palms(ctx, cam, W, H, t, -cam.x * 0.5);
+    this._trees(ctx, cam, W, H, H * 0.86, '#143a1e', 0.55, 70, 44);
+    this._leaves(ctx, cam, W, H, t);
+    // sun haze
+    ctx.fillStyle = 'rgba(255,250,210,0.06)'; ctx.fillRect(0, 0, W, H);
+  },
+  _palms(ctx, cam, W, H, t, off) {
+    for (let i = -1; i * 220 < W + 220; i++) {
+      const x = i * 220 + (off % 220), baseY = H * 0.78;
+      ctx.strokeStyle = '#2a4a24'; ctx.lineWidth = 7; ctx.beginPath();
+      ctx.moveTo(x, H); ctx.quadraticCurveTo(x + 10, baseY + 30, x + 18, baseY); ctx.stroke();
+      ctx.fillStyle = '#2f6a2a';
+      for (let f = 0; f < 6; f++) { const a = -Math.PI / 2 + (f - 2.5) * 0.5 + Math.sin(t * 0.6 + i + f) * 0.05; ctx.save(); ctx.translate(x + 18, baseY); ctx.rotate(a); ctx.beginPath(); ctx.ellipse(38, 0, 40, 8, 0, 0, TAU); ctx.fill(); ctx.restore(); }
+    }
+  },
+
   // ---- ambience helpers -------------------------------------
   _fog(ctx, cam, W, H, t, col) {
     ctx.fillStyle = col;

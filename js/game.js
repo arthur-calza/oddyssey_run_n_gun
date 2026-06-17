@@ -37,7 +37,9 @@ class Game {
     this.explosionQ = []; this.exits = []; this.boss = null; this.decor = [];
     this.prisonersTotal = 0; this.prisonersRescued = 0;
     const T = world.T;
-    const DECOR = { 't': 'torch', 'L': 'banner', 'N': 'window', 'I': 'pillar', 'V': 'vines', 'Y': 'web', 'G': 'grass', 'J': 'bars', 'U': 'rack', 'M': 'crate' };
+    const DECOR = DECOR_CHARS;   // mapa global (world.js): inclui as novas decorações
+    // background-fill layer (interiors of buildings/tunnels) — non-collidable, drawn darker behind
+    if (L.bg) for (let r = 0; r < L.bg.length; r++) { const line = L.bg[r]; for (let c = 0; c < line.length; c++) { const id = CHAR2MAT[line[c]]; if (id) world.setBg(c, r, id); } }
 
     for (let r = 0; r < rows.length; r++) {
       const line = rows[r];

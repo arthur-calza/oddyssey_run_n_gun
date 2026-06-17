@@ -47,12 +47,24 @@ const Gallery = {
     { type: 'bars',   name: 'Grades de cela' },
     { type: 'rack',   name: 'Suporte de armas' },
     { type: 'crate',  name: 'Caixa de suprimentos' },
+    { type: 'lantern',   name: 'Lanterna' },
+    { type: 'chain',     name: 'Corrente' },
+    { type: 'candle',    name: 'Vela' },
+    { type: 'cauldron',  name: 'Caldeirão' },
+    { type: 'bookshelf', name: 'Estante de livros' },
+    { type: 'bed',       name: 'Cama / catre' },
+    { type: 'table',     name: 'Mesa' },
+    { type: 'idol',      name: 'Ídolo / totem' },
+    { type: 'sign',      name: 'Placa de taverna' },
+    { type: 'flower',    name: 'Flores' },
+    { type: 'shield',    name: 'Escudo heráldico', color: '#7a2a2a' },
   ],
   BIOMES: [
     { id: 'castle',      name: 'Castelo',        sky: ['#1e2740', '#080a14'] },
     { id: 'village',     name: 'Vila',           sky: ['#3a2e26', '#100a08'] },
     { id: 'dungeon',     name: 'Masmorra',       sky: ['#14101c', '#060409'] },
     { id: 'forest',      name: 'Floresta',       sky: ['#16241a', '#070d09'] },
+    { id: 'jungle',      name: 'Selva',          sky: ['#5aa0c8', '#23566b'] },
     { id: 'battlefield', name: 'Campo de Guerra', sky: ['#3a1812', '#0c0605'] },
   ],
 
@@ -121,6 +133,7 @@ const Gallery = {
       <div class="gpanel gtop">
         <button class="gback" data-back>‹ Menu</button>
         <button class="gtab" data-tab="enemies">🧟 Bestiário</button>
+        <button class="gtab" data-tab="builds">🏰 Construções</button>
         <button class="gtab" data-tab="mats">🧱 Materiais</button>
         <button class="gtab" data-tab="decor">🏛 Decoração</button>
         <button class="gtab" data-tab="biomes">🌄 Biomas</button>
@@ -212,6 +225,13 @@ const Gallery = {
         });
       });
       if (!this.biome) this.selectBiome(this.BIOMES[0].id);
+    } else if (this.tab === 'builds') {
+      (window.BUILDINGS || []).forEach(def => {
+        mk(this.buildKey === def.key, () => this.selectBuild(def.key), b => {
+          b.innerHTML = `<span class="gem">🏰</span><span><div class="gname">${def.name}</div><div class="gsub">${def.w}×${def.h} tiles</div></span>`;
+        });
+      });
+      if (!this.buildKey && window.BUILDINGS && window.BUILDINGS.length) this.selectBuild(window.BUILDINGS[0].key);
     }
   },
 
@@ -231,6 +251,27 @@ const Gallery = {
   selectMat(id) { this.matId = id; this._buildList(); this._info(); },
   selectDecor(type) { this.decorType = type; this._buildList(); this._info(); },
   selectBiome(id) { this.biome = id; this.biomeCamX = 0; this._buildList(); this._info(); },
+  selectBuild(key) { this.buildKey = key; this.buildPrev = this._buildPreview(window.BUILD[key]); this._buildList(); this._info(); },
+
+  // monta um World temporário com o prefab carimbado, para o preview
+  _buildPreview(def) {
+    if (!def) return null;
+    if (!TEX.ready) TEX.build();
+    const pad = 4, gw = def.w + pad * 2, gh = def.h + 6, groundR = gh - 3;
+    const g = [], bg = [];
+    for (let r = 0; r < gh; r++) { g.push(new Array(gw).fill('.')); bg.push(new Array(gw).fill('.')); }
+    for (let r = groundR; r < gh; r++) for (let c = 0; c < gw; c++) g[r][c] = def.ground || '#';
+    try { def.stamp(g, bg, pad, groundR, {}); } catch (e) { /* preview tolerante a falha */ }
+    const world = new World(gw, gh);
+    const decor = [];
+    for (let r = 0; r < gh; r++) for (let c = 0; c < gw; c++) {
+      const ch = g[r][c], id = CHAR2MAT[ch];
+      if (id) world.set(c, r, id);
+      const bid = CHAR2MAT[bg[r][c]]; if (bid) world.setBg(c, r, bid);
+      if (!id && DECOR_CHARS[ch]) decor.push({ type: DECOR_CHARS[ch], x: c * CONFIG.TILE, y: r * CONFIG.TILE, color: '#7a2a2a' });
+    }
+    return { world, decor, gw, gh, def };
+  },
 
   // ---------- painel de informações ----------
   _info() {
@@ -270,6 +311,13 @@ const Gallery = {
       I.innerHTML = `<h3>🌄 ${bm.name}</h3>${row('Chave', bm.id)}
         ${row('Céu', `${bm.sky[0]} → ${bm.sky[1]}`)}
         <div class="gnote">Fundo em parallax animado. A câmera desliza para revelar as camadas.</div>`;
+    } else if (this.tab === 'builds') {
+      const def = window.BUILD[this.buildKey];
+      I.innerHTML = `<h3>🏰 ${def.name}</h3>
+        ${row('Tamanho', def.w + ' × ' + def.h + ' tiles')}
+        ${row('Terreno', def.ground)}
+        <div class="gnote">${def.desc || ''}</div>
+        <div class="gnote">Construção usada nas fases: paredes laterais com vão de passagem embaixo, interior preenchido e decoração temática.</div>`;
     }
   },
 
@@ -327,6 +375,7 @@ const Gallery = {
         { biome: bm.id, sky: bm.sky }, this.time);
       return;
     }
+    if (this.tab === 'builds') { this._drawBuild(ctx, W, H); return; }
     // backdrop comum (estúdio)
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, '#241c14'); g.addColorStop(1, '#0c0a08');
@@ -348,6 +397,23 @@ const Gallery = {
     } else if (this.tab === 'decor') {
       this._drawDecor(ctx, vw, vh);
     }
+    ctx.restore();
+  },
+
+  _drawBuild(ctx, W, H) {
+    const P = this.buildPrev; const T = CONFIG.TILE;
+    // céu suave de estúdio
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#3a5a72'); g.addColorStop(1, '#1a2230');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    if (!P) return;
+    const wpx = P.gw * T, hpx = P.gh * T;
+    const z = Math.min((W * 0.62) / wpx, (H * 0.74) / hpx);   // ajusta para caber
+    ctx.save(); ctx.imageSmoothingEnabled = false; ctx.scale(z, z);
+    const offX = (W / z - wpx) / 2, offY = (H / z - hpx) / 2;
+    const cam = { x: 0, y: 0, vw: W / z, vh: H / z, ox: offX, oy: offY, visible: () => true };
+    P.world.draw(ctx, cam);
+    for (const d of P.decor) TEX.decor(ctx, d, offX, offY, this.time, null);
     ctx.restore();
   },
 

@@ -32,11 +32,11 @@ class FX {
 
   _add(p) { if (this.parts.length < 2600) this.parts.push(p); }
 
-  // chunky death burst: blood spray + flying bone shards (+ a few that stay)
+  // chunky death burst: blood spray + bone shards. Pesado: cai rápido e assenta no chão.
   gib(x, y, color = '#7a1a14', n = 20) {
-    for (let i = 0; i < n; i++) { const a = rand(0, TAU), sp = rand(120, 460); this._add({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - rand(40, 160), life: rand(0.4, 1.1), max: 1.1, r: rand(2, 5), c: color, g: 1700, shrink: true }); }
+    for (let i = 0; i < n; i++) { const a = rand(-Math.PI, 0), sp = rand(80, 320); this._add({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - rand(10, 70), life: rand(0.35, 0.8), max: 0.8, r: rand(2, 5), c: color, g: 2600, shrink: true, land: true }); }
     const bone = '#e8e0cf';
-    for (let i = 0; i < n * 0.5; i++) if (this.debris.length < 360) this.debris.push({ x, y, vx: rand(-220, 220), vy: -rand(120, 360), s: rand(2.5, 5), c: i % 3 ? bone : color, life: rand(0.8, 1.6), max: 1.6, rot: rand(0, TAU), vr: rand(-16, 16) });
+    for (let i = 0; i < n * 0.5; i++) if (this.debris.length < 360) this.debris.push({ x, y, vx: rand(-180, 180), vy: -rand(80, 240), s: rand(2.5, 5), c: i % 3 ? bone : color, life: rand(0.8, 1.6), max: 1.6, rot: rand(0, TAU), vr: rand(-16, 16) });
     for (let i = 0; i < 4; i++) this._pushDecal({ t: 'rect', x: x + rand(-16, 16), y: y + rand(-4, 10), s: rand(2.5, 4.5), c: i % 2 ? bone : color, rot: rand(0, TAU), a: rand(0.6, 0.9) });
   }
 
@@ -46,19 +46,20 @@ class FX {
       r: rand(1.5, 3), c, g: 700, glow: true, shrink: true,
     });
   }
+  // pedaços de bloco quebrado: pulam pouco e CAEM com gravidade, parando no chão
   chips(x, y, c, n = 5) {
     for (let i = 0; i < n; i++) this._add({
-      x, y, vx: rand(-160, 160), vy: rand(-260, -40), life: rand(0.4, 0.9), max: 0.9,
-      r: rand(1.5, 3.5), c, g: 1400, shrink: false,
+      x, y, vx: rand(-110, 110), vy: rand(-150, -20), life: rand(0.5, 1.0), max: 1.0,
+      r: rand(1.5, 3.5), c, g: 2400, shrink: false, land: true,
     });
   }
   blood(x, y, dir = 0, n = 10, color = '#b1322c') {
     for (let i = 0; i < n; i++) this._add({
-      x, y, vx: rand(-130, 130) + dir * 130, vy: rand(-280, -20), life: rand(0.3, 0.8), max: 0.8,
-      r: rand(1.5, 4), c: color, g: 1700, shrink: true,
+      x, y, vx: rand(-90, 90) + dir * 90, vy: rand(-150, -10), life: rand(0.25, 0.6), max: 0.6,
+      r: rand(1.5, 4), c: color, g: 2600, shrink: true, land: true,
     });
     // a couple of heavier gore chunks
-    for (let i = 0; i < (n > 8 ? 3 : 0); i++) this.debris.push({ x, y, vx: rand(-120, 120) + dir * 90, vy: rand(-200, -40), s: rand(2.5, 4.5), c: color, life: rand(0.5, 1.0), max: 1.0, rot: rand(0, TAU), vr: rand(-12, 12) });
+    for (let i = 0; i < (n > 8 ? 3 : 0); i++) this.debris.push({ x, y, vx: rand(-100, 100) + dir * 80, vy: rand(-150, -30), s: rand(2.5, 4.5), c: color, life: rand(0.5, 1.0), max: 1.0, rot: rand(0, TAU), vr: rand(-12, 12) });
   }
   magic(x, y, color = '#a86bff', n = 12) {
     for (let i = 0; i < n; i++) { const a = rand(0, TAU), sp = rand(40, 200); this._add({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 30, life: rand(0.3, 0.8), max: 0.8, r: rand(1.5, 3.5), c: color, g: -40, glow: true, shrink: true }); }
@@ -115,13 +116,17 @@ class FX {
       p.vy += (p.g || 0) * dt;
       p.x += p.vx * dt; p.y += p.vy * dt;
       if (p.smoke) p.r += dt * 10;
+      // sangue/estilhaços assentam ao tocar o chão (em vez de "voar" e atravessar)
+      if (p.land && world && p.vy >= 0 && world.solidPx(p.x, p.y + (p.r || 1))) {
+        p.vy = 0; p.vx *= 0.55; p.g = 0;
+      }
     }
     // debris with terrain collision
     for (let i = this.debris.length - 1; i >= 0; i--) {
       const d = this.debris[i];
       d.life -= dt;
       if (d.life <= 0) { this.debris.splice(i, 1); continue; }
-      d.vy += CONFIG.GRAVITY * 0.7 * dt;
+      d.vy += CONFIG.GRAVITY * dt;   // gravidade plena: detritos caem de verdade
       d.rot += d.vr * dt;
       // X
       let nx = d.x + d.vx * dt;

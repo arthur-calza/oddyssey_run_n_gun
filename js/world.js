@@ -19,9 +19,46 @@ const MAT = [
   { name: 'gravel',    hp: 22,  solid: true,  c: '#6a6258', c2: '#4a463e', edge: '#7d756a', falls: true },
   { name: 'rocket',    hp: 12,  solid: true,  c: '#b1322c', c2: '#3a1410', edge: '#e0843a', rocket: true },   // launches a rocket when destroyed
   { name: 'ladder',    hp: 1e9, solid: false, c: '#6a4a28', c2: '#3a2a14', edge: '#8a6438', ladder: true, indestructible: true },
+  // --- novos materiais (selva / templo) ---
+  { name: 'temple',    hp: 96,  solid: true,  c: '#5b6a4c', c2: '#3e4a36', edge: '#76886a' },                 // 15 pedra de templo esculpida, com musgo
+  { name: 'plank',     hp: 18,  solid: true,  c: '#9a6e3a', c2: '#6f4f24', edge: '#bb8a4c', soft: true },     // 16 tábuas horizontais (passarelas)
+  { name: 'leaf',      hp: 10,  solid: true,  c: '#2f6a2a', c2: '#1f4a1c', edge: '#46993a', soft: true },     // 17 folhagem densa (sebe)
+  { name: 'jungle',    hp: 24,  solid: true,  c: '#4a5a26', c2: '#374518', edge: '#5e7030', soft: true, cap: 'grass' }, // 18 terra de selva
+  { name: 'darkstone', hp: 130, solid: true,  c: '#3a3e44', c2: '#26282d', edge: '#4c525a' },                 // 19 pedra escura de torre
+  // === EXPANSÃO: paleta de construção (pintura genérica via "pattern") ===
+  { name: 'claybrick', hp: 70,  solid: true,  c: '#9a4a32', c2: '#6e3422', edge: '#b85e42', pattern: 'brick' },   // 20 tijolo de barro (casas)
+  { name: 'plaster',   hp: 40,  solid: true,  c: '#cabf9a', c2: '#a89c78', edge: '#e2d8b8', pattern: 'flat' },    // 21 reboco branco
+  { name: 'woodbeam',  hp: 30,  solid: true,  c: '#5a3f22', c2: '#3e2a16', edge: '#74522e', pattern: 'panel' },   // 22 viga de madeira (enxaimel)
+  { name: 'roof',      hp: 30,  solid: true,  c: '#8a2f2a', c2: '#5e1f1c', edge: '#b0463c', pattern: 'roof' },    // 23 telha de barro
+  { name: 'thatch',    hp: 16,  solid: true,  c: '#b89a4e', c2: '#8a6e30', edge: '#d8bc6a', pattern: 'thatch', soft: true }, // 24 palha
+  { name: 'limestone', hp: 84,  solid: true,  c: '#c8c2a8', c2: '#a49e84', edge: '#e4dec4', pattern: 'block' },   // 25 pedra calcária lavrada
+  { name: 'marble',    hp: 100, solid: true,  c: '#d8dae2', c2: '#b0b2bc', edge: '#f2f4fa', pattern: 'block' },   // 26 mármore
+  { name: 'granite',   hp: 110, solid: true,  c: '#6a6068', c2: '#4a424a', edge: '#867c84', pattern: 'flat' },    // 27 granito
+  { name: 'slate',     hp: 90,  solid: true,  c: '#3e4650', c2: '#2a3038', edge: '#586470', pattern: 'tile' },    // 28 ardósia
+  { name: 'metal',     hp: 150, solid: true,  c: '#7a828c', c2: '#565c64', edge: '#9aa2ac', pattern: 'plate' },   // 29 placa de aço
+  { name: 'bronze',    hp: 120, solid: true,  c: '#9a6e2e', c2: '#6e4e1e', edge: '#c89a44', pattern: 'plate' },   // 30 bronze
+  { name: 'rust',      hp: 60,  solid: true,  c: '#7a4a2a', c2: '#542e18', edge: '#9a6038', pattern: 'plate' },   // 31 metal enferrujado
+  { name: 'tilefloor', hp: 60,  solid: true,  c: '#8a8270', c2: '#6a6252', edge: '#a8a08c', pattern: 'tile' },    // 32 piso de ladrilho
+  { name: 'carpet',    hp: 24,  solid: true,  c: '#8a2230', c2: '#5e1620', edge: '#b0303e', pattern: 'flat', soft: true }, // 33 tapete
+  { name: 'woodfloor', hp: 22,  solid: true,  c: '#8a6334', c2: '#5f4422', edge: '#a87c44', pattern: 'plank', soft: true }, // 34 assoalho
+  { name: 'obsidian',  hp: 140, solid: true,  c: '#26222e', c2: '#16131c', edge: '#3e3848', pattern: 'flat' },    // 35 obsidiana
+  { name: 'runestone', hp: 110, solid: true,  c: '#3a2c5a', c2: '#241a3c', edge: '#5a4886', pattern: 'rune', glow: '#b07bff' }, // 36 pedra rúnica
+  { name: 'crystal',   hp: 50,  solid: true,  c: '#6fd0ff', c2: '#2b7fd0', edge: '#bff0ff', pattern: 'crystal', glow: '#bff0ff' }, // 37 cristal
+  { name: 'bamboo',    hp: 20,  solid: true,  c: '#8a9a3a', c2: '#5e6e22', edge: '#aabf4e', pattern: 'panel', soft: true }, // 38 bambu
+  { name: 'glass',     hp: 8,   solid: true,  c: '#9fd0e0', c2: '#5f96a8', edge: '#d8f4ff', pattern: 'glass', soft: true }, // 39 vidro/vitral
+  { name: 'bonewall',  hp: 60,  solid: true,  c: '#cabfa0', c2: '#a89c7a', edge: '#e8e0cf', pattern: 'block' },   // 40 parede de ossos
+  { name: 'mud',       hp: 18,  solid: true,  c: '#5a4226', c2: '#3e2c16', edge: '#6e5230', pattern: 'flat', soft: true }, // 41 lama de selva
 ];
 // char -> material id (used by level loader)
-const CHAR2MAT = { '#': 2, 'D': 1, 'B': 3, '=': 4, '~': 5, 'X': 6, '$': 7, 'C': 8, 'S': 9, 'm': 10, 'A': 11, 'R': 12, 'K': 13, 'h': 14 };
+const CHAR2MAT = {
+  '#': 2, 'D': 1, 'B': 3, '=': 4, '~': 5, 'X': 6, '$': 7, 'C': 8, 'S': 9, 'm': 10, 'A': 11, 'R': 12, 'K': 13, 'h': 14, 'p': 15, 'l': 16, 'v': 17, 'j': 18, 'k': 19,
+  'b': 20, 'g': 21, 'e': 22, '^': 23, ',': 24, 'c': 25, 'a': 26, 'i': 27, 'n': 28, 'q': 29, 'u': 30, 'x': 31, 'y': 32, '%': 33, '&': 34, '*': 35, '+': 36, '<': 37, '>': 38, '?': 39, '!': 40, '@': 41,
+};
+// decor char -> type (shared by the level loader, buildings and the gallery)
+const DECOR_CHARS = {
+  't': 'torch', 'L': 'banner', 'N': 'window', 'I': 'pillar', 'V': 'vines', 'Y': 'web', 'G': 'grass', 'J': 'bars', 'U': 'rack', 'M': 'crate',
+  'W': 'lantern', '[': 'chain', ':': 'candle', ';': 'cauldron', '"': 'bookshelf', "'": 'bed', '|': 'table', 'Z': 'idol', '_': 'sign', '}': 'flower', '{': 'shield',
+};
 
 /* a single tile detached by gravity, falling until it lands & re-deposits */
 class FallingBlock {
@@ -70,11 +107,14 @@ class World {
     this.T = CONFIG.TILE;
     this.pixelW = cols * this.T;
     this.pixelH = rows * this.T;
-    this.mat = new Uint8Array(cols * rows);   // material id
+    this.mat = new Uint8Array(cols * rows);   // material id (solid/collidable layer)
+    this.bg = new Uint8Array(cols * rows);    // background-fill layer (interiors/tunnels; non-collidable, drawn darker behind)
     this.hp = new Int32Array(cols * rows);    // current hp
     this.fallers = [];                        // active FallingBlocks
     this.game = null;                         // set by Game
   }
+  setBg(c, r, id) { if (this.inBounds(c, r)) this.bg[this.idx(c, r)] = id; }
+  bgAt(c, r) { return this.inBounds(c, r) ? this.bg[this.idx(c, r)] : 0; }
   // detach a gravity-affected tile (and cascade upward) when unsupported
   maybeFall(c, r) {
     if (!this.inBounds(c, r) || this.fallers.length > 400) return;
@@ -242,6 +282,18 @@ class World {
     const r0 = Math.max(0, Math.floor(cam.y / T));
     const r1 = Math.min(this.rows - 1, Math.floor((cam.y + cam.vh) / T) + 1);
     const ox = cam.ox, oy = cam.oy;
+    // ---- background-fill layer (building interiors, tunnel walls): darker, behind solids ----
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const i = this.idx(c, r); const bid = this.bg[i];
+      if (!bid || this.mat[i]) continue;                       // a solid tile here will cover it anyway
+      const x = Math.round(c * T + ox), y = Math.round(r * T + oy);
+      const variant = ((c * 2 + r * 3) % TEX.V + TEX.V) % TEX.V;
+      const img = TEX.tiles[bid] && TEX.tiles[bid][variant];
+      if (img) ctx.drawImage(img, x, y); else { ctx.fillStyle = MAT[bid].c; ctx.fillRect(x, y, T, T); }
+      ctx.fillStyle = 'rgba(8,8,14,0.52)'; ctx.fillRect(x, y, T, T);   // recess into shadow
+      // inner-edge shading where the interior meets open air / floors (depth)
+      if (!this.bg[this.idx(c, r - 1)] && !this.solid(c, r - 1)) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x, y, T, 4); }
+    }
     for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
       const i = this.idx(c, r); const id = this.mat[i];
       if (!id) continue;

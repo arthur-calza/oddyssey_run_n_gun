@@ -8,7 +8,7 @@ const HEROES = [
   {
     key: 'ragnarok', name: 'RAGNAROK', icon: '⚔', spr: 'ragnarok',
     desc: 'Cavaleiro de placas. Espingarda de dispersão e o Tiro Explosivo.',
-    hp: 150, speed: 235, jumpV: 880, jumps: 1, clip: 6, reload: 0.9, gunLen: 26, w: 28, h: 48,  // jumpV = altura do pulo (TESTE)
+    hp: 150, speed: 235, jumpV: 1400, jumps: 1, clip: 6, reload: 0.9, gunLen: 26, w: 28, h: 48,  // jumpV = altura do pulo (TESTE)
     weapon: {
       fire(p, game) {
         if (p.powered > 0) {   // POTION: explosive buckshot
@@ -34,7 +34,7 @@ const HEROES = [
   {
     key: 'zracks', name: 'ZRACKS', icon: '➶', spr: 'zracks',
     desc: 'Lagarto caçador. Arco perfurante e a Investida com lâmina.',
-    hp: 110, speed: 300, jumpV: 800, jumps: 2, clip: 12, reload: 0.8, gunLen: 22, w: 28, h: 46,  // jumpV = altura do pulo (TESTE)
+    hp: 110, speed: 300, jumpV: 1400, jumps: 2, clip: 12, reload: 0.8, gunLen: 22, w: 28, h: 46,  // jumpV = altura do pulo (TESTE)
     weapon: {
       fire(p, game) {
         if (p.powered > 0) {   // POTION: venom orbs (poison splash)
