@@ -68,13 +68,16 @@ function _trimClip(g, bg) {
 
 const Editor = {
   active: false, canvas: null, ctx: null, time: 0, cb: null,
-  tab: 'mats', tool: 'brush',
+  tab: 'mats', tool: 'brush', layer: 1, brushSize: 1,
   world: null, objs: null, view: null,
   cur: null, curId: null, clip: null, clipName: '', clipSrc: null, sel: null,
+  clips: [], undoStack: [],
   hov: { c: 0, r: 0 }, _dirty: false, _ld: false, _pan: null,
   _ls: null, _rs: null, _ss: null,
+  SIZES: [1, 2, 3, 5, 8],
 
   TOOLS: [
+    { id: 'pan',      label: 'Mover',       key: '0' },
     { id: 'brush',    label: 'Pincel',      key: '1' },
     { id: 'line',     label: 'Linha',       key: '2' },
     { id: 'rect',     label: 'Retângulo',   key: '3' },
@@ -86,9 +89,9 @@ const Editor = {
   ],
   TABS: [
     { id: 'mats',     label: '🧱 Materiais' },
-    { id: 'bg',       label: '🟫 Fundo' },
     { id: 'decor',    label: '🏛 Decoração' },
-    { id: 'ents',     label: '🧟 Entidades' },
+    { id: 'enemies',  label: '🧟 Inimigos' },
+    { id: 'items',    label: '🎁 Itens' },
     { id: 'builds',   label: '🏰 Construções' },
     { id: 'dungeons', label: '🕳 Masmorras' },
     { id: 'saved',    label: '💾 Salvos' },
@@ -111,11 +114,18 @@ const Editor = {
     if (!this.world) this._newScene(false);
     this.view = this.view || { x: 0, y: 0, zoom: 1 };
     this._buildDOM();
-    this.setTool('brush'); this.setTab('mats');
+    this.setTool('brush'); this.setTab('mats'); this.setBrushSize(this.brushSize);
     this._wheel = (e) => { e.preventDefault(); this._onWheel(e); };
     canvas.addEventListener('wheel', this._wheel, { passive: false });
     this._key = (e) => {
-      if (e.key === 'Escape') { e.stopPropagation(); this._back(); }
+      const k = (e.key || '').toLowerCase();
+      if (e.ctrlKey || e.metaKey) {
+        if (k === 'z') { e.preventDefault(); e.stopPropagation(); this._undo(); }
+        else if (k === 'c') { e.preventDefault(); e.stopPropagation(); this._copySelection(); }
+        else if (k === 'v') { e.preventDefault(); e.stopPropagation(); this._paste(); }
+        return;
+      }
+      if (k === 'escape') { e.stopPropagation(); this._back(); }
     };
     addEventListener('keydown', this._key, true);
   },
@@ -137,11 +147,12 @@ const Editor = {
     this.objs.set('5,' + (groundR - 1), { kind: 'marker', m: 'spawn', char: 'P' });
     this.objs.set((cols - 6) + ',' + (groundR - 1), { kind: 'marker', m: 'exit', char: 'E' });
     this.world.markGrass();
-    this.sel = null; this.clip = null;
+    this.sel = null; this.clip = null; this.undoStack = [];
     this.view = { x: 0, y: Math.max(0, (groundR - 16) * CONFIG.TILE), zoom: 1 };
   },
 
   _resizeWorld(nc, nr) {
+    this._pushUndo();
     const old = this.world, oc = old.cols, or = old.rows;
     const nw = new World(nc, nr);
     for (let r = 0; r < Math.min(or, nr); r++) for (let c = 0; c < Math.min(oc, nc); c++) {
@@ -166,7 +177,7 @@ const Editor = {
         #editor .eback{border-color:#b1322c;}
         #editor .ebtn.go{border-color:#3a5a2a;color:#7be08a;}
         #editor .ebtn.save{border-color:#2b7fd0;color:#6fd0ff;}
-        #editor .elist{position:absolute;top:96px;left:12px;bottom:64px;width:228px;overflow-y:auto;padding:8px;}
+        #editor .elist{position:absolute;top:96px;left:12px;bottom:104px;width:228px;overflow-y:auto;padding:8px;}
         #editor .eitem{display:flex;align-items:center;gap:8px;width:100%;cursor:pointer;font:inherit;text-align:left;color:#e8e0cf;background:#241a10;border:2px solid #4a3826;border-radius:6px;padding:6px 8px;margin-bottom:5px;transition:.1s;}
         #editor .eitem:hover{background:#3a2c1c;}
         #editor .eitem.on{border-color:#e8b94a;color:#e8b94a;}
@@ -175,15 +186,18 @@ const Editor = {
         #editor .eitem .enm{font-size:13px;font-weight:bold;}
         #editor .eitem .esub{font-size:11px;color:#9a8f7d;}
         #editor .eitem .edel{margin-left:auto;color:#b1322c;font-weight:bold;border:1px solid #5a2420;border-radius:4px;background:#2a1410;padding:1px 6px;cursor:pointer;}
-        #editor .einfo{position:absolute;top:96px;right:12px;width:236px;bottom:64px;overflow-y:auto;padding:10px 12px;font-size:12px;line-height:1.5;}
+        #editor .einfo{position:absolute;top:96px;right:12px;width:236px;bottom:104px;overflow-y:auto;padding:10px 12px;font-size:12px;line-height:1.5;}
         #editor .einfo h3{color:#e8b94a;font-size:15px;margin:2px 0 6px;letter-spacing:1px;}
         #editor .einfo .erow{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;}
         #editor .einfo .erow .ebtn{font-size:12px;padding:5px 8px;}
         #editor .einfo .ehelp{color:#9a8f7d;font-size:11.5px;margin-top:8px;border-top:1px solid #3a2c1c;padding-top:8px;}
-        #editor .etools{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;padding:7px 9px;flex-wrap:wrap;justify-content:center;max-width:96vw;}
+        #editor .etools{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 10px;max-width:96vw;}
+        #editor .etoolrow{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;}
         #editor .esbtn{cursor:pointer;font:inherit;font-size:12.5px;font-weight:bold;color:#e8e0cf;background:#241a10;border:2px solid #4a3826;border-radius:6px;padding:6px 9px;transition:.1s;}
         #editor .esbtn:hover{background:#3a2c1c;} #editor .esbtn.on{border-color:#6fd0ff;color:#6fd0ff;box-shadow:0 0 8px rgba(111,208,255,.35);}
-        #editor .estatus{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);pointer-events:none;color:#caa86a;font-size:12px;text-shadow:1px 1px 0 #000;white-space:nowrap;}
+        #editor .esbtn.sz{padding:6px 8px;min-width:30px;text-align:center;}
+        #editor .esep{width:1px;height:20px;background:#5a4326;margin:0 3px;}
+        #editor .estatus{color:#caa86a;font-size:12px;text-shadow:1px 1px 0 #000;text-align:center;}
         #editor .etoast{position:absolute;top:84px;left:50%;transform:translateX(-50%);pointer-events:none;background:rgba(20,40,16,0.92);border:2px solid #3a5a2a;color:#bff0c0;border-radius:8px;padding:8px 16px;font-weight:bold;opacity:0;transition:opacity .3s;}
       `;
       document.head.appendChild(st);
@@ -194,12 +208,11 @@ const Editor = {
       <div class="epanel elist" id="eList"></div>
       <div class="epanel einfo" id="eInfo"></div>
       <div class="epanel etools" id="eTools"></div>
-      <div class="estatus" id="eStatus"></div>
       <div class="etoast" id="eToast"></div>`;
     document.body.appendChild(e);
     this.panel = e;
     this.listEl = e.querySelector('#eList'); this.infoEl = e.querySelector('#eInfo');
-    this.statusEl = e.querySelector('#eStatus'); this.toastEl = e.querySelector('#eToast');
+    this.toastEl = e.querySelector('#eToast');
 
     // barra superior: voltar + abas + ações
     const top = e.querySelector('#eTop');
@@ -216,13 +229,23 @@ const Editor = {
     mk('▶ Testar', 'go', () => this._test());
     this.tabsTop = top;
 
-    // barra de ferramentas
+    // barra inferior: legenda (em cima) + ferramentas e tamanho do pincel (embaixo)
     const tb = e.querySelector('#eTools');
+    const statusLine = document.createElement('div'); statusLine.className = 'estatus';
+    tb.appendChild(statusLine); this.statusEl = statusLine;
+    const row = document.createElement('div'); row.className = 'etoolrow';
     this.TOOLS.forEach(t => {
       const b = document.createElement('button'); b.className = 'esbtn'; b.dataset.tool = t.id;
-      b.textContent = t.label + '  (' + t.key + ')';
-      b.onclick = () => this.setTool(t.id); tb.appendChild(b);
+      b.textContent = t.label + ' (' + t.key + ')';
+      b.onclick = () => this.setTool(t.id); row.appendChild(b);
     });
+    const sep2 = document.createElement('span'); sep2.className = 'esep'; row.appendChild(sep2);
+    const szlab = document.createElement('span'); szlab.style.cssText = 'font-size:12px;color:#9a8f7d;'; szlab.textContent = 'Tam:'; row.appendChild(szlab);
+    this.SIZES.forEach(s => {
+      const b = document.createElement('button'); b.className = 'esbtn sz'; b.dataset.size = s; b.textContent = s;
+      b.title = 'Tamanho do pincel/borracha ([ ])'; b.onclick = () => this.setBrushSize(s); row.appendChild(b);
+    });
+    tb.appendChild(row);
   },
 
   toast(msg) {
@@ -241,6 +264,41 @@ const Editor = {
     if (this.tabsTop) this.tabsTop.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
     this._buildList(); this._info();
   },
+  setBrushSize(s) {
+    this.brushSize = s;
+    if (this.panel) this.panel.querySelectorAll('[data-size]').forEach(b => b.classList.toggle('on', +b.dataset.size === s));
+  },
+  _cycleSize(d) { const i = clamp(this.SIZES.indexOf(this.brushSize) + d, 0, this.SIZES.length - 1); this.setBrushSize(this.SIZES[i]); },
+  setLayer(n) { this.layer = n; this._info(); },
+
+  // ---------------- desfazer (Ctrl+Z) ----------------
+  _snapshot() {
+    return {
+      cols: this.world.cols, rows: this.world.rows,
+      mat: this.world.mat.slice(), bg: this.world.bg.slice(), hp: this.world.hp.slice(), grass: this.world.grass.slice(),
+      objs: [...this.objs.entries()].map(([k, v]) => [k, Object.assign({}, v)]),
+    };
+  },
+  _pushUndo() { this.undoStack.push(this._snapshot()); if (this.undoStack.length > 40) this.undoStack.shift(); },
+  _undo() {
+    const s = this.undoStack.pop();
+    if (!s) { this.toast('Nada para desfazer'); return; }
+    if (this.world.cols !== s.cols || this.world.rows !== s.rows) this.world = new World(s.cols, s.rows);
+    this.world.mat.set(s.mat); this.world.bg.set(s.bg); this.world.hp.set(s.hp); this.world.grass.set(s.grass);
+    this.objs = new Map(s.objs.map(([k, v]) => [k, Object.assign({}, v)]));
+    this._dirty = true; this.toast('Desfeito');
+  },
+
+  // ---------------- memória de cópia (clipboard, até 3) ----------------
+  _paste() {
+    if (!this.clips.length) { this.toast('Memória vazia (selecione e Ctrl+C)'); return; }
+    this._useClip(0); this.toast('Colando — clique para posicionar');
+  },
+  _useClip(i) {
+    const cl = this.clips[i]; if (!cl) return;
+    this.clip = cl; this.clipName = 'Cópia ' + (cl.name || ''); this.clipSrc = null; this.curId = null;
+    this.setTool('stamp'); this._info();
+  },
 
   // ---------------- paleta ----------------
   _buildList() {
@@ -248,14 +306,16 @@ const Editor = {
     const item = (on, onclick, fill) => { const b = document.createElement('button'); b.className = 'eitem' + (on ? ' on' : ''); fill(b); b.onclick = onclick; L.appendChild(b); return b; };
     const swatch = (id) => { const sw = document.createElement('canvas'); sw.width = sw.height = 28; const tile = TEX.tiles[id] && TEX.tiles[id][0]; if (tile) sw.getContext('2d').drawImage(tile, 0, 0, 28, 28); return sw; };
 
-    if (this.tab === 'mats' || this.tab === 'bg') {
-      const isBg = this.tab === 'bg';
+    if (this.tab === 'mats') {
+      const note = document.createElement('div'); note.style.cssText = 'color:#9a8f7d;font-size:11px;margin:0 2px 6px;';
+      note.innerHTML = 'Mesmos blocos para <b>Camada 1 (frente)</b> e <b>Camada 2 (fundo)</b> — escolha a camada no painel à direita.';
+      L.appendChild(note);
       for (let id = 1; id < MAT.length; id++) {
         const m = MAT[id]; if (!m) continue;
-        const eid = (isBg ? 'bg:' : 'mat:') + id;
-        item(this.curId === eid, () => this._selectPaint({ kind: isBg ? 'bg' : 'mat', id, char: this.MAT2CHAR[id], name: m.name, eid }), b => {
+        const eid = 'mat:' + id;
+        item(this.curId === eid, () => this._selectPaint({ kind: 'mat', id, char: this.MAT2CHAR[id], name: m.name, eid }), b => {
           b.appendChild(swatch(id));
-          const sp = document.createElement('span'); sp.innerHTML = `<div class="enm">${m.name}</div><div class="esub">${isBg ? 'fundo' : 'HP ' + (m.indestructible ? '∞' : m.hp)}</div>`; b.appendChild(sp);
+          const sp = document.createElement('span'); sp.innerHTML = `<div class="enm">${m.name}</div><div class="esub">HP ${m.indestructible ? '∞' : m.hp}</div>`; b.appendChild(sp);
         });
       }
     } else if (this.tab === 'decor') {
@@ -266,8 +326,7 @@ const Editor = {
           b.innerHTML = `<span class="eem">🏛</span><span><div class="enm">${d.name}</div><div class="esub">${d.type}</div></span>`;
         });
       });
-    } else if (this.tab === 'ents') {
-      // inimigos
+    } else if (this.tab === 'enemies') {
       Object.keys(this.ENEMY2CHAR).forEach(type => {
         const ch = this.ENEMY2CHAR[type], info = (Gallery.ENEMY_INFO && Gallery.ENEMY_INFO[type]) || { icon: '👾', name: type };
         const eid = 'enemy:' + type;
@@ -275,11 +334,12 @@ const Editor = {
           b.innerHTML = `<span class="eem">${info.icon}</span><span><div class="enm">${info.name}</div><div class="esub">inimigo</div></span>`;
         });
       });
-      // recompensas
+    } else if (this.tab === 'items') {
+      // recompensas / coletáveis
       for (const pk in this.PICK2CHAR) {
         const ch = this.PICK2CHAR[pk], info = this.PICK_INFO[pk], eid = 'pickup:' + pk;
         item(this.curId === eid, () => this._selectPaint({ kind: 'pickup', pk, char: ch, name: info[1], eid }), b => {
-          b.innerHTML = `<span class="eem">${info[0]}</span><span><div class="enm">${info[1]}</div><div class="esub">item</div></span>`;
+          b.innerHTML = `<span class="eem">${info[0]}</span><span><div class="enm">${info[1]}</div><div class="esub">coletável</div></span>`;
         });
       }
       // marcadores de fase
@@ -321,7 +381,7 @@ const Editor = {
 
   _selectPaint(entry) {
     this.cur = entry; this.curId = entry.eid;
-    if (['select', 'stamp', 'eyedrop'].includes(this.tool)) this.setTool('brush');
+    if (['select', 'stamp', 'eyedrop', 'pan'].includes(this.tool)) this.setTool('brush');
     this._buildList(); this._info();
   },
   _selectClip(def, kind, eid) {
@@ -354,29 +414,45 @@ const Editor = {
     const I = this.infoEl; if (!I) return; I.innerHTML = '';
     const T = this.TOOLS.find(t => t.id === this.tool) || {};
     const DESC = {
+      pan: 'Arraste para mover o cenário.',
       brush: 'Pinta o item escolhido (arraste para pintar vários).',
       line: 'Arraste para traçar uma linha do item.',
       rect: 'Arraste para preencher um retângulo.',
       bucket: 'Preenche uma área contígua do mesmo material.',
-      erase: 'Apaga: objeto › bloco › fundo (em camadas).',
+      erase: 'Apaga na camada ativa (use o tamanho ao lado).',
       select: 'Arraste para marcar uma área. Depois Copiar/Apagar.',
       stamp: 'Clique para carimbar a construção/área copiada.',
       eyedrop: 'Clique para capturar o que está sob o cursor.',
     };
     let head = '🔨 Ferramenta de Criação';
-    let body = '';
     if (this.tool === 'stamp' && this.clip) head = '📋 ' + (this.clipName || 'Trecho') + ' (' + this.clip.w + '×' + this.clip.h + ')';
     else if (this.cur) head = (this.cur.name || 'Item') + ' selecionado';
-    body += `<div class="esub">${T.label || ''} — ${DESC[this.tool] || ''}</div>`;
-    I.innerHTML = `<h3>${head}</h3>${body}`;
+    I.innerHTML = `<h3>${head}</h3><div class="esub">${T.label || ''} — ${DESC[this.tool] || ''}</div>`;
+
+    const mkb = (txt, fn, dis) => { const b = document.createElement('button'); b.className = 'ebtn'; b.textContent = txt; b.disabled = !!dis; if (dis) b.style.opacity = '.45'; b.onclick = fn; return b; };
+
+    // camadas (Camada 1 = frente/sólido · Camada 2 = fundo)
+    const layTitle = document.createElement('div'); layTitle.className = 'esub'; layTitle.style.marginTop = '6px'; layTitle.textContent = 'Camada de pintura:';
+    I.appendChild(layTitle);
+    const layRow = document.createElement('div'); layRow.className = 'erow';
+    const l1 = mkb('▦ 1 · Frente', () => this.setLayer(1)); if (this.layer === 1) l1.classList.add('on');
+    const l2 = mkb('▒ 2 · Fundo', () => this.setLayer(2)); if (this.layer === 2) l2.classList.add('on');
+    layRow.appendChild(l1); layRow.appendChild(l2); I.appendChild(layRow);
 
     // seleção
     const selRow = document.createElement('div'); selRow.className = 'erow';
-    const mkb = (txt, fn, dis) => { const b = document.createElement('button'); b.className = 'ebtn'; b.textContent = txt; b.disabled = !!dis; if (dis) b.style.opacity = '.45'; b.onclick = fn; return b; };
     selRow.appendChild(mkb('📋 Copiar área', () => this._copySelection(), !this.sel));
     selRow.appendChild(mkb('🗑 Apagar área', () => this._deleteSelection(), !this.sel));
     I.appendChild(selRow);
     if (this.sel) { const s = document.createElement('div'); s.className = 'esub'; s.textContent = `Área: ${this.sel.c1 - this.sel.c0 + 1}×${this.sel.r1 - this.sel.r0 + 1} tiles`; I.appendChild(s); }
+
+    // memória de cópia (clipboard, até 3)
+    const memTitle = document.createElement('div'); memTitle.className = 'esub'; memTitle.style.marginTop = '6px'; memTitle.textContent = 'Memória (Ctrl+C copia · Ctrl+V cola):';
+    I.appendChild(memTitle);
+    const memRow = document.createElement('div'); memRow.className = 'erow';
+    if (!this.clips.length) { const d = document.createElement('div'); d.className = 'esub'; d.textContent = '(vazia)'; memRow.appendChild(d); }
+    this.clips.forEach((cl, i) => { const b = mkb(`${i + 1}: ${cl.w}×${cl.h}`, () => this._useClip(i)); if (this.clip === cl) b.classList.add('on'); memRow.appendChild(b); });
+    I.appendChild(memRow);
 
     // grade
     const gRow = document.createElement('div'); gRow.className = 'erow';
@@ -386,17 +462,20 @@ const Editor = {
     const gsz = document.createElement('div'); gsz.className = 'esub'; gsz.textContent = `Grade: ${this.world.cols}×${this.world.rows} tiles`; I.appendChild(gsz);
 
     const help = document.createElement('div'); help.className = 'ehelp';
-    help.innerHTML = 'Botão <b>direito</b> ou <b>Espaço+arrasto</b>: mover câmera<br>Roda do mouse: zoom · Teclas 1–8: ferramentas<br>Para repetir salas iguais: <b>Seleção</b> › <b>Copiar área</b> › <b>Carimbo</b>.';
+    help.innerHTML = '<b>Mover</b> (0) ou botão direito/Espaço+arrasto · Roda: zoom<br><b>Ctrl+Z</b> desfaz · Teclas 0–8: ferramentas · <b>[ ]</b>: tamanho<br>Salas iguais: <b>Seleção</b> › <b>Ctrl+C</b> › <b>Carimbo/Ctrl+V</b>.';
     I.appendChild(help);
   },
 
   // ---------------- edição de células ----------------
   _key2(c, r) { return c + ',' + r; },
   _removeMarker(m) { for (const [k, v] of this.objs) if (v.kind === 'marker' && v.m === m) this.objs.delete(k); },
+  // pinta uma célula (na camada ativa) com o item atual
   applyCell(c, r) {
     if (!this.world.inBounds(c, r)) return; const cur = this.cur; if (!cur) return; const key = this._key2(c, r);
-    if (cur.kind === 'mat') { this.world.set(c, r, cur.id); this.objs.delete(key); }
-    else if (cur.kind === 'bg') { this.world.setBg(c, r, cur.id); }
+    if (cur.kind === 'mat') {
+      if (this.layer === 2) this.world.setBg(c, r, cur.id);       // Camada 2 = fundo
+      else { this.world.set(c, r, cur.id); this.objs.delete(key); } // Camada 1 = frente/sólido
+    }
     else if (cur.kind === 'decor') { this.objs.set(key, { kind: 'decor', type: cur.type, char: cur.char }); this.world.set(c, r, 0); }
     else if (cur.kind === 'enemy') { this.objs.set(key, { kind: 'enemy', type: cur.type, char: cur.char }); this.world.set(c, r, 0); }
     else if (cur.kind === 'pickup') { this.objs.set(key, { kind: 'pickup', pk: cur.pk, char: cur.char }); this.world.set(c, r, 0); }
@@ -405,31 +484,46 @@ const Editor = {
   },
   eraseCell(c, r) {
     if (!this.world.inBounds(c, r)) return; const key = this._key2(c, r);
-    if (this.objs.has(key)) this.objs.delete(key);
-    else if (this.world.at(c, r)) this.world.set(c, r, 0);
-    else if (this.world.bgAt(c, r)) this.world.setBg(c, r, 0);
+    if (this.layer === 2) { this.world.setBg(c, r, 0); }          // borracha na Camada 2 limpa o fundo
+    else {                                                         // Camada 1: objeto › sólido › (fundo se já vazio)
+      if (this.objs.has(key)) this.objs.delete(key);
+      else if (this.world.at(c, r)) this.world.set(c, r, 0);
+      else this.world.setBg(c, r, 0);
+    }
     this._dirty = true;
+  },
+  // _brushCells: aplica `fn` num quadrado de brushSize×brushSize centrado no cursor
+  _brushCells(c, r, fn) {
+    const n = this.brushSize, off = (n - 1) >> 1;
+    for (let dr = 0; dr < n; dr++) for (let dc = 0; dc < n; dc++) fn.call(this, c - off + dc, r - off + dr);
   },
   eyedrop(c, r) {
     if (!this.world.inBounds(c, r)) return; const o = this.objs.get(this._key2(c, r));
+    let tab = null;
     if (o) {
-      if (o.kind === 'decor') this.cur = { kind: 'decor', type: o.type, char: o.char, name: o.type, eid: 'decor:' + o.type };
-      else if (o.kind === 'enemy') this.cur = { kind: 'enemy', type: o.type, char: o.char, name: o.type, eid: 'enemy:' + o.type };
-      else if (o.kind === 'pickup') this.cur = { kind: 'pickup', pk: o.pk, char: o.char, name: o.pk, eid: 'pickup:' + o.pk };
-      else if (o.kind === 'marker') this.cur = { kind: 'marker', m: o.m, char: o.char, name: o.m, eid: 'marker:' + o.m };
-    } else if (this.world.at(c, r)) { const id = this.world.at(c, r); this.cur = { kind: 'mat', id, char: this.MAT2CHAR[id], name: MAT[id].name, eid: 'mat:' + id }; }
-    else if (this.world.bgAt(c, r)) { const id = this.world.bgAt(c, r); this.cur = { kind: 'bg', id, char: this.MAT2CHAR[id], name: MAT[id].name, eid: 'bg:' + id }; }
+      if (o.kind === 'decor') { const d = (Gallery.DECOR || []).find(x => x.type === o.type); this.cur = { kind: 'decor', type: o.type, char: o.char, name: d ? d.name : o.type, eid: 'decor:' + o.type }; tab = 'decor'; }
+      else if (o.kind === 'enemy') { const inf = (Gallery.ENEMY_INFO && Gallery.ENEMY_INFO[o.type]) || {}; this.cur = { kind: 'enemy', type: o.type, char: o.char, name: inf.name || o.type, eid: 'enemy:' + o.type }; tab = 'enemies'; }
+      else if (o.kind === 'pickup') { this.cur = { kind: 'pickup', pk: o.pk, char: o.char, name: this.PICK_INFO[o.pk][1], eid: 'pickup:' + o.pk }; tab = 'items'; }
+      else if (o.kind === 'marker') { this.cur = { kind: 'marker', m: o.m, char: o.char, name: o.m === 'spawn' ? 'Início (P)' : 'Saída (E)', eid: 'marker:' + o.m }; tab = 'items'; }
+    } else if (this.world.at(c, r)) { const id = this.world.at(c, r); this.cur = { kind: 'mat', id, char: this.MAT2CHAR[id], name: MAT[id].name, eid: 'mat:' + id }; this.layer = 1; tab = 'mats'; }
+    else if (this.world.bgAt(c, r)) { const id = this.world.bgAt(c, r); this.cur = { kind: 'mat', id, char: this.MAT2CHAR[id], name: MAT[id].name, eid: 'mat:' + id }; this.layer = 2; tab = 'mats'; }
     else return;
-    this.curId = this.cur.eid; this.setTool('brush');
+    this.curId = this.cur.eid; this.tool = 'brush';
+    if (tab) this.setTab(tab);          // reflete a seleção no sidebar (troca a aba e destaca)
+    this.setTool('brush');              // garante o destaque da ferramenta
+    this.toast('Selecionado: ' + this.cur.name);
   },
   floodFill(c, r) {
     if (!this.cur || this.cur.kind !== 'mat' || !this.world.inBounds(c, r)) return;
-    const target = this.world.at(c, r), repl = this.cur.id; if (target === repl) return;
+    const bg = this.layer === 2;
+    const at = (cc, rr) => bg ? this.world.bgAt(cc, rr) : this.world.at(cc, rr);
+    const set = (cc, rr, id) => bg ? this.world.setBg(cc, rr, id) : this.world.set(cc, rr, id);
+    const target = at(c, r), repl = this.cur.id; if (target === repl) return;
     const stack = [[c, r]]; let n = 0;
     while (stack.length && n < 6000) {
       const [cc, rr] = stack.pop(); if (!this.world.inBounds(cc, rr)) continue;
-      if (this.world.at(cc, rr) !== target) continue;
-      this.world.set(cc, rr, repl); n++;
+      if (at(cc, rr) !== target) continue;
+      set(cc, rr, repl); n++;
       stack.push([cc + 1, rr], [cc - 1, rr], [cc, rr + 1], [cc, rr - 1]);
     }
     this._dirty = true;
@@ -457,15 +551,18 @@ const Editor = {
     return { w, h, cells, bg };
   },
   _copySelection() {
-    if (!this.sel) return;
-    const s = this.sel; this.clip = this._serialize(s.c0, s.r0, s.c1 - s.c0 + 1, s.r1 - s.r0 + 1);
-    this.clipName = 'Área copiada'; this.clipSrc = null; this.curId = null;
-    this.setTool('stamp'); this.toast('Área copiada — clique para carimbar'); this._info();
+    if (!this.sel) { this.toast('Selecione uma área primeiro (ferramenta Seleção)'); return; }
+    const s = this.sel; const clip = this._serialize(s.c0, s.r0, s.c1 - s.c0 + 1, s.r1 - s.r0 + 1);
+    clip.name = clip.w + '×' + clip.h;
+    this.clips.unshift(clip); if (this.clips.length > 3) this.clips.length = 3;   // memória de até 3
+    this.clip = clip; this.clipName = 'Cópia ' + clip.name; this.clipSrc = null; this.curId = null;
+    this.sel = null;                                   // limpa o retângulo (seleção dinâmica)
+    this.setTool('stamp'); this.toast('Copiado para a memória — clique para colar'); this._info();
   },
   _deleteSelection() {
-    if (!this.sel) return; const s = this.sel;
-    for (let r = s.r0; r <= s.r1; r++) for (let c = s.c0; c <= s.c1; c++) this.eraseCell(c, r);
-    this.toast('Área apagada'); this._info();
+    if (!this.sel) return; this._pushUndo(); const s = this.sel;
+    for (let r = s.r0; r <= s.r1; r++) for (let c = s.c0; c <= s.c1; c++) { const k = this._key2(c, r); this.objs.delete(k); this.world.set(c, r, 0); this.world.setBg(c, r, 0); }
+    this._dirty = true; this.toast('Área apagada'); this._info();
   },
   _putChar(c, r, ch) {
     if (!this.world.inBounds(c, r) || !ch || ch === '.') return; const key = this._key2(c, r);
@@ -542,7 +639,7 @@ const Editor = {
     this.hov = { c, r };
 
     const space = Input.down(' ');
-    const panning = Input.mouse.rdown || (space && Input.mouse.down);
+    const panning = Input.mouse.rdown || (space && Input.mouse.down) || (this.tool === 'pan' && Input.mouse.down);
     if (panning) {
       if (!this._pan) this._pan = { mx, my, vx: this.view.x, vy: this.view.y };
       this.view.x = this._pan.vx - (mx - this._pan.mx) / z;
@@ -550,8 +647,10 @@ const Editor = {
       this._clampView();
     } else this._pan = null;
 
-    // atalhos de ferramenta
+    // atalhos de ferramenta e de tamanho do pincel
     this.TOOLS.forEach(t => { if (Input.once(t.key)) this.setTool(t.id); });
+    if (Input.once('[')) this._cycleSize(-1);
+    if (Input.once(']')) this._cycleSize(1);
     if (Input.once('delete') || Input.once('backspace')) this._deleteSelection();
 
     const drawing = Input.mouse.down && !panning && !space;
@@ -559,9 +658,12 @@ const Editor = {
     const released = !drawing && this._ld;
     this._ld = drawing;
 
+    // grava um ponto de desfazer no INÍCIO de cada ação que altera o cenário
+    if (pressed && ['brush', 'erase', 'line', 'rect', 'bucket', 'stamp'].includes(this.tool)) this._pushUndo();
+
     switch (this.tool) {
-      case 'brush':  if (drawing) this.applyCell(c, r); break;
-      case 'erase':  if (drawing) this.eraseCell(c, r); break;
+      case 'brush':  if (drawing) this._brushCells(c, r, this.applyCell); break;
+      case 'erase':  if (drawing) this._brushCells(c, r, this.eraseCell); break;
       case 'line':   if (pressed) this._ls = { c, r }; if (released && this._ls) { this._lineApply(this._ls.c, this._ls.r, c, r); this._ls = null; } break;
       case 'rect':   if (pressed) this._rs = { c, r }; if (released && this._rs) { this._rectApply(this._rs.c, this._rs.r, c, r); this._rs = null; } break;
       case 'bucket': if (pressed) this.floodFill(c, r); break;
@@ -612,8 +714,8 @@ const Editor = {
 
     this._drawGrid(ctx, cam, T);
 
-    // seleção
-    if (this.sel) {
+    // seleção (mostrada apenas com a ferramenta Seleção ativa)
+    if (this.sel && this.tool === 'select') {
       const s = this.sel; ctx.save(); ctx.strokeStyle = '#6fd0ff'; ctx.lineWidth = 2 / z; ctx.setLineDash([6 / z, 4 / z]);
       ctx.strokeRect(s.c0 * T + ox, s.r0 * T + oy, (s.c1 - s.c0 + 1) * T, (s.r1 - s.r0 + 1) * T);
       ctx.fillStyle = 'rgba(111,208,255,0.10)'; ctx.fillRect(s.c0 * T + ox, s.r0 * T + oy, (s.c1 - s.c0 + 1) * T, (s.r1 - s.r0 + 1) * T);
@@ -625,7 +727,11 @@ const Editor = {
 
     // cursor / fantasma do carimbo
     if (this.tool === 'stamp' && this.clip) this._drawClipGhost(ctx, ox, oy, T, z);
-    else { ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.5 / z; ctx.strokeRect(this.hov.c * T + ox, this.hov.r * T + oy, T, T); ctx.restore(); }
+    else if (this.tool !== 'pan') {
+      const n = (this.tool === 'brush' || this.tool === 'erase') ? this.brushSize : 1, off = (n - 1) >> 1;
+      ctx.save(); ctx.strokeStyle = this.tool === 'erase' ? 'rgba(255,120,120,0.9)' : 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.5 / z;
+      ctx.strokeRect((this.hov.c - off) * T + ox, (this.hov.r - off) * T + oy, n * T, n * T); ctx.restore();
+    }
 
     ctx.restore();
   },
@@ -674,6 +780,7 @@ const Editor = {
     if (!this.statusEl) return;
     const t = this.TOOLS.find(x => x.id === this.tool);
     const what = this.tool === 'stamp' ? (this.clipName || 'trecho') : (this.cur ? this.cur.name : '—');
-    this.statusEl.textContent = `${t ? t.label : ''} · ${what} · célula ${this.hov.c},${this.hov.r} · zoom ${Math.round(this.view.zoom * 100)}%`;
+    const lay = this.layer === 2 ? 'Fundo' : 'Frente';
+    this.statusEl.textContent = `${t ? t.label : ''} · ${what} · Camada ${this.layer} (${lay}) · Tam ${this.brushSize} · ${this.hov.c},${this.hov.r} · zoom ${Math.round(this.view.zoom * 100)}%`;
   },
 };
