@@ -32,7 +32,7 @@ class FX {
   }
 
   // ---- persistent mini-block debris (fall with gravity, then stay) ----
-  _pushCrumb(k) { this.crumbs.push(k); if (this.crumbs.length > 1500) this.crumbs.splice(0, this.crumbs.length - 1500); }
+  _pushCrumb(k) { this.crumbs.push(k); if (this.crumbs.length > 2200) this.crumbs.splice(0, this.crumbs.length - 2200); }
   // chunks of a shattered tile: ≈1/10 of a tile, scatter, fall and rest on the ground forever
   crumbsBurst(x, y, m, power = 70) {
     const n = 3 + (Math.random() * 4 | 0), sp = 26 + power * 0.5;
@@ -44,26 +44,62 @@ class FX {
     });
   }
   // gore: red flesh bits + white bone shards that fall and pool on the floor as real particles
+  // (espalham bem mais para cima e para os lados antes de cair)
   goreBurst(x, y, dir = 0, n = 12, color = '#7a1a14') {
     for (let i = 0; i < n; i++) {
-      const bone = Math.random() < 0.32;
+      const bone = Math.random() < 0.34;
       this._pushCrumb({
-        x: x + rand(-9, 9), y: y + rand(-10, 6),
-        vx: rand(-140, 140) + dir * 70, vy: -rand(40, 230),
-        s: bone ? rand(1.8, 3.0) : rand(2.2, 4.2),
+        x: x + rand(-12, 12), y: y + rand(-14, 6),
+        vx: rand(-230, 230) + dir * 100, vy: -rand(70, 380),
+        s: bone ? rand(2.0, 3.4) : rand(2.4, 4.6),
         c: bone ? pick(['#e8e0cf', '#d8cdb4', '#fff4e2']) : color,
         rot: rand(0, TAU), vr: rand(-16, 16), rest: false, blood: !bone,
+      });
+    }
+  }
+  // PEDAÇOS GRANDES da morte: ossos (retângulos brancos com cabeças), pedaços
+  // de corpo (retângulos da cor do inimigo) e glóbulos de carne. Caem com
+  // gravidade, assentam e somem (35%) quando o bloco de apoio é destruído.
+  // Voam bem alto e para os lados, cobrindo mais tiles ao cair (estilo Broforce).
+  goreChunks(x, y, dir = 0, n = 14, color = '#7a1a14') {
+    const KINDS = ['bone', 'bone', 'chunk', 'chunk', 'glob'];
+    for (let i = 0; i < n; i++) {
+      const kind = KINDS[(Math.random() * KINDS.length) | 0];
+      const big = rand(4.5, 8.5);
+      this._pushCrumb({
+        x: x + rand(-12, 12), y: y + rand(-14, 6),
+        vx: rand(-280, 280) + dir * 130, vy: -rand(140, 460),
+        s: kind === 'glob' ? big * 1.1 : big,
+        c: kind === 'bone' ? pick(['#e8e0cf', '#f0e8d6', '#d8cdb4']) : color,
+        rot: rand(0, TAU), vr: rand(-13, 13), rest: false,
+        kind, blood: kind === 'glob',
       });
     }
   }
   drawCrumbs(ctx, cam) {
     const ox = cam.ox, oy = cam.oy, vw = cam.vw, vh = cam.vh;
     for (const k of this.crumbs) {
-      if (k.x < cam.x - 24 || k.x > cam.x + vw + 24 || k.y < cam.y - 24 || k.y > cam.y + vh + 24) continue;
+      if (k.x < cam.x - 30 || k.x > cam.x + vw + 30 || k.y < cam.y - 30 || k.y > cam.y + vh + 30) continue;
+      const s = k.s;
       ctx.save(); ctx.translate(k.x + ox, k.y + oy); ctx.rotate(k.rot);
       ctx.fillStyle = k.c;
-      if (k.blood) { ctx.beginPath(); ctx.ellipse(0, 0, k.s * 0.62, k.s * 0.5, 0, 0, TAU); ctx.fill(); }
-      else { ctx.fillRect(-k.s / 2, -k.s / 2, k.s, k.s); ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(-k.s / 2, k.s * 0.18, k.s, k.s * 0.32); }
+      if (k.kind === 'bone') {                                  // osso: barra branca com cabeças nas pontas
+        ctx.fillRect(-s / 2, -s * 0.2, s, s * 0.4);
+        const hr = s * 0.26;
+        ctx.beginPath();
+        ctx.arc(-s / 2, -s * 0.18, hr, 0, TAU); ctx.arc(-s / 2, s * 0.18, hr, 0, TAU);
+        ctx.arc(s / 2, -s * 0.18, hr, 0, TAU); ctx.arc(s / 2, s * 0.18, hr, 0, TAU); ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(-s / 2, s * 0.06, s, s * 0.14);
+      } else if (k.kind === 'chunk') {                          // pedaço de corpo: bloco maior com sombra/realce
+        ctx.fillRect(-s / 2, -s / 2, s, s);
+        ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(-s / 2, -s / 2, s, s * 0.22);
+        ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(-s / 2, s * 0.16, s, s * 0.34);
+      } else if (k.kind === 'glob' || k.blood) {                // glóbulo / respingo de carne
+        ctx.beginPath(); ctx.ellipse(0, 0, s * 0.62, s * 0.5, 0, 0, TAU); ctx.fill();
+        if (k.kind === 'glob') { ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.ellipse(s * 0.1, s * 0.14, s * 0.3, s * 0.22, 0, 0, TAU); ctx.fill(); }
+      } else {                                                  // estilhaço pequeno (bloco)
+        ctx.fillRect(-s / 2, -s / 2, s, s); ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(-s / 2, s * 0.18, s, s * 0.32);
+      }
       ctx.restore();
     }
   }

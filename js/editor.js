@@ -631,10 +631,13 @@ const Editor = {
     let hasSpawn = false; for (const v of this.objs.values()) if (v.kind === 'marker' && v.m === 'spawn') hasSpawn = true;
     if (!hasSpawn) { this.toast('Coloque um marcador de Início (P) para testar'); return; }
     const data = this._serialize(0, 0, this.world.cols, this.world.rows);
+    // superfície (1º bloco sólido por coluna) p/ a iluminação subsolo/superfície
+    const surface = [];
+    for (let c = 0; c < this.world.cols; c++) { let s = this.world.rows; for (let r = 0; r < this.world.rows; r++) { if (this.world.at(c, r)) { s = r; break; } } surface.push(s); }
     const def = {
       name: 'CRIAÇÃO', sub: 'Teste da sua criação', win: 'exit',
       biome: 'castle', sky: ['#1e2740', '#080a14'], bannerColor: '#6a1a1a',
-      rows: data.cells, bg: data.bg,
+      rows: data.cells, bg: data.bg, surface,
     };
     this.cb && this.cb.onPlay && this.cb.onPlay(def);
   },

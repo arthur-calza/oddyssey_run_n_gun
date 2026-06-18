@@ -446,67 +446,43 @@ class Game {
   }
 
   // ---- iluminação 2D simples ---------------------------------
-  // Escuridão ambiente sobre tudo; é "removida" onde há céu (superfície)
-  // e ao redor de fontes de luz (tochas, lanternas, velas, caldeirões,
-  // materiais brilhantes) + uma luz fraca no herói.
+  // A SUPERFÍCIE (acima do nível natural do terreno, incluindo o interior
+  // de construções) tem luz padrão. O SUBSOLO (abaixo da superfície) fica
+  // mais escuro, porém sempre visível. Transição suave via blur.
   _drawLighting(ctx) {
     if (!this.world || (this.level && this.level.noLight)) return;
+    const surfArr = this.level && this.level.surface;
+    if (!surfArr) return;   // sem dados de superfície (ex.: criações simples) -> luz padrão em tudo
+
+    // ===== AJUSTE A ILUMINAÇÃO AQUI =====
+    const UNDERGROUND_DARK = 0.5;   // escuridão do subsolo: 0 = igual à superfície · 1 = preto total
+    const BRIGHT_MARGIN = 1;        // quantos tiles abaixo da superfície ainda ficam claros
+    const FADE = 4;                 // tiles de transição suave (maior = mais gradual)
+    // ====================================
+
     const W = CONFIG.W, H = CONFIG.H, T = this.world.T, z = CONFIG.ZOOM;
-    if (!this._lcan) { this._lcan = document.createElement('canvas'); this._lcan.width = W; this._lcan.height = H; this._lctx = this._lcan.getContext('2d'); }
-    const lx = this._lctx;
-    lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalCompositeOperation = 'source-over'; lx.clearRect(0, 0, W, H);
-    lx.fillStyle = 'rgba(8,10,24,0.8)'; lx.fillRect(0, 0, W, H);   // escuridão ambiente
-
-    const ox = this.cam.ox, oy = this.cam.oy;
-    const sx = wx => (wx + ox) * z, sy = wy => (wy + oy) * z;     // mundo -> tela
+    const S = 4, LW = Math.ceil(W / S), LH = Math.ceil(H / S);   // buffer de escuridão em 1/4 da resolução
+    if (!this._lcan) { this._lcan = document.createElement('canvas'); this._lctx = this._lcan.getContext('2d'); }
+    if (this._lcan.width !== LW) { this._lcan.width = LW; this._lcan.height = LH; }
+    const L = this._lctx, ox = this.cam.ox, oy = this.cam.oy;
+    const bx = wx => (wx + ox) * z / S, by = wy => (wy + oy) * z / S;   // mundo -> buffer
     const c0 = Math.max(0, Math.floor(this.cam.x / T)), c1 = Math.min(this.world.cols - 1, Math.floor((this.cam.x + this.cam.vw) / T) + 1);
-    const rBot = Math.min(this.world.rows - 1, Math.floor((this.cam.y + this.cam.vh) / T) + 1);
 
-    lx.globalCompositeOperation = 'destination-out';
-    // 1) luz do dia: cada coluna é iluminada do céu até o primeiro bloco sólido (a superfície)
+    L.setTransform(1, 0, 0, 1, 0, 0); L.clearRect(0, 0, LW, LH);
+    const N = surfArr.length;
+    const surfAt = c => { const i = clamp(c, 0, N - 1); return (surfArr[Math.max(0, i - 1)] + surfArr[i] + surfArr[Math.min(N - 1, i + 1)]) / 3; };
+    const dark = `rgba(4,7,16,${UNDERGROUND_DARK})`, clear = 'rgba(4,7,16,0)';
     for (let c = c0; c <= c1; c++) {
-      let surf = this.world.rows;
-      for (let r = 0; r < this.world.rows; r++) { if (this.world.solid(c, r)) { surf = r; break; } }
-      const colX = sx(c * T), colW = Math.ceil(T * z) + 1;
-      const skyBottom = sy((surf + 1) * T);
-      if (skyBottom > 0) { lx.fillStyle = 'rgba(0,0,0,1)'; lx.fillRect(colX, 0, colW, skyBottom); }
-      const fy0 = sy((surf + 1) * T), fy1 = sy((surf + 3) * T);   // transição suave abaixo da superfície
-      if (fy1 > fy0 && fy0 < H) { const gr = lx.createLinearGradient(0, fy0, 0, fy1); gr.addColorStop(0, 'rgba(0,0,0,0.85)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); lx.fillStyle = gr; lx.fillRect(colX, fy0, colW, fy1 - fy0); }
+      const s = surfAt(c) + BRIGHT_MARGIN;
+      const xL = Math.round(bx(c * T)), xR = Math.round(bx((c + 1) * T)), wL = Math.max(1, xR - xL);   // encaixe exato (sem sobrepor colunas)
+      const y0 = Math.max(0, by(s * T)), y1 = by((s + FADE) * T);
+      if (y1 > y0) { const g = L.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, clear); g.addColorStop(1, dark); L.fillStyle = g; L.fillRect(xL, y0, wL, y1 - y0); }
+      if (y1 < LH) { L.fillStyle = dark; L.fillRect(xL, Math.max(0, y1), wL, LH - Math.max(0, y1)); }
     }
-    // 2) fontes de luz (props de fogo) com leve tremulação
-    const LIGHTS = { torch: 4.2, lantern: 3.6, candle: 2.2, cauldron: 3.2 };
-    for (const d of this.decor) {
-      const rad = LIGHTS[d.type]; if (!rad) continue;
-      if (!this.cam.visible(d.x - T * 6, d.y - T * 6, T * 12, T * 12)) continue;
-      const fl = 1 + Math.sin(this.time * 9 + d.x) * 0.05 + (Math.random() - 0.5) * 0.04;
-      this._punchLight(lx, sx(d.x + T / 2), sy(d.y + T * 0.4), rad * T * z * fl);
-    }
-    // materiais que brilham (cristal, runa) iluminam ao redor
-    for (let c = c0; c <= c1; c++) for (let r = Math.max(0, Math.floor(this.cam.y / T)); r <= rBot; r++) {
-      const id = this.world.at(c, r); if (!id) continue; const m = MAT[id];
-      if (m && m.glow) this._punchLight(lx, sx(c * T + T / 2), sy(r * T + T / 2), 2.4 * T * z, 0.8);
-    }
-    // 3) luz fraca do herói
-    const p = this.player;
-    if (p && !p.dead) this._punchLight(lx, sx(p.cx), sy(p.cy), 3.2 * T * z, 0.85);
-
-    // tom quente aditivo sobre as chamas
-    lx.globalCompositeOperation = 'lighter';
-    for (const d of this.decor) {
-      const rad = LIGHTS[d.type]; if (!rad) continue;
-      if (!this.cam.visible(d.x - T * 6, d.y - T * 6, T * 12, T * 12)) continue;
-      const cxs = sx(d.x + T / 2), cys = sy(d.y + T * 0.4), rr = rad * T * z * 0.7;
-      const gr = lx.createRadialGradient(cxs, cys, 1, cxs, cys, rr);
-      gr.addColorStop(0, 'rgba(255,180,90,0.18)'); gr.addColorStop(1, 'rgba(255,140,60,0)');
-      lx.fillStyle = gr; lx.fillRect(cxs - rr, cys - rr, rr * 2, rr * 2);
-    }
-    lx.globalCompositeOperation = 'source-over';
-    ctx.drawImage(this._lcan, 0, 0);
-  }
-  _punchLight(lx, x, y, rad, strength = 1) {
-    const gr = lx.createRadialGradient(x, y, 1, x, y, rad);
-    gr.addColorStop(0, `rgba(0,0,0,${strength})`); gr.addColorStop(0.6, `rgba(0,0,0,${strength * 0.5})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
-    lx.fillStyle = gr; lx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    // desenha a escuridão sobre a cena com blur (suaviza qualquer degrau entre colunas)
+    ctx.save(); ctx.imageSmoothingEnabled = true; ctx.filter = 'blur(8px)';
+    ctx.drawImage(this._lcan, 0, 0, LW, LH, 0, 0, W, H);
+    ctx.filter = 'none'; ctx.restore();
   }
 
   _drawBossBar(ctx) {

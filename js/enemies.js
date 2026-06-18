@@ -56,11 +56,12 @@ class Enemy extends Entity {
     this.dying = this.dyingMax = (this.boss ? 1.2 : 0.55); this.dead = true;
     this.vx = (dir || sign(this.vx) || 1) * (this.boss ? 40 : 160); this.vy = -200;
     const gore = this.def.gore, big = this.boss ? 3 : this.mini ? 2 : 1;
-    // a big burst of blood + bones, plus a permanent pool/splatter on the ground
-    game.fx.gib(this.cx, this.cy, gore, 22 * big);                 // chunky gore
-    game.fx.blood(this.cx, this.cy, dir, 26 * big, gore);          // spray
-    game.fx.smoke(this.cx, this.cy, 6 * big);
-    game.fx.goreBurst(this.cx, this.cy, dir, 48 * big, gore);      // red flesh + white bone bits fall & settle (3× particles per kill)
+    // explosão de morte — volume ~3x maior, espalhando bem e cobrindo o chão (estilo Broforce)
+    game.fx.gib(this.cx, this.cy, gore, 30 * big);                 // faíscas + bits de gore
+    game.fx.blood(this.cx, this.cy, dir, 34 * big, gore);          // spray de sangue
+    game.fx.smoke(this.cx, this.cy, 7 * big);
+    game.fx.goreBurst(this.cx, this.cy, dir, 110 * big, gore);     // muitos bits pequenos (carne + ossos) que assentam no chão
+    game.fx.goreChunks(this.cx, this.cy, dir, 22 * big, gore);     // PEDAÇOS GRANDES: ossos e partes do corpo
     game.cam.addShake(this.boss ? 16 : 5); Sound.flesh();
     if (this.boss || this.type === 'flayer') game.fx.magic(this.cx, this.cy, '#b07bff', 20);
     game.onEnemyKilled(this);
