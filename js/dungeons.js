@@ -41,7 +41,7 @@
       put(g, c0 + 2, r0 + h - 1, 'z'); air(g, c0 + 3, r0 + h - 1, 'o');
     },
     vault(g, bg, c0, r0, w, h, rng) {                                  // cofre soterrado: ouro + token
-      hline(g, r0 + h - 1, c0 + 1, c0 + w - 2, '$'); put(g, c0 + (w >> 1), r0 + h - 1, 'T');
+      put(g, c0 + 2, r0 + h - 1, '$'); put(g, c0 + (w >> 1), r0 + h - 1, 'T'); put(g, c0 + w - 3, r0 + h - 1, '$');
       air(g, c0 + 1, r0 + h - 2, 'W'); air(g, c0 + w - 2, r0 + h - 2, 'W');
     },
     powder(g, bg, c0, r0, w, h, rng) {                                 // paiol: pólvora e foguetes

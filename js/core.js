@@ -80,21 +80,79 @@ const Input = {
   endFrame()  { this.pressed = {}; this.mouse.moved = false; },
 };
 
+// ---- Keybindings --------------------------------------------
+// Mapa de AÇÃO -> lista de teclas físicas. Totalmente reconfigurável
+// (persistido em localStorage). O Controller lê apenas daqui, então
+// trocar as teclas no menu de pausa muda os comandos instantaneamente.
+const Keys = {
+  KEY: 'oddyssey_keybinds_v1',
+  capturing: false,                       // true enquanto o menu captura uma nova tecla
+  // ordem/labels exibidos no menu de personalização
+  ACTIONS: [
+    { id: 'left',     label: 'Mover à esquerda' },
+    { id: 'right',    label: 'Mover à direita' },
+    { id: 'up',       label: 'Cima / Subir' },
+    { id: 'down',     label: 'Baixo / Descer' },
+    { id: 'jump',     label: 'Pular' },
+    { id: 'fire',     label: 'Atirar' },
+    { id: 'special',  label: 'Especial' },
+    { id: 'melee',    label: 'Corpo a corpo' },
+    { id: 'swapPrev', label: 'Herói anterior' },
+    { id: 'swapNext', label: 'Próximo herói' },
+    { id: 'pause',    label: 'Pausar' },
+  ],
+  DEFAULT: {
+    left:  ['arrowleft', 'a'], right: ['arrowright', 'd'],
+    up:    ['arrowup', 'w'],   down:  ['arrowdown', 's'],
+    jump:  ['arrowup', ' ', 'w'],
+    fire:  ['z'], special: ['x'], melee: ['c'],
+    swapPrev: ['q'], swapNext: ['e'], pause: ['p', 'escape'],
+  },
+  map: {},
+
+  load() {
+    this.map = {};
+    let saved = null;
+    try { const s = localStorage.getItem(this.KEY); if (s) saved = JSON.parse(s); } catch (e) {}
+    for (const a of this.ACTIONS) {
+      const id = a.id;
+      this.map[id] = (saved && Array.isArray(saved[id]) && saved[id].length) ? saved[id].slice() : this.DEFAULT[id].slice();
+    }
+  },
+  save()  { try { localStorage.setItem(this.KEY, JSON.stringify(this.map)); } catch (e) {} },
+  reset() { for (const a of this.ACTIONS) this.map[a.id] = this.DEFAULT[a.id].slice(); this.save(); },
+
+  down(action) { const ks = this.map[action]; return ks ? ks.some(k => Input.down(k)) : false; },
+  once(action) { const ks = this.map[action]; if (!ks) return false; let hit = false; for (const k of ks) if (Input.once(k)) hit = true; return hit; },
+
+  // adicionar/remover/atribuir uma tecla a uma ação (usado pelo menu)
+  add(action, key)    { key = (key || '').toLowerCase(); if (!this.map[action]) this.map[action] = []; if (!this.map[action].includes(key)) this.map[action].push(key); this.save(); },
+  removeKey(action, key) { if (this.map[action]) this.map[action] = this.map[action].filter(k => k !== key); this.save(); },
+
+  // nome amigável para exibir uma tecla
+  pretty(k) {
+    const M = { ' ': 'Espaço', 'arrowleft': '◄', 'arrowright': '►', 'arrowup': '▲', 'arrowdown': '▼',
+      'escape': 'Esc', 'enter': 'Enter', 'shift': 'Shift', 'control': 'Ctrl', 'alt': 'Alt', 'tab': 'Tab', 'backspace': '⌫' };
+    if (M[k]) return M[k];
+    return k.length === 1 ? k.toUpperCase() : k.charAt(0).toUpperCase() + k.slice(1);
+  },
+};
+Keys.load();
+
 // A controller exposes the abstract game inputs for one player.
-// Swap/duplicate this to add gamepad or a second local player.
+// Lê do mapa de teclas (Keys); trocar/duplicar para gamepad ou 2º jogador.
 class Controller {
-  constructor() { this.aimMode = 'mouse'; }
-  get left()    { return Input.down('a') || Input.down('arrowleft'); }
-  get right()   { return Input.down('d') || Input.down('arrowright'); }
-  get up()      { return Input.down('w') || Input.down('arrowup'); }
-  get down()    { return Input.down('s') || Input.down('arrowdown'); }
-  get jumpHeld(){ return Input.down('w') || Input.down(' ') || Input.down('arrowup'); }
-  jumpPressed() { return Input.once('w') || Input.once(' ') || Input.once('arrowup'); }
-  get fire()    { return Input.mouse.down || Input.down('j'); }
-  get special() { return Input.mouse.rdown || Input.down('k'); }
-  meleePressed(){ return Input.once('r'); }   // corpo-a-corpo com espada
-  swapNext()    { return Input.once('e'); }
-  swapPrev()    { return Input.once('q'); }
+  get left()    { return Keys.down('left'); }
+  get right()   { return Keys.down('right'); }
+  get up()      { return Keys.down('up'); }
+  get down()    { return Keys.down('down'); }
+  get jumpHeld(){ return Keys.down('jump'); }
+  jumpPressed() { return Keys.once('jump'); }
+  get fire()    { return Keys.down('fire'); }
+  get special() { return Keys.down('special'); }
+  meleePressed(){ return Keys.once('melee'); }   // corpo-a-corpo com espada
+  swapNext()    { return Keys.once('swapNext'); }
+  swapPrev()    { return Keys.once('swapPrev'); }
 }
 
 // ---- Camera --------------------------------------------------

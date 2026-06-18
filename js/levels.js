@@ -26,6 +26,21 @@ const LEVELS = (function () {
   const rect = (g, c0, r0, w, h, ch) => { for (let r = r0; r < r0 + h; r++) hline(g, r, c0, c0 + w - 1, ch); };
   const toRows = g => g.map(a => a.join(''));
 
+  // limita o LOOT colhível da fase: no máx. `oreganoMax` orégano ('o') e `tokenMax`
+  // tokens ('T'). Remove o excedente aleatoriamente; garante ao menos 1 token.
+  function capLoot(g, oreganoMax, tokenMax) {
+    const ore = [], tok = [];
+    for (let r = 0; r < g.length; r++) for (let c = 0; c < g[0].length; c++) {
+      const ch = g[r][c]; if (ch === 'o') ore.push([c, r]); else if (ch === 'T') tok.push([c, r]);
+    }
+    if (tok.length === 0 && ore.length) { const i = (Math.random() * ore.length) | 0; const p = ore.splice(i, 1)[0]; g[p[1]][p[0]] = 'T'; tok.push(p); }
+    const trim = (list, max) => {
+      for (let i = list.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; const t = list[i]; list[i] = list[j]; list[j] = t; }
+      for (let i = max; i < list.length; i++) { const p = list[i]; g[p[1]][p[0]] = '.'; }
+    };
+    trim(tok, tokenMax); trim(ore, oreganoMax);
+  }
+
   // ---- camada de fundo (interiores de construções e túneis) ----
   let CUR_BG = null;
   const bgPut = (c, r, ch) => { if (CUR_BG && r >= 0 && r < CUR_BG.length && c >= 0 && c < CUR_BG[0].length) CUR_BG[r][c] = ch; };
@@ -110,6 +125,7 @@ const LEVELS = (function () {
       rooms: d.rooms, entrances: d.ent || 3, mob: d.mob, surfAt: S, cap: 3,
     });
     if (cfg.keep) cfg.keep(g, S, W, rect, hline, vline, ladder, put);
+    capLoot(g, cfg.oregano || 40, cfg.tokens || 1);   // limita orégano/tokens colhíveis na fase
     put(g, 4, startR - 1, 'P');
     const ex = cfg.exit || (W - 5); put(g, ex, S(ex) - 1, 'E');
     return { name: cfg.name, sub: cfg.sub, win: cfg.keep ? 'boss' : 'exit', biome: cfg.biome, sky: cfg.sky, bannerColor: cfg.banner, rows: toRows(g), bg: toRows(bg) };
@@ -119,6 +135,7 @@ const LEVELS = (function () {
   const CAMPAIGN = [
     mk({
       name: 'PORTÃO DE FERRO', sub: 'Tome a base e desça às masmorras do castelo: 3 andares de túneis.',
+      oregano: 25, tokens: 1,
       biome: 'castle', sky: ['#1e2740', '#080a14'], banner: '#6a1a1a',
       W: 252, amp: 6, seed: 3, cliff: 'B', wall: 'B',
       matFn: d => d < 8 ? 'D' : '#', pits: [[105, 2], [180, 2]],
@@ -134,6 +151,7 @@ const LEVELS = (function () {
     }),
     mk({
       name: 'VILA DOS LAMENTOS', sub: 'Casas saqueadas e, sob elas, catacumbas e tocas em três níveis.',
+      oregano: 40, tokens: 1,
       biome: 'village', sky: ['#3a2e26', '#100a08'], banner: '#5a1e34',
       W: 260, amp: 7, seed: 7, cliff: 'S', wall: 'S',
       matFn: d => d < 2 ? 'D' : 'S', pits: [[112, 2], [186, 2]],
@@ -149,6 +167,7 @@ const LEVELS = (function () {
     }),
     mk({
       name: 'CATACUMBAS PROFUNDAS', sub: 'Uma necrópole de três andares: celas, santuários e a matilha.',
+      oregano: 55, tokens: 2,
       biome: 'dungeon', sky: ['#14101c', '#060409'], banner: '#2a1e44',
       W: 250, amp: 8, seed: 13, cliff: 'C', wall: 'C',
       matFn: d => d < 1 ? 'C' : (d % 4 === 3 ? 'm' : 'C'), pits: [[84, 2], [200, 2]],
@@ -164,6 +183,7 @@ const LEVELS = (function () {
     }),
     mk({
       name: 'O TRONO DO DEVORADOR', sub: 'Cruze o arsenal e as criptas e destrua o Devorador de Mentes.',
+      oregano: 100, tokens: 2,
       biome: 'battlefield', sky: ['#3a1812', '#0c0605'], banner: '#5a1414',
       W: 296, amp: 7, seed: 21, cliff: 'B', wall: 'B', exit: 262,
       matFn: d => d < 2 ? 'D' : 'B', pits: [[105, 2], [200, 2]],
@@ -187,6 +207,7 @@ const LEVELS = (function () {
     }),
     mk({
       name: 'A PRISÃO DE PEDRA', sub: 'Blocos de celas verticais e, no subsolo, uma prisão de três andares.',
+      oregano: 70, tokens: 1,
       biome: 'dungeon', sky: ['#161320', '#070509'], banner: '#2a1e44',
       W: 238, amp: 5, seed: 33, cliff: 'C', wall: 'C',
       matFn: d => d < 1 ? 'C' : '#', pits: [[84, 2], [160, 2]],
@@ -202,6 +223,7 @@ const LEVELS = (function () {
     }),
     mk({
       name: 'O ARSENAL', sub: 'Pólvora por toda parte — e um paiol subterrâneo de três andares!',
+      oregano: 85, tokens: 2,
       biome: 'battlefield', sky: ['#2a1810', '#0a0604'], banner: '#6a1a1a',
       W: 280, amp: 6, seed: 51, cliff: 'B', wall: 'B',
       matFn: d => d < 2 ? 'D' : 'B', pits: [[98, 2], [175, 3]],
@@ -222,6 +244,7 @@ const LEVELS = (function () {
     }),
     mk({
       name: 'TEMPLO NA SELVA', sub: 'Ruínas tomadas pela mata; sob os zigurautes, uma cripta de três andares.',
+      oregano: 100, tokens: 2,
       biome: 'jungle', sky: ['#5aa0c8', '#23566b'], banner: '#2a6a2a',
       W: 268, amp: 9, seed: 77, cliff: 'p', wall: 'p',
       matFn: d => d < 1 ? 'j' : (d < 4 ? 'j' : (d % 5 === 4 ? 'p' : 'D')), pits: [[105, 3], [184, 2]],
@@ -257,6 +280,7 @@ const LEVELS = (function () {
     for (let c = 6; c < W - 6; c += 4) coinAt(g, c, gr - 2);
     put(g, 60, gr - 1, 'Q'); put(g, 110, gr - 1, 'T'); put(g, 100, gr - 1, 'X'); put(g, 115, gr - 1, 'K');
     put(g, 30, gr - 1, 'z'); put(g, 124, gr - 1, 'f'); put(g, 160, gr - 1, 'r'); put(g, 230, gr - 1, 'F');
+    capLoot(g, 30, 1);
     put(g, 3, gr - 1, 'P'); put(g, W - 5, gr - 1, 'E');
     return { name: 'FASE DE TESTES', sub: 'Escada (col 96), parede para escalar (col 170), poções, tokens e barris.', win: 'exit', biome: 'castle', sky: ['#1e2740', '#080a14'], bannerColor: '#6a1a1a', rows: toRows(g), bg: toRows(bg) };
   }

@@ -197,7 +197,7 @@ class World {
         // Earth-type blocks (dirt, jungle, mud) drop no crumbs.
         if (!m.noDebris) this.game.fx.crumbsBurst(c * T + T / 2, r * T + T / 2, m, opts.power || 70);
         this.game.fx.smoke(c * T + T / 2, r * T + T / 2, 2, 'rgba(120,110,95,');
-        if (m.gold) { this.game.fx.spark(c * T + 14, r * T + 14, '#ffe27a', 8); this.game.spawnOregano(c * T + T / 2, r * T + T / 2, 3 + (Math.random() * 3 | 0)); }
+        if (m.gold) { this.game.fx.spark(c * T + 14, r * T + 14, '#ffe27a', 8); this.game.spawnOregano(c * T + T / 2, r * T + T / 2, 1 + (Math.random() * 2 | 0)); }
       }
       if (m.barrel && !opts.noBarrelChain) {
         // chained explosion (queued to avoid deep recursion)

@@ -39,14 +39,9 @@ class Enemy extends Entity {
     this.patrolT = rand(0.6, 2.2);
     this.react = 0;                 // pequeno atraso de reação antes de atirar ao avistar
   }
-  // ouvir: alertado por tiros/explosões próximas (chamado pelo jogo)
-  hear(x, y, radius) {
-    if (this.dying != null || this.boss) return;
-    if (dist2(this.cx, this.cy, x, y) < radius * radius) {
-      if (this.alert <= 0) this.react = Math.max(this.react, 0.25);
-      this.alert = Math.max(this.alert, 3.5);
-    }
-  }
+  // ouvir: DESATIVADO — os inimigos percebem o jogador apenas pelo campo de visão.
+  // (mantido como no-op pois game.alertEnemies ainda o chama ao disparar)
+  hear() {}
   hurt(dmg, dir, game) {
     if (this.dying != null) return;
     this.hp -= dmg; this.flash = 0.1; this.stagger = 0.06;
@@ -71,7 +66,7 @@ class Enemy extends Entity {
     game.onEnemyKilled(this);
     if (this.boss) game.world.explode(this.cx, this.cy, 110, 30);
     if (Math.random() < (this.boss ? 1 : this.mini ? 0.6 : 0.12)) game.pickups.push(new Pickup(this.cx, this.cy, 'health'));
-    const coins = this.boss ? 35 : this.mini ? 14 : ((Math.random() < 0.45 ? 1 : 0) + (Math.random() < 0.18 ? 1 : 0));
+    const coins = this.boss ? 18 : this.mini ? 6 : (Math.random() < 0.35 ? 1 : 0);
     if (coins) game.spawnOregano(this.cx, this.cy, coins);
     if ((this.boss || this.mini) && Math.random() < (this.boss ? 1 : 0.3)) game.pickups.push(new Pickup(this.cx, this.cy - 8, 'life'));
   }
@@ -93,17 +88,16 @@ class Enemy extends Entity {
     this.react = Math.max(0, this.react - dt);
     const p = game.player, target = (p && !p.dead) ? p : null;
     const dx = target ? target.cx - this.cx : 0, dy = target ? target.cy - this.cy : 0, adx = Math.abs(dx);
-    if (target) { const tg = SPR.gunAnchor(target), sg = SPR.gunAnchor(this); this.aimAng = Math.atan2(tg.y - sg.y, tg.x - sg.x); }
     const def = this.def;
 
-    // ---- PERCEPÇÃO: ver (cone à frente + linha de visão) ou ouvir (proximidade) ----
+    // ---- PERCEPÇÃO: SOMENTE visão (cone à frente + linha de visão) ----
+    // o jogador só é notado se entrar no campo de visão (lado para o qual o inimigo olha)
     if (target && this.stagger <= 0) {
       const los = lineClear(game.world, this.cx, this.cy, target.cx, target.cy);
-      const inFront = sign(dx) === this.face || adx < 40;          // está olhando para o jogador
+      const inFront = sign(dx) === this.face;                       // precisa estar do lado para o qual olha
       const sightRange = def.range > 0 ? def.range : def.aggro;     // corpo-a-corpo "vê" até o aggro
-      const sees = inFront && los && adx < sightRange && Math.abs(dy) < 260;
-      const hears = los && dist2(this.cx, this.cy, target.cx, target.cy) < 150 * 150; // passos/respiração de perto
-      if (sees || hears) {
+      const sees = inFront && los && adx < sightRange && Math.abs(dy) < 220;
+      if (sees) {
         if (this.alert <= 0) this.react = Math.max(this.react, 0.28);  // tempo de "reação" ao avistar
         this.alert = def.boss ? 1 : 3.5;                               // continua ciente por um tempo após perder de vista
       }
@@ -113,6 +107,7 @@ class Enemy extends Entity {
     if (this.stagger <= 0 && aware) {
       // CIENTE: caça o jogador e atira quando tiver linha de visão
       this.face = dx >= 0 ? 1 : -1;
+      this.aimAng = this.face > 0 ? 0 : Math.PI;   // mira 1D: dispara para o lado em que está virado
       let want = sign(dx);
       if (def.kite && adx < def.range * 0.5) want = -sign(dx);
       if (this.boss) want = adx > 150 ? sign(dx) : 0;
@@ -158,6 +153,7 @@ class Enemy extends Entity {
       }
       this.face = dir || this.face;
     }
+    this.aimAng = this.face > 0 ? 0 : Math.PI;                        // arma aponta para frente (mira 1D)
     this.vx = approach(this.vx, dir * this.speed * 0.42, 900 * dt);   // passo lento e calmo
   }
 

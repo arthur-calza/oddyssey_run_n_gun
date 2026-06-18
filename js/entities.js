@@ -350,11 +350,11 @@ class Player extends Entity {
     this.powered = Math.max(0, (this.powered || 0) - dt); // magic-potion buff timer
     this.gainSpecial(dt * 6); // passive charge
 
-    // ---- aim toward mouse (pivot at the chest/hands) ----
-    const mw = game.cam.mouseWorld();
-    this.face = (mw.x >= this.cx) ? 1 : -1;
-    const ga = SPR.gunAnchor(this);
-    this.aimAng = Math.atan2(mw.y - ga.y, mw.x - ga.x);
+    // ---- mira 1D: vira na direção do movimento e atira sempre para a frente ----
+    // (sem mouse; disparo horizontal — funciona também durante o pulo)
+    const moveDir = (c.right ? 1 : 0) - (c.left ? 1 : 0);
+    if (moveDir !== 0) this.face = moveDir;
+    this.aimAng = this.face > 0 ? 0 : Math.PI;
 
     // ---- movement ----
     let move = (c.right ? 1 : 0) - (c.left ? 1 : 0);
@@ -457,10 +457,10 @@ class Player extends Entity {
       this.special -= this.hero.special.cost; this.specCool = this.hero.special.cd;
     }
 
-    // ---- melee: sword strike (R), available to every hero ----
+    // ---- melee: golpe em VOLTA do jogador (C), disponível a todo herói ----
     if (c.meleePressed() && this.meleeCd <= 0) {
       this.meleeCd = 0.4; this.swordMode = 0.3; this.attackT = 1;   // swordMode makes the sprite draw a blade
-      game.meleeArc(this, { range: 54, arc: 1.15, dmg: 28, tileDmg: 22, knock: 250, color: 'rgba(230,238,255,0.95)', shake: 4 });
+      game.meleeArc(this, { radial: true, range: 50, dmg: 28, tileDmg: 22, knock: 250, color: 'rgba(230,238,255,0.95)', shake: 4 });
       Sound.slash();
     }
 

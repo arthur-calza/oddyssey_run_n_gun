@@ -26,7 +26,11 @@ class Game {
   // ---- level building --------------------------------------
   loadLevel(index) {
     this.levelIndex = index;
-    const L = LEVELS[index]; this.level = L;
+    this.loadLevelDef(LEVELS[index]);
+  }
+  // carrega a partir de uma DEFINIÇÃO de fase (campanha ou criação do editor)
+  loadLevelDef(L) {
+    this.level = L;
     const rows = L.rows;
     const cols = Math.max(...rows.map(r => r.length));
     const world = new World(cols, rows.length);
@@ -137,10 +141,36 @@ class Game {
     }
   }
 
-  // melee sweep in front of an actor (for warrior/barbarian/rogue/druid)
+  // melee: sweep in front (o.radial=false) OR a 360° hit around the actor (o.radial=true)
   meleeArc(p, o) {
-    const ang = p.aimAng, range = o.range, arc = o.arc || 1.1;
-    const kn = o.knock != null ? o.knock : 200, dmg = o.dmg, td = o.tileDmg != null ? o.tileDmg : dmg;
+    const range = o.range, kn = o.knock != null ? o.knock : 200, dmg = o.dmg, td = o.tileDmg != null ? o.tileDmg : dmg;
+    const T = this.world.T;
+    if (o.radial) {
+      // golpe em VOLTA do jogador — atinge inimigos dos dois lados
+      for (const e of this.enemies) {
+        if (!e.alive) continue;
+        const dx = e.cx - p.cx, dy = e.cy - p.cy, d = Math.hypot(dx, dy);
+        if (d > range + e.w * 0.5) continue;
+        const kd = sign(dx) || p.face;
+        e.hurt(dmg, kd, this);
+        e.vx += kd * kn; e.vy -= 70;
+        this.fx.blood(e.cx, e.cy, kd, 6);
+      }
+      // quebra blocos ao redor (laterais, acima e diagonais superiores)
+      for (const d of [[1, 0], [-1, 0], [0, -1], [0, 1], [1, -1], [-1, -1]]) {
+        for (let r = T * 0.4; r <= range; r += T * 0.6) {
+          const tx = p.cx + d[0] * r, ty = p.cy + d[1] * r;
+          this.world.damage(Math.floor(tx / T), Math.floor(ty / T), td, { power: 80 });
+        }
+      }
+      const col = o.color || 'rgba(255,255,255,0.92)';
+      this.fx.slash(p.cx + range * 0.4, p.cy, 0, range * 0.75, col);
+      this.fx.slash(p.cx - range * 0.4, p.cy, Math.PI, range * 0.75, col);
+      this.cam.addShake(o.shake || 3);
+      return;
+    }
+    // golpe direcional (à frente) — usado por investidas/heróis corpo-a-corpo
+    const ang = p.aimAng, arc = o.arc || 1.1;
     for (const e of this.enemies) {
       if (!e.alive) continue;
       const dx = e.cx - p.cx, dy = e.cy - p.cy, d = Math.hypot(dx, dy);
@@ -152,7 +182,6 @@ class Game {
         this.fx.blood(e.cx, e.cy, sign(dx) || p.face, 6);
       }
     }
-    const T = this.world.T;
     for (let r = T * 0.4; r <= range; r += T * 0.55) {
       const tx = p.cx + Math.cos(ang) * r, ty = p.cy + Math.sin(ang) * r;
       this.world.damage(Math.floor(tx / T), Math.floor(ty / T), td, { power: 80 });
