@@ -134,6 +134,7 @@ const Gallery = {
         <button class="gback" data-back>‹ Menu</button>
         <button class="gtab" data-tab="enemies">🧟 Bestiário</button>
         <button class="gtab" data-tab="builds">🏰 Construções</button>
+        <button class="gtab" data-tab="dungeons">🕳 Masmorras</button>
         <button class="gtab" data-tab="mats">🧱 Materiais</button>
         <button class="gtab" data-tab="decor">🏛 Decoração</button>
         <button class="gtab" data-tab="biomes">🌄 Biomas</button>
@@ -232,6 +233,13 @@ const Gallery = {
         });
       });
       if (!this.buildKey && window.BUILDINGS && window.BUILDINGS.length) this.selectBuild(window.BUILDINGS[0].key);
+    } else if (this.tab === 'dungeons') {
+      (window.DUNGEONS || []).forEach(def => {
+        mk(this.dunKey === def.key, () => this.selectDungeon(def.key), b => {
+          b.innerHTML = `<span class="gem">🕳</span><span><div class="gname">${def.name}</div><div class="gsub">${def.w}×${def.h} tiles</div></span>`;
+        });
+      });
+      if (!this.dunKey && window.DUNGEONS && window.DUNGEONS.length) this.selectDungeon(window.DUNGEONS[0].key);
     }
   },
 
@@ -252,6 +260,32 @@ const Gallery = {
   selectDecor(type) { this.decorType = type; this._buildList(); this._info(); },
   selectBiome(id) { this.biome = id; this.biomeCamX = 0; this._buildList(); this._info(); },
   selectBuild(key) { this.buildKey = key; this.buildPrev = this._buildPreview(window.BUILD[key]); this._buildList(); this._info(); },
+  selectDungeon(key) { this.dunKey = key; this.dunPrev = this._buildDungeonPreview((window.DUNGEONS || []).find(d => d.key === key)); this._buildList(); this._info(); },
+
+  // monta um World temporário com a dungeon ESCAVADA na terra (terreno ao redor preenchido)
+  _buildDungeonPreview(def) {
+    if (!def) return null;
+    if (!TEX.ready) TEX.build();
+    const pad = 3, gw = def.w + pad * 2, surfR = 4, gh = surfR + def.h + 3;
+    const g = [], bg = [];
+    for (let r = 0; r < gh; r++) { g.push(new Array(gw).fill('.')); bg.push(new Array(gw).fill('.')); }
+    for (let r = surfR; r < gh; r++) for (let c = 0; c < gw; c++) g[r][c] = def.surf || 'D';   // exterior de terra/pedra
+    try { def.stamp(g, bg, pad, surfR, { gallery: true }); } catch (e) { /* tolerante a falha */ }
+    const world = new World(gw, gh);
+    const decor = [], marks = [];
+    for (let r = 0; r < gh; r++) for (let c = 0; c < gw; c++) {
+      const ch = g[r][c], id = CHAR2MAT[ch];
+      if (id) world.set(c, r, id);
+      const bid = CHAR2MAT[bg[r][c]]; if (bid) world.setBg(c, r, bid);
+      if (!id) {
+        if (DECOR_CHARS[ch]) decor.push({ type: DECOR_CHARS[ch], x: c * CONFIG.TILE, y: r * CONFIG.TILE, color: '#7a2a2a' });
+        else if (typeof CHAR2ENEMY !== 'undefined' && CHAR2ENEMY[ch]) marks.push({ kind: 'enemy', key: CHAR2ENEMY[ch], c, r });
+        else if ('oTHQ'.indexOf(ch) >= 0) marks.push({ kind: ch, c, r });
+      }
+    }
+    if (world.markGrass) world.markGrass();
+    return { world, decor, marks, gw, gh, def };
+  },
 
   // monta um World temporário com o prefab carimbado, para o preview
   _buildPreview(def) {
@@ -376,6 +410,7 @@ const Gallery = {
       return;
     }
     if (this.tab === 'builds') { this._drawBuild(ctx, W, H); return; }
+    if (this.tab === 'dungeons') { this._drawDungeon(ctx, W, H); return; }
     // backdrop comum (estúdio)
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, '#241c14'); g.addColorStop(1, '#0c0a08');
@@ -415,6 +450,41 @@ const Gallery = {
     P.world.draw(ctx, cam);
     for (const d of P.decor) TEX.decor(ctx, d, offX, offY, this.time, null);
     ctx.restore();
+  },
+
+  _drawDungeon(ctx, W, H) {
+    const P = this.dunPrev, T = CONFIG.TILE;
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#2a2018'); g.addColorStop(1, '#0a0806');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    if (!P) return;
+    const wpx = P.gw * T, hpx = P.gh * T;
+    const z = Math.min((W * 0.66) / wpx, (H * 0.82) / hpx);   // cabe a dungeon inteira
+    ctx.save(); ctx.imageSmoothingEnabled = false; ctx.scale(z, z);
+    const offX = (W / z - wpx) / 2, offY = (H / z - hpx) / 2;
+    const cam = { x: 0, y: 0, vw: W / z, vh: H / z, ox: offX, oy: offY, visible: () => true };
+    P.world.draw(ctx, cam);
+    for (const d of P.decor) TEX.decor(ctx, d, offX, offY, this.time, null);
+    // marcadores de monstros (●) e tesouros (orégano/token/poção/vida)
+    const LOOT = { o: ['#7be08a', '🌿'], T: ['#e0843a', '⬡'], Q: ['#6fd0ff', '⚗'], H: ['#ff5b6e', '✚'] };
+    for (const mk of P.marks) {
+      const x = mk.c * T + T / 2 + offX, y = mk.r * T + T / 2 + offY;
+      if (mk.kind === 'enemy') {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.beginPath(); ctx.arc(x, y, 7, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#e0473a'; ctx.beginPath(); ctx.arc(x, y, 5, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#000'; ctx.fillRect(x - 2, y - 1, 1.6, 2); ctx.fillRect(x + 1, y - 1, 1.6, 2);
+      } else {
+        const L = LOOT[mk.kind] || ['#fff', '?'];
+        ctx.fillStyle = L[0]; ctx.font = 'bold 12px "Trebuchet MS"'; ctx.textAlign = 'center';
+        ctx.fillText(L[1], x, y + 4);
+      }
+    }
+    ctx.textAlign = 'left';
+    ctx.restore();
+    // legenda
+    ctx.fillStyle = '#caa86a'; ctx.font = '13px "Trebuchet MS"'; ctx.textAlign = 'center';
+    ctx.fillText('● monstros   🌿 orégano   ⬡ token   ⚗ poção   ✚ vida', W / 2, H - 14);
+    ctx.textAlign = 'left';
   },
 
   _floor(ctx, vw, feetY) {
