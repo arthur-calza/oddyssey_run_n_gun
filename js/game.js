@@ -95,6 +95,7 @@ class Game {
       window: ['up', 'down', 'left', 'right'], shield: ['down', 'up', 'left', 'right'], bars: ['left', 'right', 'up', 'down'],
     };
     for (const d of this.decor) {
+      if (d.type === 'door') { d.ac = null; d.ar = null; d.openAmt = 0; d.dir = d.dir || 1; continue; }  // portas ficam livres (não somem)
       const c = (d.x / T) | 0, r = (d.y / T) | 0;
       const order = MOUNT[d.type] || ['down', 'up', 'left', 'right'];   // most props sit on the block below
       d.ac = null; d.ar = null;
@@ -187,6 +188,37 @@ class Game {
       this.world.damage(Math.floor(tx / T), Math.floor(ty / T), td, { power: 80 });
     }
     this.fx.slash(p.cx + Math.cos(ang) * range * 0.45, p.cy + Math.sin(ang) * range * 0.45, ang, range * 0.7, o.color || 'rgba(255,255,255,0.92)');
+    this.cam.addShake(o.shake || 3);
+  }
+
+  // golpe corpo-a-corpo em VOLTA do herói (tecla C): atinge os DOIS lados e
+  // ACIMA, mas NUNCA abaixo dos pés — não quebra o chão sob o personagem.
+  meleeRadial(p, o) {
+    const range = o.range, kn = o.knock != null ? o.knock : 200, dmg = o.dmg, td = o.tileDmg != null ? o.tileDmg : dmg;
+    const T = this.world.T, cx = p.cx, cy = p.cy, feetY = p.y + p.h;
+    // inimigos ao redor (ignora os que estão claramente abaixo dos pés)
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      const dx = e.cx - cx, dy = e.cy - cy, d = Math.hypot(dx, dy);
+      if (d > range + e.w * 0.5) continue;
+      if (e.cy > feetY + 6) continue;                 // abaixo dos pés → não atinge
+      e.hurt(dmg, sign(dx) || p.face, this);
+      e.vx += (sign(dx) || p.face) * kn; e.vy -= 70;
+      this.fx.blood(e.cx, e.cy, sign(dx) || p.face, 6);
+    }
+    // tiles ao redor: lados + acima, até a linha dos pés (nunca abaixo)
+    const feetRow = Math.floor((feetY - 1) / T);
+    const c0 = Math.floor((cx - range) / T), c1 = Math.floor((cx + range) / T), r0 = Math.floor((cy - range) / T);
+    for (let r = r0; r <= feetRow; r++) for (let c = c0; c <= c1; c++) {
+      const tcx = c * T + T / 2, tcy = r * T + T / 2;
+      if (Math.hypot(tcx - cx, tcy - cy) > range) continue;
+      this.world.damage(c, r, td, { power: 80 });
+    }
+    // efeito visual: golpe para os dois lados e para cima
+    const col = o.color || 'rgba(255,255,255,0.92)';
+    this.fx.slash(cx + range * 0.42, cy, 0, range * 0.7, col);
+    this.fx.slash(cx - range * 0.42, cy, Math.PI, range * 0.7, col);
+    this.fx.slash(cx, cy - range * 0.4, -Math.PI / 2, range * 0.6, col);
     this.cam.addShake(o.shake || 3);
   }
 
@@ -294,6 +326,7 @@ class Game {
 
     this._bulletCollisions();
     this.world.updateFallers(dt, this);
+    this.updateDoors(dt);
     this.fx.update(dt, this.world);
 
     // process queued explosions (barrels chain etc.)
@@ -350,6 +383,23 @@ class Game {
     }
   }
 
+  // portas: abrem (giram) na direção do movimento do herói ao passar; fecham depois
+  updateDoors(dt) {
+    if (!this.decor || !this.decor.length) return;
+    const p = this.player, T = this.world.T;
+    for (const d of this.decor) {
+      if (d.type !== 'door') continue;
+      const cx = d.x + T / 2, top = d.y, bot = d.y + T * 2;
+      let near = false;
+      if (p && !p.dead) {
+        near = Math.abs(p.cx - cx) < T * 0.85 && (p.y + p.h) > top && p.y < bot;
+        if (near && Math.abs(p.vx) > 16) d.dir = sign(p.vx);   // abre no sentido do movimento
+      }
+      if (d.dir == null) d.dir = 1;
+      d.openAmt = approach(d.openAmt || 0, near ? 1 : 0, dt * (near ? 7 : 4));
+    }
+  }
+
   // ---- draw ------------------------------------------------
   draw() {
     const ctx = this.ctx;
@@ -389,8 +439,74 @@ class Game {
     this.fx.draw(ctx, this.cam);
     ctx.restore();   // end world zoom
 
+    this._drawLighting(ctx);   // superfície clara, áreas cobertas escuras (tochas/lanternas iluminam)
+
     if (this.boss && this.boss.alive) this._drawBossBar(ctx);
     if (this.paused) this._drawPaused(ctx);
+  }
+
+  // ---- iluminação 2D simples ---------------------------------
+  // Escuridão ambiente sobre tudo; é "removida" onde há céu (superfície)
+  // e ao redor de fontes de luz (tochas, lanternas, velas, caldeirões,
+  // materiais brilhantes) + uma luz fraca no herói.
+  _drawLighting(ctx) {
+    if (!this.world || (this.level && this.level.noLight)) return;
+    const W = CONFIG.W, H = CONFIG.H, T = this.world.T, z = CONFIG.ZOOM;
+    if (!this._lcan) { this._lcan = document.createElement('canvas'); this._lcan.width = W; this._lcan.height = H; this._lctx = this._lcan.getContext('2d'); }
+    const lx = this._lctx;
+    lx.setTransform(1, 0, 0, 1, 0, 0); lx.globalCompositeOperation = 'source-over'; lx.clearRect(0, 0, W, H);
+    lx.fillStyle = 'rgba(8,10,24,0.8)'; lx.fillRect(0, 0, W, H);   // escuridão ambiente
+
+    const ox = this.cam.ox, oy = this.cam.oy;
+    const sx = wx => (wx + ox) * z, sy = wy => (wy + oy) * z;     // mundo -> tela
+    const c0 = Math.max(0, Math.floor(this.cam.x / T)), c1 = Math.min(this.world.cols - 1, Math.floor((this.cam.x + this.cam.vw) / T) + 1);
+    const rBot = Math.min(this.world.rows - 1, Math.floor((this.cam.y + this.cam.vh) / T) + 1);
+
+    lx.globalCompositeOperation = 'destination-out';
+    // 1) luz do dia: cada coluna é iluminada do céu até o primeiro bloco sólido (a superfície)
+    for (let c = c0; c <= c1; c++) {
+      let surf = this.world.rows;
+      for (let r = 0; r < this.world.rows; r++) { if (this.world.solid(c, r)) { surf = r; break; } }
+      const colX = sx(c * T), colW = Math.ceil(T * z) + 1;
+      const skyBottom = sy((surf + 1) * T);
+      if (skyBottom > 0) { lx.fillStyle = 'rgba(0,0,0,1)'; lx.fillRect(colX, 0, colW, skyBottom); }
+      const fy0 = sy((surf + 1) * T), fy1 = sy((surf + 3) * T);   // transição suave abaixo da superfície
+      if (fy1 > fy0 && fy0 < H) { const gr = lx.createLinearGradient(0, fy0, 0, fy1); gr.addColorStop(0, 'rgba(0,0,0,0.85)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); lx.fillStyle = gr; lx.fillRect(colX, fy0, colW, fy1 - fy0); }
+    }
+    // 2) fontes de luz (props de fogo) com leve tremulação
+    const LIGHTS = { torch: 4.2, lantern: 3.6, candle: 2.2, cauldron: 3.2 };
+    for (const d of this.decor) {
+      const rad = LIGHTS[d.type]; if (!rad) continue;
+      if (!this.cam.visible(d.x - T * 6, d.y - T * 6, T * 12, T * 12)) continue;
+      const fl = 1 + Math.sin(this.time * 9 + d.x) * 0.05 + (Math.random() - 0.5) * 0.04;
+      this._punchLight(lx, sx(d.x + T / 2), sy(d.y + T * 0.4), rad * T * z * fl);
+    }
+    // materiais que brilham (cristal, runa) iluminam ao redor
+    for (let c = c0; c <= c1; c++) for (let r = Math.max(0, Math.floor(this.cam.y / T)); r <= rBot; r++) {
+      const id = this.world.at(c, r); if (!id) continue; const m = MAT[id];
+      if (m && m.glow) this._punchLight(lx, sx(c * T + T / 2), sy(r * T + T / 2), 2.4 * T * z, 0.8);
+    }
+    // 3) luz fraca do herói
+    const p = this.player;
+    if (p && !p.dead) this._punchLight(lx, sx(p.cx), sy(p.cy), 3.2 * T * z, 0.85);
+
+    // tom quente aditivo sobre as chamas
+    lx.globalCompositeOperation = 'lighter';
+    for (const d of this.decor) {
+      const rad = LIGHTS[d.type]; if (!rad) continue;
+      if (!this.cam.visible(d.x - T * 6, d.y - T * 6, T * 12, T * 12)) continue;
+      const cxs = sx(d.x + T / 2), cys = sy(d.y + T * 0.4), rr = rad * T * z * 0.7;
+      const gr = lx.createRadialGradient(cxs, cys, 1, cxs, cys, rr);
+      gr.addColorStop(0, 'rgba(255,180,90,0.18)'); gr.addColorStop(1, 'rgba(255,140,60,0)');
+      lx.fillStyle = gr; lx.fillRect(cxs - rr, cys - rr, rr * 2, rr * 2);
+    }
+    lx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(this._lcan, 0, 0);
+  }
+  _punchLight(lx, x, y, rad, strength = 1) {
+    const gr = lx.createRadialGradient(x, y, 1, x, y, rad);
+    gr.addColorStop(0, `rgba(0,0,0,${strength})`); gr.addColorStop(0.6, `rgba(0,0,0,${strength * 0.5})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    lx.fillStyle = gr; lx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
   }
 
   _drawBossBar(ctx) {

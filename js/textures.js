@@ -297,6 +297,28 @@ const TEX = {
         if (game && Math.random() < 0.3) game.fx._add({ x: d.x + T / 2, y: d.y, vx: rand(-10, 10), vy: rand(-40, -15), life: rand(0.4, 0.9), max: 0.9, r: rand(1, 2.5), c: pick(['#ffd86b', '#ff8a3c']), g: -20, glow: true, shrink: true });
         break;
       }
+      case 'door': {
+        // fechada = linha vertical (de lado p/ câmera); abre girando na direção do movimento
+        const amt = clamp(d.openAmt || 0, 0, 1), dir = d.dir || 1, h = T * 2, topY = y, midX = x + T / 2;
+        ctx.fillStyle = '#2e2016'; ctx.fillRect(midX - 1.5, topY - 2, 3, h + 2);   // jamba/batente (a "linha")
+        const hingeX = midX - dir * (T * 0.06);
+        const ang = amt * 1.35;                         // 0 (fechada) -> ~77° (aberta)
+        const w = (T * 0.82) * Math.sin(ang) * dir;     // largura projetada (sinal = direção)
+        const lean = (T * 0.10) * Math.sin(ang);
+        ctx.fillStyle = amt > 0.02 ? '#6a4a28' : '#5a3f22';
+        ctx.beginPath();
+        ctx.moveTo(hingeX, topY + 2); ctx.lineTo(hingeX + w, topY + 2 + lean);
+        ctx.lineTo(hingeX + w, topY + h - 2 - lean); ctx.lineTo(hingeX, topY + h - 2);
+        ctx.closePath(); ctx.fill();
+        if (Math.abs(w) > 3) {
+          ctx.strokeStyle = '#3a2a18'; ctx.lineWidth = 1;
+          for (let k = 1; k <= 2; k++) { const lx2 = hingeX + w * (k / 3); ctx.beginPath(); ctx.moveTo(lx2, topY + 4); ctx.lineTo(lx2, topY + h - 4); ctx.stroke(); }
+          ctx.fillStyle = '#caa33a'; ctx.beginPath(); ctx.arc(hingeX + w * 0.82, topY + h * 0.5, 1.8, 0, TAU); ctx.fill();
+        } else {
+          ctx.fillStyle = '#caa33a'; ctx.beginPath(); ctx.arc(midX + dir * 3, topY + h * 0.5, 1.8, 0, TAU); ctx.fill();
+        }
+        break;
+      }
       case 'banner': {
         ctx.fillStyle = '#2c2622'; ctx.fillRect(x + 4, y, T - 8, 3);
         const sway = Math.sin(time * 2 + d.x) * 2;

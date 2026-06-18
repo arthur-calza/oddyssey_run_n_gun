@@ -460,7 +460,7 @@ class Player extends Entity {
     // ---- melee: golpe em VOLTA do jogador (C), disponível a todo herói ----
     if (c.meleePressed() && this.meleeCd <= 0) {
       this.meleeCd = 0.4; this.swordMode = 0.3; this.attackT = 1;   // swordMode makes the sprite draw a blade
-      game.meleeArc(this, { radial: true, range: 50, dmg: 28, tileDmg: 22, knock: 250, color: 'rgba(230,238,255,0.95)', shake: 4 });
+      game.meleeRadial(this, { range: 54, dmg: 28, tileDmg: 22, knock: 250, color: 'rgba(230,238,255,0.95)', shake: 4 });
       Sound.slash();
     }
 

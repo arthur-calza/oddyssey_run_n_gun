@@ -58,6 +58,7 @@ const Gallery = {
     { type: 'sign',      name: 'Placa de taverna' },
     { type: 'flower',    name: 'Flores' },
     { type: 'shield',    name: 'Escudo heráldico', color: '#7a2a2a' },
+    { type: 'door',      name: 'Porta (abre ao passar)' },
   ],
   BIOMES: [
     { id: 'castle',      name: 'Castelo',        sky: ['#1e2740', '#080a14'] },

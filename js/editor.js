@@ -73,7 +73,7 @@ const Editor = {
   cur: null, curId: null, clip: null, clipName: '', clipSrc: null, sel: null,
   clips: [], undoStack: [],
   hov: { c: 0, r: 0 }, _dirty: false, _ld: false, _pan: null,
-  _ls: null, _rs: null, _ss: null,
+  _ls: null, _rs: null, _ss: null, _panelHidden: {},
   SIZES: [1, 2, 3, 5, 8],
 
   TOOLS: [
@@ -125,6 +125,7 @@ const Editor = {
         else if (k === 'v') { e.preventDefault(); e.stopPropagation(); this._paste(); }
         return;
       }
+      if (k === 'tab') { e.preventDefault(); e.stopPropagation(); this._toggleAll(); return; }
       if (k === 'escape') { e.stopPropagation(); this._back(); }
     };
     addEventListener('keydown', this._key, true);
@@ -199,6 +200,10 @@ const Editor = {
         #editor .esep{width:1px;height:20px;background:#5a4326;margin:0 3px;}
         #editor .estatus{color:#caa86a;font-size:12px;text-shadow:1px 1px 0 #000;text-align:center;}
         #editor .etoast{position:absolute;top:84px;left:50%;transform:translateX(-50%);pointer-events:none;background:rgba(20,40,16,0.92);border:2px solid #3a5a2a;color:#bff0c0;border-radius:8px;padding:8px 16px;font-weight:bold;opacity:0;transition:opacity .3s;}
+        #editor .etoggles{position:absolute;top:54px;left:12px;display:flex;gap:5px;pointer-events:auto;background:rgba(20,15,10,0.88);border:2px solid #5a4326;border-radius:7px;padding:5px 6px;z-index:6;}
+        #editor .etgl{cursor:pointer;font:inherit;font-size:11px;font-weight:bold;color:#e8e0cf;background:#241a10;border:2px solid #4a3826;border-radius:5px;padding:4px 7px;}
+        #editor .etgl:hover{background:#3a2c1c;border-color:#e8b94a;}
+        #editor .etgl.off{opacity:.5;border-color:#3a2c1c;color:#9a8f7d;}
       `;
       document.head.appendChild(st);
     }
@@ -246,6 +251,29 @@ const Editor = {
       b.title = 'Tamanho do pincel/borracha ([ ])'; b.onclick = () => this.setBrushSize(s); row.appendChild(b);
     });
     tb.appendChild(row);
+
+    // botões para recolher/expandir os painéis (Tab = recolher tudo)
+    const tg = document.createElement('div'); tg.className = 'etoggles';
+    [['list', '◧ Paleta'], ['info', '▤ Painel'], ['tools', '▭ Barra'], ['top', '▦ Abas']].forEach(([k, lbl]) => {
+      const b = document.createElement('button'); b.className = 'etgl'; b.dataset.panel = k; b.textContent = lbl;
+      b.title = 'Mostrar/ocultar (Tab oculta tudo)'; b.onclick = () => this._togglePanel(k); tg.appendChild(b);
+    });
+    e.appendChild(tg); this._togglesEl = tg;
+    this._applyPanels();
+  },
+
+  _togglePanel(which) { this._panelHidden[which] = !this._panelHidden[which]; this._applyPanels(); },
+  _toggleAll() {
+    const keys = ['list', 'info', 'tools', 'top'];
+    const anyShown = keys.some(k => !this._panelHidden[k]);
+    keys.forEach(k => this._panelHidden[k] = anyShown);   // tudo visível -> oculta tudo; senão mostra tudo
+    this._applyPanels();
+  },
+  _applyPanels() {
+    if (!this.panel) return;
+    const map = { list: '#eList', info: '#eInfo', tools: '#eTools', top: '#eTop' };
+    for (const k in map) { const el = this.panel.querySelector(map[k]); if (el) el.style.display = this._panelHidden[k] ? 'none' : ''; }
+    if (this._togglesEl) this._togglesEl.querySelectorAll('[data-panel]').forEach(b => b.classList.toggle('off', !!this._panelHidden[b.dataset.panel]));
   },
 
   toast(msg) {
@@ -462,7 +490,7 @@ const Editor = {
     const gsz = document.createElement('div'); gsz.className = 'esub'; gsz.textContent = `Grade: ${this.world.cols}×${this.world.rows} tiles`; I.appendChild(gsz);
 
     const help = document.createElement('div'); help.className = 'ehelp';
-    help.innerHTML = '<b>Mover</b> (0) ou botão direito/Espaço+arrasto · Roda: zoom<br><b>Ctrl+Z</b> desfaz · Teclas 0–8: ferramentas · <b>[ ]</b>: tamanho<br>Salas iguais: <b>Seleção</b> › <b>Ctrl+C</b> › <b>Carimbo/Ctrl+V</b>.';
+    help.innerHTML = '<b>Mover</b> (0) ou botão direito/Espaço+arrasto · Roda: zoom<br><b>Ctrl+Z</b> desfaz · Teclas 0–8: ferramentas · <b>[ ]</b>: tamanho<br><b>Tab</b>: ocultar/mostrar painéis · 💾 salva a <b>área selecionada</b><br>Salas iguais: <b>Seleção</b> › <b>Ctrl+C</b> › <b>Carimbo/Ctrl+V</b>.';
     I.appendChild(help);
   },
 
@@ -585,9 +613,12 @@ const Editor = {
 
   // ---------------- salvar / testar ----------------
   _saveCreation() {
-    const clip = this._serialize(0, 0, this.world.cols, this.world.rows);
-    const trimmed = _trimClip(clip.cells.map(s => s.split('')), clip.bg.map(s => s.split('')));
-    if (!trimmed) { this.toast('Nada para salvar — construa algo primeiro'); return; }
+    // exige selecionar a ÁREA que vai compor a construção (não salva o grid/chão todo)
+    if (!this.sel) { this.toast('Selecione a área da construção antes de salvar (ferramenta Seleção)'); this.setTool('select'); this._info(); return; }
+    const s = this.sel;
+    const region = this._serialize(s.c0, s.r0, s.c1 - s.c0 + 1, s.r1 - s.r0 + 1);
+    const trimmed = _trimClip(region.cells.map(x => x.split('')), region.bg.map(x => x.split('')));
+    if (!trimmed) { this.toast('A área selecionada está vazia'); return; }
     const name = (prompt('Nome da criação:', 'Minha construção') || '').trim();
     if (!name) return;
     const cr = { key: 'user_' + Date.now().toString(36), name, w: trimmed.w, h: trimmed.h, cells: trimmed.cells, bg: trimmed.bg, custom: true, ground: '#' };

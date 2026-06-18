@@ -102,11 +102,11 @@ const Keys = {
     { id: 'pause',    label: 'Pausar' },
   ],
   DEFAULT: {
-    left:  ['arrowleft', 'a'], right: ['arrowright', 'd'],
-    up:    ['arrowup', 'w'],   down:  ['arrowdown', 's'],
-    jump:  ['arrowup', ' ', 'w'],
+    left:  ['arrowleft'], right: ['arrowright'],
+    up:    ['arrowup'],   down:  ['arrowdown'],
+    jump:  ['arrowup', ' '],
     fire:  ['z'], special: ['x'], melee: ['c'],
-    swapPrev: ['q'], swapNext: ['e'], pause: ['p', 'escape'],
+    swapPrev: ['s'], swapNext: ['d'], pause: ['p', 'escape'],
   },
   map: {},
 

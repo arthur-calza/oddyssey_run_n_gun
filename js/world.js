@@ -58,6 +58,7 @@ const CHAR2MAT = {
 const DECOR_CHARS = {
   't': 'torch', 'L': 'banner', 'N': 'window', 'I': 'pillar', 'V': 'vines', 'Y': 'web', 'G': 'grass', 'J': 'bars', 'U': 'rack', 'M': 'crate',
   'W': 'lantern', '[': 'chain', ':': 'candle', ';': 'cauldron', '"': 'bookshelf', "'": 'bed', '|': 'table', 'Z': 'idol', '_': 'sign', '}': 'flower', '{': 'shield',
+  's': 'door',
 };
 
 /* a single tile detached by gravity, falling until it lands & re-deposits */
