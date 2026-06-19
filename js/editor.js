@@ -68,16 +68,17 @@ function _trimClip(g, bg) {
 
 const Editor = {
   active: false, canvas: null, ctx: null, time: 0, cb: null,
-  tab: 'mats', tool: 'brush', layer: 1, brushSize: 1,
+  tab: 'mats', tool: 'brush', brushSize: 1,
+  layers: { front: true, back: true },   // quais camadas estão VISÍVEIS e ATIVAS p/ edição
   world: null, objs: null, view: null,
   cur: null, curId: null, clip: null, clipName: '', clipSrc: null, sel: null,
-  clips: [], undoStack: [],
+  clips: [], undoStack: [], redoStack: [],
   hov: { c: 0, r: 0 }, _dirty: false, _ld: false, _pan: null,
   _ls: null, _rs: null, _ss: null, _panelHidden: {},
   SIZES: [1, 2, 3, 5, 8],
 
   TOOLS: [
-    { id: 'pan',      label: 'Mover',       key: '0' },
+    { id: 'pan',      label: 'Mover',       key: "'" },
     { id: 'brush',    label: 'Pincel',      key: '1' },
     { id: 'line',     label: 'Linha',       key: '2' },
     { id: 'rect',     label: 'Retângulo',   key: '3' },
@@ -88,13 +89,13 @@ const Editor = {
     { id: 'eyedrop',  label: 'Conta-gotas', key: '8' },
   ],
   TABS: [
-    { id: 'mats',     label: '🧱 Materiais' },
-    { id: 'decor',    label: '🏛 Decoração' },
-    { id: 'enemies',  label: '🧟 Inimigos' },
-    { id: 'items',    label: '🎁 Itens' },
-    { id: 'builds',   label: '🏰 Construções' },
-    { id: 'dungeons', label: '🕳 Masmorras' },
-    { id: 'saved',    label: '💾 Salvos' },
+    { id: 'mats',     icon: '🧱', label: 'Materiais' },
+    { id: 'decor',    icon: '🏛', label: 'Decoração' },
+    { id: 'enemies',  icon: '🧟', label: 'Inimigos' },
+    { id: 'items',    icon: '🎁', label: 'Itens' },
+    { id: 'builds',   icon: '🏰', label: 'Construções' },
+    { id: 'dungeons', icon: '🕳', label: 'Masmorras' },
+    { id: 'saved',    icon: '💾', label: 'Salvos' },
   ],
   PICK2CHAR: { oregano: 'o', life: 'H', potion: 'Q', token: 'T' },
   PICKBYCHAR: { o: 'oregano', H: 'life', Q: 'potion', T: 'token' },
@@ -120,13 +121,26 @@ const Editor = {
     this._key = (e) => {
       const k = (e.key || '').toLowerCase();
       if (e.ctrlKey || e.metaKey) {
-        if (k === 'z') { e.preventDefault(); e.stopPropagation(); this._undo(); }
-        else if (k === 'c') { e.preventDefault(); e.stopPropagation(); this._copySelection(); }
-        else if (k === 'v') { e.preventDefault(); e.stopPropagation(); this._paste(); }
+        const eat = () => { e.preventDefault(); e.stopPropagation(); };
+        // painéis (estilo VS Code)
+        if (e.altKey && k === 'b') { eat(); this._togglePanel('tools'); return; }
+        if (k === 'b') { eat(); this._togglePanel('side'); return; }
+        if (k === 'j') { eat(); this._togglePanel('info'); return; }
+        // histórico
+        if (k === 'z') { eat(); e.shiftKey ? this._redo() : this._undo(); return; }
+        if (k === 'y') { eat(); this._redo(); return; }
+        // área selecionada
+        if (k === 'c') { eat(); this._copySelection(); return; }
+        if (k === 'x') { eat(); this._cutSelection(); return; }
+        if (k === 'v') { eat(); this._paste(); return; }
         return;
       }
       if (k === 'tab') { e.preventDefault(); e.stopPropagation(); this._toggleAll(); return; }
-      if (k === 'escape') { e.stopPropagation(); this._back(); }
+      if (k === 'escape') {
+        e.stopPropagation();
+        if (this.sel) { e.preventDefault(); this.sel = null; this._ss = null; this.toast('Seleção desfeita'); this._info(); return; }
+        this._back();
+      }
     };
     addEventListener('keydown', this._key, true);
   },
@@ -148,7 +162,7 @@ const Editor = {
     this.objs.set('5,' + (groundR - 1), { kind: 'marker', m: 'spawn', char: 'P' });
     this.objs.set((cols - 6) + ',' + (groundR - 1), { kind: 'marker', m: 'exit', char: 'E' });
     this.world.markGrass();
-    this.sel = null; this.clip = null; this.undoStack = [];
+    this.sel = null; this.clip = null; this.undoStack = []; this.redoStack = [];
     this.view = { x: 0, y: Math.max(0, (groundR - 16) * CONFIG.TILE), zoom: 1 };
   },
 
@@ -170,74 +184,110 @@ const Editor = {
       const st = document.createElement('style'); st.id = 'editorCSS';
       st.textContent = `
         #editor{position:fixed;inset:0;pointer-events:none;z-index:50;font-family:"Trebuchet MS","Segoe UI",sans-serif;color:#e8e0cf;}
-        #editor .epanel{pointer-events:auto;background:rgba(20,15,10,0.86);border:2px solid #5a4326;border-radius:8px;box-shadow:0 0 0 2px #000,0 6px 24px #000;}
-        #editor .etop{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center;padding:7px 9px;flex-wrap:wrap;max-width:96vw;justify-content:center;}
-        #editor .etab,#editor .ebtn{cursor:pointer;font:inherit;font-weight:bold;font-size:13px;letter-spacing:.5px;color:#e8e0cf;background:#241a10;border:2px solid #5a4326;border-radius:6px;padding:6px 10px;transition:.1s;}
-        #editor .etab:hover,#editor .ebtn:hover{background:#3a2c1c;}
-        #editor .etab.on{border-color:#e8b94a;color:#e8b94a;box-shadow:0 0 8px rgba(232,185,74,.4);}
-        #editor .eback{border-color:#b1322c;}
+        #editor button{cursor:pointer;font:inherit;color:#e8e0cf;}
+        /* ---- barra de atividades (esquerda, ícones de aba) ---- */
+        #editor .eact{position:absolute;top:0;left:0;bottom:0;width:54px;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0;background:rgba(16,12,8,0.94);border-right:2px solid #5a4326;box-shadow:4px 0 16px #000;z-index:8;}
+        #editor .eact .aico{width:42px;height:42px;border:2px solid transparent;border-radius:8px;background:transparent;font-size:21px;line-height:1;display:flex;align-items:center;justify-content:center;transition:.1s;position:relative;}
+        #editor .eact .aico:hover{background:#2c2114;}
+        #editor .eact .aico.on{background:#2c2114;border-color:#e8b94a;box-shadow:0 0 8px rgba(232,185,74,.4);}
+        #editor .eact .aico.on::before{content:"";position:absolute;left:-8px;top:6px;bottom:6px;width:3px;border-radius:2px;background:#e8b94a;}
+        #editor .eact .aback{color:#e89a8a;border-color:#7a2a24;}
+        #editor .eact .aspring{margin-top:auto;}
+        /* ---- painéis flutuantes (docados) ---- */
+        #editor .epanel{pointer-events:auto;background:rgba(20,15,10,0.92);border:1px solid #5a4326;box-shadow:0 6px 24px #000;display:flex;flex-direction:column;}
+        #editor .ephead{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#1c1408;border-bottom:1px solid #4a3826;font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#caa86a;flex:0 0 auto;}
+        #editor .ephead .epttl{flex:1;}
+        #editor .epchev{width:22px;height:22px;border:1px solid #4a3826;border-radius:5px;background:#241a10;color:#caa86a;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;}
+        #editor .epchev:hover{background:#3a2c1c;border-color:#e8b94a;}
+        #editor .epbody{flex:1;overflow-y:auto;padding:8px;}
+        /* sidebar (paleta) esquerda */
+        #editor .eside{position:absolute;top:0;left:54px;bottom:0;width:236px;z-index:7;}
+        /* painel direito (propriedades) */
+        #editor .einfo{position:absolute;top:0;right:0;width:248px;bottom:0;z-index:7;}
+        #editor .einfo .epbody{font-size:12px;line-height:1.5;}
+        #editor .einfo h3{color:#e8b94a;font-size:14px;margin:0 0 6px;letter-spacing:.5px;}
+        #editor .einfo .erow{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;}
+        #editor .einfo .erow .ebtn{font-size:12px;padding:5px 8px;}
+        #editor .einfo .ehelp{color:#9a8f7d;font-size:11.5px;margin-top:8px;border-top:1px solid #3a2c1c;padding-top:8px;}
+        #editor .einfo .esechead{color:#caa86a;font-size:10.5px;font-weight:bold;letter-spacing:.5px;text-transform:uppercase;margin:10px 0 3px;}
+        /* barra inferior (ferramentas) — largura toda, acima do rodapé */
+        #editor .etools{position:absolute;bottom:0;left:54px;right:0;z-index:8;flex-direction:row;align-items:stretch;border-bottom:none;}
+        #editor .etools .ephead{flex-direction:column;justify-content:center;border-bottom:none;border-right:1px solid #4a3826;writing-mode:vertical-rl;text-orientation:mixed;padding:8px 4px;gap:8px;}
+        #editor .etools .ephead .epchev{writing-mode:horizontal-tb;}
+        #editor .etools .epbody{display:flex;flex-direction:column;align-items:center;gap:5px;padding:7px 10px;}
+        #editor .etoolrow{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;align-items:center;}
+        /* botões genéricos */
+        #editor .ebtn{font-weight:bold;font-size:13px;letter-spacing:.3px;background:#241a10;border:2px solid #5a4326;border-radius:6px;padding:6px 10px;transition:.1s;}
+        #editor .ebtn:hover{background:#3a2c1c;}
         #editor .ebtn.go{border-color:#3a5a2a;color:#7be08a;}
         #editor .ebtn.save{border-color:#2b7fd0;color:#6fd0ff;}
-        #editor .elist{position:absolute;top:96px;left:12px;bottom:104px;width:228px;overflow-y:auto;padding:8px;}
-        #editor .eitem{display:flex;align-items:center;gap:8px;width:100%;cursor:pointer;font:inherit;text-align:left;color:#e8e0cf;background:#241a10;border:2px solid #4a3826;border-radius:6px;padding:6px 8px;margin-bottom:5px;transition:.1s;}
+        #editor .ebtn.exp{border-color:#7a5fd0;color:#b9a6ff;}
+        #editor .ebtn.on{border-color:#6fd0ff;color:#6fd0ff;box-shadow:0 0 8px rgba(111,208,255,.35);}
+        /* itens da paleta */
+        #editor .eitem{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:#241a10;border:2px solid #4a3826;border-radius:6px;padding:6px 8px;margin-bottom:5px;transition:.1s;}
         #editor .eitem:hover{background:#3a2c1c;}
         #editor .eitem.on{border-color:#e8b94a;color:#e8b94a;}
         #editor .eitem .eem{font-size:18px;width:24px;text-align:center;}
         #editor .eitem canvas{width:28px;height:28px;border:1px solid #000;border-radius:3px;image-rendering:pixelated;background:#0c0a08;}
         #editor .eitem .enm{font-size:13px;font-weight:bold;}
         #editor .eitem .esub{font-size:11px;color:#9a8f7d;}
-        #editor .eitem .edel{margin-left:auto;color:#b1322c;font-weight:bold;border:1px solid #5a2420;border-radius:4px;background:#2a1410;padding:1px 6px;cursor:pointer;}
-        #editor .einfo{position:absolute;top:96px;right:12px;width:236px;bottom:104px;overflow-y:auto;padding:10px 12px;font-size:12px;line-height:1.5;}
-        #editor .einfo h3{color:#e8b94a;font-size:15px;margin:2px 0 6px;letter-spacing:1px;}
-        #editor .einfo .erow{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;}
-        #editor .einfo .erow .ebtn{font-size:12px;padding:5px 8px;}
-        #editor .einfo .ehelp{color:#9a8f7d;font-size:11.5px;margin-top:8px;border-top:1px solid #3a2c1c;padding-top:8px;}
-        #editor .etools{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 10px;max-width:96vw;}
-        #editor .etoolrow{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;}
-        #editor .esbtn{cursor:pointer;font:inherit;font-size:12.5px;font-weight:bold;color:#e8e0cf;background:#241a10;border:2px solid #4a3826;border-radius:6px;padding:6px 9px;transition:.1s;}
+        #editor .eitem .edel{margin-left:auto;color:#b1322c;font-weight:bold;border:1px solid #5a2420;border-radius:4px;background:#2a1410;padding:1px 6px;}
+        #editor .eitem .edl{color:#b9a6ff;font-weight:bold;border:1px solid #4a3a6a;border-radius:4px;background:#1c1830;padding:1px 6px;}
+        /* ferramentas */
+        #editor .esbtn{font-size:12.5px;font-weight:bold;background:#241a10;border:2px solid #4a3826;border-radius:6px;padding:6px 9px;transition:.1s;}
         #editor .esbtn:hover{background:#3a2c1c;} #editor .esbtn.on{border-color:#6fd0ff;color:#6fd0ff;box-shadow:0 0 8px rgba(111,208,255,.35);}
         #editor .esbtn.sz{padding:6px 8px;min-width:30px;text-align:center;}
         #editor .esep{width:1px;height:20px;background:#5a4326;margin:0 3px;}
         #editor .estatus{color:#caa86a;font-size:12px;text-shadow:1px 1px 0 #000;text-align:center;}
-        #editor .etoast{position:absolute;top:84px;left:50%;transform:translateX(-50%);pointer-events:none;background:rgba(20,40,16,0.92);border:2px solid #3a5a2a;color:#bff0c0;border-radius:8px;padding:8px 16px;font-weight:bold;opacity:0;transition:opacity .3s;}
-        #editor .etoggles{position:absolute;top:54px;left:12px;display:flex;gap:5px;pointer-events:auto;background:rgba(20,15,10,0.88);border:2px solid #5a4326;border-radius:7px;padding:5px 6px;z-index:6;}
-        #editor .etgl{cursor:pointer;font:inherit;font-size:11px;font-weight:bold;color:#e8e0cf;background:#241a10;border:2px solid #4a3826;border-radius:5px;padding:4px 7px;}
-        #editor .etgl:hover{background:#3a2c1c;border-color:#e8b94a;}
-        #editor .etgl.off{opacity:.5;border-color:#3a2c1c;color:#9a8f7d;}
+        /* ações topo (Novo/Salvar/Testar/Exportar) */
+        #editor .etop{position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:6px;align-items:center;padding:5px 7px;pointer-events:auto;background:rgba(20,15,10,0.9);border:1px solid #5a4326;border-radius:8px;box-shadow:0 4px 16px #000;z-index:7;}
+        #editor .etop .ebtn{font-size:12.5px;padding:5px 9px;}
+        /* abas de reabrir (quando painel recolhido) */
+        #editor .ereopen{position:absolute;pointer-events:auto;background:#241a10;border:1px solid #5a4326;color:#caa86a;font-size:13px;font-weight:bold;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px #000;z-index:7;}
+        #editor .ereopen:hover{background:#3a2c1c;border-color:#e8b94a;}
+        #editor .ereopen.side{top:50%;left:54px;transform:translateY(-50%);width:18px;height:54px;border-radius:0 7px 7px 0;}
+        #editor .ereopen.info{top:50%;right:0;transform:translateY(-50%);width:18px;height:54px;border-radius:7px 0 0 7px;}
+        #editor .ereopen.tools{bottom:0;left:50%;transform:translateX(-50%);width:54px;height:18px;border-radius:7px 7px 0 0;}
+        #editor .etoast{position:absolute;top:62px;left:50%;transform:translateX(-50%);pointer-events:none;background:rgba(20,40,16,0.92);border:2px solid #3a5a2a;color:#bff0c0;border-radius:8px;padding:8px 16px;font-weight:bold;opacity:0;transition:opacity .3s;z-index:9;}
       `;
       document.head.appendChild(st);
     }
     const e = document.createElement('div'); e.id = 'editor';
     e.innerHTML = `
-      <div class="epanel etop" id="eTop"></div>
-      <div class="epanel elist" id="eList"></div>
-      <div class="epanel einfo" id="eInfo"></div>
-      <div class="epanel etools" id="eTools"></div>
+      <div class="eact" id="eAct"></div>
+      <div class="epanel eside" id="eSide"><div class="ephead"><span class="epttl" id="eSideTtl">Paleta</span><button class="epchev" id="eSideChev" title="Recolher (Ctrl+B)">‹</button></div><div class="epbody" id="eList"></div></div>
+      <div class="epanel einfo" id="eInfo"><div class="ephead"><span class="epttl">Propriedades</span><button class="epchev" id="eInfoChev" title="Recolher (Ctrl+J)">›</button></div><div class="epbody" id="eInfoBody"></div></div>
+      <div class="epanel etools" id="eTools"><div class="ephead" title="Ferramentas"><button class="epchev" id="eToolsChev" title="Recolher (Ctrl+Alt+B)">▾</button><span>🔧</span></div><div class="epbody" id="eToolsBody"></div></div>
+      <div class="etop" id="eTop"></div>
+      <button class="ereopen side" id="eReSide" title="Mostrar paleta (Ctrl+B)">›</button>
+      <button class="ereopen info" id="eReInfo" title="Mostrar propriedades (Ctrl+J)">‹</button>
+      <button class="ereopen tools" id="eReTools" title="Mostrar ferramentas (Ctrl+Alt+B)">▴</button>
       <div class="etoast" id="eToast"></div>`;
     document.body.appendChild(e);
     this.panel = e;
-    this.listEl = e.querySelector('#eList'); this.infoEl = e.querySelector('#eInfo');
-    this.toastEl = e.querySelector('#eToast');
+    this.listEl = e.querySelector('#eList'); this.infoEl = e.querySelector('#eInfoBody');
+    this.toastEl = e.querySelector('#eToast'); this.sideTtlEl = e.querySelector('#eSideTtl');
 
-    // barra superior: voltar + abas + ações
-    const top = e.querySelector('#eTop');
-    const back = document.createElement('button'); back.className = 'etab eback'; back.textContent = '‹ Menu';
-    back.onclick = () => this._back(); top.appendChild(back);
+    // barra de atividades (esquerda): voltar + ícones de aba
+    const act = e.querySelector('#eAct');
+    const back = document.createElement('button'); back.className = 'aico aback'; back.textContent = '‹'; back.title = 'Voltar ao menu (Esc)';
+    back.onclick = () => this._back(); act.appendChild(back);
     this.TABS.forEach(t => {
-      const b = document.createElement('button'); b.className = 'etab'; b.dataset.tab = t.id; b.textContent = t.label;
-      b.onclick = () => this.setTab(t.id); top.appendChild(b);
+      const b = document.createElement('button'); b.className = 'aico'; b.dataset.tab = t.id; b.textContent = t.icon;
+      b.title = t.label; b.onclick = () => this.setTab(t.id); act.appendChild(b);
     });
-    const sep = document.createElement('span'); sep.style.cssText = 'width:1px;height:22px;background:#5a4326;margin:0 2px;'; top.appendChild(sep);
-    const mk = (txt, cls, fn) => { const b = document.createElement('button'); b.className = 'ebtn' + (cls ? ' ' + cls : ''); b.textContent = txt; b.onclick = fn; top.appendChild(b); return b; };
-    mk('🆕 Novo', '', () => { this._newScene(true); this.setTab(this.tab); });
-    mk('💾 Salvar', 'save', () => this._saveCreation());
-    mk('▶ Testar', 'go', () => this._test());
-    this.tabsTop = top;
+    this.actEl = act;
 
-    // barra inferior: legenda (em cima) + ferramentas e tamanho do pincel (embaixo)
-    const tb = e.querySelector('#eTools');
-    const statusLine = document.createElement('div'); statusLine.className = 'estatus';
-    tb.appendChild(statusLine); this.statusEl = statusLine;
+    // ações (topo): Novo / Salvar / Testar / Exportar
+    const top = e.querySelector('#eTop');
+    const mk = (txt, cls, fn, title) => { const b = document.createElement('button'); b.className = 'ebtn' + (cls ? ' ' + cls : ''); b.textContent = txt; if (title) b.title = title; b.onclick = fn; top.appendChild(b); return b; };
+    mk('🆕 Novo', '', () => { this._newScene(true); this.setTab(this.tab); });
+    mk('💾 Salvar', 'save', () => this._saveCreation(), 'Salva a área selecionada na enciclopédia');
+    mk('⬇ .js', 'exp', () => this._exportCreation(), 'Baixa a área selecionada como arquivo .js do projeto');
+    mk('▶ Testar', 'go', () => this._test());
+
+    // barra inferior: ferramentas + tamanho + legenda
+    const tb = e.querySelector('#eToolsBody');
     const row = document.createElement('div'); row.className = 'etoolrow';
     this.TOOLS.forEach(t => {
       const b = document.createElement('button'); b.className = 'esbtn'; b.dataset.tool = t.id;
@@ -251,29 +301,38 @@ const Editor = {
       b.title = 'Tamanho do pincel/borracha ([ ])'; b.onclick = () => this.setBrushSize(s); row.appendChild(b);
     });
     tb.appendChild(row);
+    const statusLine = document.createElement('div'); statusLine.className = 'estatus';
+    tb.appendChild(statusLine); this.statusEl = statusLine;
 
-    // botões para recolher/expandir os painéis (Tab = recolher tudo)
-    const tg = document.createElement('div'); tg.className = 'etoggles';
-    [['list', '◧ Paleta'], ['info', '▤ Painel'], ['tools', '▭ Barra'], ['top', '▦ Abas']].forEach(([k, lbl]) => {
-      const b = document.createElement('button'); b.className = 'etgl'; b.dataset.panel = k; b.textContent = lbl;
-      b.title = 'Mostrar/ocultar (Tab oculta tudo)'; b.onclick = () => this._togglePanel(k); tg.appendChild(b);
-    });
-    e.appendChild(tg); this._togglesEl = tg;
+    // setas de recolher/expandir (cada painel tem a sua + uma aba para reabrir)
+    e.querySelector('#eSideChev').onclick = () => this._togglePanel('side');
+    e.querySelector('#eInfoChev').onclick = () => this._togglePanel('info');
+    e.querySelector('#eToolsChev').onclick = () => this._togglePanel('tools');
+    e.querySelector('#eReSide').onclick = () => this._togglePanel('side');
+    e.querySelector('#eReInfo').onclick = () => this._togglePanel('info');
+    e.querySelector('#eReTools').onclick = () => this._togglePanel('tools');
     this._applyPanels();
   },
 
   _togglePanel(which) { this._panelHidden[which] = !this._panelHidden[which]; this._applyPanels(); },
   _toggleAll() {
-    const keys = ['list', 'info', 'tools', 'top'];
+    const keys = ['side', 'info', 'tools'];
     const anyShown = keys.some(k => !this._panelHidden[k]);
     keys.forEach(k => this._panelHidden[k] = anyShown);   // tudo visível -> oculta tudo; senão mostra tudo
     this._applyPanels();
   },
   _applyPanels() {
     if (!this.panel) return;
-    const map = { list: '#eList', info: '#eInfo', tools: '#eTools', top: '#eTop' };
-    for (const k in map) { const el = this.panel.querySelector(map[k]); if (el) el.style.display = this._panelHidden[k] ? 'none' : ''; }
-    if (this._togglesEl) this._togglesEl.querySelectorAll('[data-panel]').forEach(b => b.classList.toggle('off', !!this._panelHidden[b.dataset.panel]));
+    const map = { side: ['#eSide', '#eReSide'], info: ['#eInfo', '#eReInfo'], tools: ['#eTools', '#eReTools'] };
+    for (const k in map) {
+      const hidden = !!this._panelHidden[k];
+      const pane = this.panel.querySelector(map[k][0]); if (pane) pane.style.display = hidden ? 'none' : '';
+      const re = this.panel.querySelector(map[k][1]); if (re) re.style.display = hidden ? 'flex' : 'none';
+    }
+    // as laterais recuam para não cobrir a barra inferior (altura medida em runtime)
+    const tools = this.panel.querySelector('#eTools');
+    const th = this._panelHidden.tools ? 0 : (tools ? tools.offsetHeight : 0);
+    ['#eSide', '#eInfo'].forEach(sel => { const el = this.panel.querySelector(sel); if (el) el.style.bottom = th + 'px'; });
   },
 
   toast(msg) {
@@ -289,7 +348,10 @@ const Editor = {
   },
   setTab(tab) {
     this.tab = tab;
-    if (this.tabsTop) this.tabsTop.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    if (this.actEl) this.actEl.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+    const t = this.TABS.find(x => x.id === tab);
+    if (this.sideTtlEl && t) this.sideTtlEl.textContent = t.icon + ' ' + t.label;
+    if (this._panelHidden.side) this._togglePanel('side');   // abre a paleta ao trocar de aba
     this._buildList(); this._info();
   },
   setBrushSize(s) {
@@ -297,7 +359,16 @@ const Editor = {
     if (this.panel) this.panel.querySelectorAll('[data-size]').forEach(b => b.classList.toggle('on', +b.dataset.size === s));
   },
   _cycleSize(d) { const i = clamp(this.SIZES.indexOf(this.brushSize) + d, 0, this.SIZES.length - 1); this.setBrushSize(this.SIZES[i]); },
-  setLayer(n) { this.layer = n; this._info(); },
+  // ---- camadas (Frente = sólidos/objetos · Fundo = preenchimento) ----
+  // As mesmas opções controlam a VISIBILIDADE e quais camadas as operações afetam.
+  toggleLayer(which) {
+    this.layers[which] = !this.layers[which];
+    if (!this.layers.front && !this.layers.back) this.layers[which] = true;  // ao menos uma ativa
+    this._info();
+  },
+  setLayers(front, back) { this.layers.front = front; this.layers.back = back; this._info(); },
+  // alvo da pintura: Fundo só quando o Fundo está ativo e a Frente, não; senão Frente
+  _paintBack() { return this.layers.back && !this.layers.front; },
 
   // ---------------- desfazer (Ctrl+Z) ----------------
   _snapshot() {
@@ -307,14 +378,24 @@ const Editor = {
       objs: [...this.objs.entries()].map(([k, v]) => [k, Object.assign({}, v)]),
     };
   },
-  _pushUndo() { this.undoStack.push(this._snapshot()); if (this.undoStack.length > 40) this.undoStack.shift(); },
-  _undo() {
-    const s = this.undoStack.pop();
-    if (!s) { this.toast('Nada para desfazer'); return; }
+  _pushUndo() { this.undoStack.push(this._snapshot()); if (this.undoStack.length > 60) this.undoStack.shift(); this.redoStack.length = 0; },
+  _restore(s) {
     if (this.world.cols !== s.cols || this.world.rows !== s.rows) this.world = new World(s.cols, s.rows);
     this.world.mat.set(s.mat); this.world.bg.set(s.bg); this.world.hp.set(s.hp); this.world.grass.set(s.grass);
     this.objs = new Map(s.objs.map(([k, v]) => [k, Object.assign({}, v)]));
-    this._dirty = true; this.toast('Desfeito');
+    this._dirty = true;
+  },
+  _undo() {
+    const s = this.undoStack.pop();
+    if (!s) { this.toast('Nada para desfazer'); return; }
+    this.redoStack.push(this._snapshot()); if (this.redoStack.length > 60) this.redoStack.shift();
+    this._restore(s); this.toast('Desfeito');
+  },
+  _redo() {
+    const s = this.redoStack.pop();
+    if (!s) { this.toast('Nada para refazer'); return; }
+    this.undoStack.push(this._snapshot()); if (this.undoStack.length > 60) this.undoStack.shift();
+    this._restore(s); this.toast('Refeito');
   },
 
   // ---------------- memória de cópia (clipboard, até 3) ----------------
@@ -336,7 +417,7 @@ const Editor = {
 
     if (this.tab === 'mats') {
       const note = document.createElement('div'); note.style.cssText = 'color:#9a8f7d;font-size:11px;margin:0 2px 6px;';
-      note.innerHTML = 'Mesmos blocos para <b>Camada 1 (frente)</b> e <b>Camada 2 (fundo)</b> — escolha a camada no painel à direita.';
+      note.innerHTML = 'Os mesmos blocos servem para a <b>Frente</b> e o <b>Fundo</b> — escolha as camadas ativas no painel à direita.';
       L.appendChild(note);
       for (let id = 1; id < MAT.length; id++) {
         const m = MAT[id]; if (!m) continue;
@@ -400,6 +481,10 @@ const Editor = {
         const b = item(this.curId === eid, () => this._selectClip(cr, 'saved', eid), bx => {
           bx.innerHTML = `<span class="eem">⭐</span><span><div class="enm">${cr.name}</div><div class="esub">${cr.w}×${cr.h}</div></span>`;
         });
+        const dl = document.createElement('span'); dl.className = 'edl'; dl.textContent = '⬇'; dl.title = 'Baixar como .js do projeto';
+        dl.style.marginLeft = 'auto';
+        dl.onclick = (ev) => { ev.stopPropagation(); this._downloadCreationJS(cr); };
+        b.appendChild(dl);
         const del = document.createElement('span'); del.className = 'edel'; del.textContent = '✕'; del.title = 'Excluir';
         del.onclick = (ev) => { ev.stopPropagation(); if (confirm('Excluir “' + cr.name + '”?')) { Creations.remove(cr.key); this._buildList(); } };
         b.appendChild(del);
@@ -447,8 +532,8 @@ const Editor = {
       line: 'Arraste para traçar uma linha do item.',
       rect: 'Arraste para preencher um retângulo.',
       bucket: 'Preenche uma área contígua do mesmo material.',
-      erase: 'Apaga na camada ativa (use o tamanho ao lado).',
-      select: 'Arraste para marcar uma área. Depois Copiar/Apagar.',
+      erase: 'Apaga nas camadas ativas (use o tamanho ao lado).',
+      select: 'Arraste para marcar uma área. Depois Copiar/Recortar/Apagar.',
       stamp: 'Clique para carimbar a construção/área copiada.',
       eyedrop: 'Clique para capturar o que está sob o cursor.',
     };
@@ -458,39 +543,46 @@ const Editor = {
     I.innerHTML = `<h3>${head}</h3><div class="esub">${T.label || ''} — ${DESC[this.tool] || ''}</div>`;
 
     const mkb = (txt, fn, dis) => { const b = document.createElement('button'); b.className = 'ebtn'; b.textContent = txt; b.disabled = !!dis; if (dis) b.style.opacity = '.45'; b.onclick = fn; return b; };
+    const sec = (txt) => { const d = document.createElement('div'); d.className = 'esechead'; d.textContent = txt; I.appendChild(d); };
 
-    // camadas (Camada 1 = frente/sólido · Camada 2 = fundo)
-    const layTitle = document.createElement('div'); layTitle.className = 'esub'; layTitle.style.marginTop = '6px'; layTitle.textContent = 'Camada de pintura:';
-    I.appendChild(layTitle);
+    // camadas: Frente e Fundo são alternáveis (visibilidade + alvo das operações)
+    sec('Camadas');
     const layRow = document.createElement('div'); layRow.className = 'erow';
-    const l1 = mkb('▦ 1 · Frente', () => this.setLayer(1)); if (this.layer === 1) l1.classList.add('on');
-    const l2 = mkb('▒ 2 · Fundo', () => this.setLayer(2)); if (this.layer === 2) l2.classList.add('on');
-    layRow.appendChild(l1); layRow.appendChild(l2); I.appendChild(layRow);
+    const lf = mkb('▦ Frente', () => this.toggleLayer('front')); if (this.layers.front) lf.classList.add('on');
+    const lb = mkb('▒ Fundo', () => this.toggleLayer('back')); if (this.layers.back) lb.classList.add('on');
+    layRow.appendChild(lf); layRow.appendChild(lb); I.appendChild(layRow);
+    const layHint = document.createElement('div'); layHint.className = 'esub';
+    layHint.textContent = this.layers.front && this.layers.back ? 'Visão completa — pintura vai para a Frente.'
+      : (this.layers.front ? 'Só a Frente: pinta/edita os sólidos e objetos.' : 'Só o Fundo: pinta/edita o preenchimento.');
+    I.appendChild(layHint);
 
-    // seleção
+    // seleção: copiar / recortar / apagar (sensível às camadas ativas)
+    sec('Seleção');
     const selRow = document.createElement('div'); selRow.className = 'erow';
-    selRow.appendChild(mkb('📋 Copiar área', () => this._copySelection(), !this.sel));
-    selRow.appendChild(mkb('🗑 Apagar área', () => this._deleteSelection(), !this.sel));
+    selRow.appendChild(mkb('📋 Copiar', () => this._copySelection(), !this.sel));
+    selRow.appendChild(mkb('✂ Recortar', () => this._cutSelection(), !this.sel));
+    selRow.appendChild(mkb('🗑 Apagar', () => this._deleteSelection(), !this.sel));
     I.appendChild(selRow);
-    if (this.sel) { const s = document.createElement('div'); s.className = 'esub'; s.textContent = `Área: ${this.sel.c1 - this.sel.c0 + 1}×${this.sel.r1 - this.sel.r0 + 1} tiles`; I.appendChild(s); }
+    if (this.sel) { const s = document.createElement('div'); s.className = 'esub'; s.textContent = `Área: ${this.sel.c1 - this.sel.c0 + 1}×${this.sel.r1 - this.sel.r0 + 1} tiles${this._layerTag()}`; I.appendChild(s); }
+    else { const s = document.createElement('div'); s.className = 'esub'; s.textContent = 'Use a ferramenta Seleção para marcar uma área.'; I.appendChild(s); }
 
     // memória de cópia (clipboard, até 3)
-    const memTitle = document.createElement('div'); memTitle.className = 'esub'; memTitle.style.marginTop = '6px'; memTitle.textContent = 'Memória (Ctrl+C copia · Ctrl+V cola):';
-    I.appendChild(memTitle);
+    sec('Memória (Ctrl+C/X copia · Ctrl+V cola)');
     const memRow = document.createElement('div'); memRow.className = 'erow';
     if (!this.clips.length) { const d = document.createElement('div'); d.className = 'esub'; d.textContent = '(vazia)'; memRow.appendChild(d); }
-    this.clips.forEach((cl, i) => { const b = mkb(`${i + 1}: ${cl.w}×${cl.h}`, () => this._useClip(i)); if (this.clip === cl) b.classList.add('on'); memRow.appendChild(b); });
+    this.clips.forEach((cl, i) => { const b = mkb(`${i + 1}: ${cl.name || (cl.w + '×' + cl.h)}`, () => this._useClip(i)); if (this.clip === cl) b.classList.add('on'); memRow.appendChild(b); });
     I.appendChild(memRow);
 
     // grade
+    sec('Grade');
     const gRow = document.createElement('div'); gRow.className = 'erow';
     gRow.appendChild(mkb('＋ Largura', () => { this._resizeWorld(this.world.cols + 12, this.world.rows); this.toast('Grade ampliada'); }));
     gRow.appendChild(mkb('＋ Altura', () => { this._resizeWorld(this.world.cols, this.world.rows + 8); this.toast('Grade ampliada'); }));
     I.appendChild(gRow);
-    const gsz = document.createElement('div'); gsz.className = 'esub'; gsz.textContent = `Grade: ${this.world.cols}×${this.world.rows} tiles`; I.appendChild(gsz);
+    const gsz = document.createElement('div'); gsz.className = 'esub'; gsz.textContent = `${this.world.cols}×${this.world.rows} tiles`; I.appendChild(gsz);
 
     const help = document.createElement('div'); help.className = 'ehelp';
-    help.innerHTML = '<b>Mover</b> (0) ou botão direito/Espaço+arrasto · Roda: zoom<br><b>Ctrl+Z</b> desfaz · Teclas 0–8: ferramentas · <b>[ ]</b>: tamanho<br><b>Tab</b>: ocultar/mostrar painéis · 💾 salva a <b>área selecionada</b><br>Salas iguais: <b>Seleção</b> › <b>Ctrl+C</b> › <b>Carimbo/Ctrl+V</b>.';
+    help.innerHTML = '<b>Mover</b> (\') ou botão direito/Espaço+arrasto · Roda: zoom<br><b>Ctrl+Z</b>/<b>Ctrl+Y</b>: desfaz/refaz · Teclas \'1–8: ferramentas · <b>[ ]</b>: tamanho<br><b>Ctrl+B</b>/<b>Ctrl+J</b>/<b>Ctrl+Alt+B</b>: painéis · <b>Tab</b>: todos · <b>Esc</b>: limpa a seleção<br>💾 salva · <b>⬇ .js</b> baixa a <b>área selecionada</b> como arquivo do projeto.';
     I.appendChild(help);
   },
 
@@ -501,8 +593,8 @@ const Editor = {
   applyCell(c, r) {
     if (!this.world.inBounds(c, r)) return; const cur = this.cur; if (!cur) return; const key = this._key2(c, r);
     if (cur.kind === 'mat') {
-      if (this.layer === 2) this.world.setBg(c, r, cur.id);       // Camada 2 = fundo
-      else { this.world.set(c, r, cur.id); this.objs.delete(key); } // Camada 1 = frente/sólido
+      if (this._paintBack()) this.world.setBg(c, r, cur.id);       // pintar no Fundo
+      else { this.world.set(c, r, cur.id); this.objs.delete(key); } // pintar na Frente (sólido)
     }
     else if (cur.kind === 'decor') { this.objs.set(key, { kind: 'decor', type: cur.type, char: cur.char }); this.world.set(c, r, 0); }
     else if (cur.kind === 'enemy') { this.objs.set(key, { kind: 'enemy', type: cur.type, char: cur.char }); this.world.set(c, r, 0); }
@@ -512,11 +604,11 @@ const Editor = {
   },
   eraseCell(c, r) {
     if (!this.world.inBounds(c, r)) return; const key = this._key2(c, r);
-    if (this.layer === 2) { this.world.setBg(c, r, 0); }          // borracha na Camada 2 limpa o fundo
-    else {                                                         // Camada 1: objeto › sólido › (fundo se já vazio)
+    if (this._paintBack()) { this.world.setBg(c, r, 0); }         // borracha no Fundo limpa o preenchimento
+    else {                                                         // Frente: objeto › sólido › (fundo se ambas ativas e vazio)
       if (this.objs.has(key)) this.objs.delete(key);
       else if (this.world.at(c, r)) this.world.set(c, r, 0);
-      else this.world.setBg(c, r, 0);
+      else if (this.layers.back) this.world.setBg(c, r, 0);
     }
     this._dirty = true;
   },
@@ -533,8 +625,8 @@ const Editor = {
       else if (o.kind === 'enemy') { const inf = (Gallery.ENEMY_INFO && Gallery.ENEMY_INFO[o.type]) || {}; this.cur = { kind: 'enemy', type: o.type, char: o.char, name: inf.name || o.type, eid: 'enemy:' + o.type }; tab = 'enemies'; }
       else if (o.kind === 'pickup') { this.cur = { kind: 'pickup', pk: o.pk, char: o.char, name: this.PICK_INFO[o.pk][1], eid: 'pickup:' + o.pk }; tab = 'items'; }
       else if (o.kind === 'marker') { this.cur = { kind: 'marker', m: o.m, char: o.char, name: o.m === 'spawn' ? 'Início (P)' : 'Saída (E)', eid: 'marker:' + o.m }; tab = 'items'; }
-    } else if (this.world.at(c, r)) { const id = this.world.at(c, r); this.cur = { kind: 'mat', id, char: this.MAT2CHAR[id], name: MAT[id].name, eid: 'mat:' + id }; this.layer = 1; tab = 'mats'; }
-    else if (this.world.bgAt(c, r)) { const id = this.world.bgAt(c, r); this.cur = { kind: 'mat', id, char: this.MAT2CHAR[id], name: MAT[id].name, eid: 'mat:' + id }; this.layer = 2; tab = 'mats'; }
+    } else if (this.world.at(c, r)) { const id = this.world.at(c, r); this.cur = { kind: 'mat', id, char: this.MAT2CHAR[id], name: MAT[id].name, eid: 'mat:' + id }; if (this._paintBack()) this.setLayers(true, true); tab = 'mats'; }
+    else if (this.world.bgAt(c, r)) { const id = this.world.bgAt(c, r); this.cur = { kind: 'mat', id, char: this.MAT2CHAR[id], name: MAT[id].name, eid: 'mat:' + id }; this.setLayers(false, true); tab = 'mats'; }
     else return;
     this.curId = this.cur.eid; this.tool = 'brush';
     if (tab) this.setTab(tab);          // reflete a seleção no sidebar (troca a aba e destaca)
@@ -543,7 +635,7 @@ const Editor = {
   },
   floodFill(c, r) {
     if (!this.cur || this.cur.kind !== 'mat' || !this.world.inBounds(c, r)) return;
-    const bg = this.layer === 2;
+    const bg = this._paintBack();
     const at = (cc, rr) => bg ? this.world.bgAt(cc, rr) : this.world.at(cc, rr);
     const set = (cc, rr, id) => bg ? this.world.setBg(cc, rr, id) : this.world.set(cc, rr, id);
     const target = at(c, r), repl = this.cur.id; if (target === repl) return;
@@ -569,28 +661,53 @@ const Editor = {
   // ---------------- copiar / colar (seleção e carimbo) ----------------
   _charAt(c, r) { const o = this.objs.get(this._key2(c, r)); if (o) return o.char; const id = this.world.at(c, r); return id ? (this.MAT2CHAR[id] || '.') : '.'; },
   _bgCharAt(c, r) { const id = this.world.bgAt(c, r); return id ? (this.MAT2CHAR[id] || '.') : '.'; },
-  _serialize(c0, r0, w, h) {
+  // serializa uma região; `layers` controla quais camadas são copiadas (padrão: ambas)
+  _serialize(c0, r0, w, h, layers) {
+    const front = !layers || layers.front !== false, back = !layers || layers.back !== false;
     const cells = [], bg = [];
     for (let rr = 0; rr < h; rr++) {
       let line = '', bln = '';
-      for (let cc = 0; cc < w; cc++) { line += this._charAt(c0 + cc, r0 + rr); bln += this._bgCharAt(c0 + cc, r0 + rr); }
+      for (let cc = 0; cc < w; cc++) {
+        line += front ? this._charAt(c0 + cc, r0 + rr) : '.';
+        bln += back ? this._bgCharAt(c0 + cc, r0 + rr) : '.';
+      }
       cells.push(line); bg.push(bln);
     }
     return { w, h, cells, bg };
   },
+  _layerTag() { return this.layers.front && this.layers.back ? '' : (this.layers.front ? ' [frente]' : ' [fundo]'); },
   _copySelection() {
     if (!this.sel) { this.toast('Selecione uma área primeiro (ferramenta Seleção)'); return; }
-    const s = this.sel; const clip = this._serialize(s.c0, s.r0, s.c1 - s.c0 + 1, s.r1 - s.r0 + 1);
-    clip.name = clip.w + '×' + clip.h;
+    const s = this.sel; const clip = this._serialize(s.c0, s.r0, s.c1 - s.c0 + 1, s.r1 - s.r0 + 1, this.layers);
+    clip.name = clip.w + '×' + clip.h + this._layerTag();
     this.clips.unshift(clip); if (this.clips.length > 3) this.clips.length = 3;   // memória de até 3
     this.clip = clip; this.clipName = 'Cópia ' + clip.name; this.clipSrc = null; this.curId = null;
     this.sel = null;                                   // limpa o retângulo (seleção dinâmica)
-    this.setTool('stamp'); this.toast('Copiado para a memória — clique para colar'); this._info();
+    this.setTool('stamp'); this.toast('Copiado' + this._layerTag() + ' — clique para colar'); this._info();
+  },
+  _cutSelection() {
+    if (!this.sel) { this.toast('Selecione uma área primeiro (ferramenta Seleção)'); return; }
+    const s = this.sel; const clip = this._serialize(s.c0, s.r0, s.c1 - s.c0 + 1, s.r1 - s.r0 + 1, this.layers);
+    clip.name = clip.w + '×' + clip.h + this._layerTag();
+    this.clips.unshift(clip); if (this.clips.length > 3) this.clips.length = 3;
+    this._pushUndo();
+    this._clearSelection(this.sel);                    // recorta (apaga as camadas ativas)
+    this.clip = clip; this.clipName = 'Recorte ' + clip.name; this.clipSrc = null; this.curId = null;
+    this.sel = null;
+    this.setTool('stamp'); this.toast('Recortado' + this._layerTag() + ' — clique para colar'); this._info();
+  },
+  // apaga as CAMADAS ATIVAS dentro de uma área (sem mexer no histórico)
+  _clearSelection(s) {
+    for (let r = s.r0; r <= s.r1; r++) for (let c = s.c0; c <= s.c1; c++) {
+      if (this.layers.front) { this.objs.delete(this._key2(c, r)); this.world.set(c, r, 0); }
+      if (this.layers.back) this.world.setBg(c, r, 0);
+    }
+    this._dirty = true;
   },
   _deleteSelection() {
-    if (!this.sel) return; this._pushUndo(); const s = this.sel;
-    for (let r = s.r0; r <= s.r1; r++) for (let c = s.c0; c <= s.c1; c++) { const k = this._key2(c, r); this.objs.delete(k); this.world.set(c, r, 0); this.world.setBg(c, r, 0); }
-    this._dirty = true; this.toast('Área apagada'); this._info();
+    if (!this.sel) return; this._pushUndo();
+    this._clearSelection(this.sel);
+    this.toast('Área apagada' + this._layerTag()); this._info();
   },
   _putChar(c, r, ch) {
     if (!this.world.inBounds(c, r) || !ch || ch === '.') return; const key = this._key2(c, r);
@@ -611,21 +728,89 @@ const Editor = {
     this._dirty = true;
   },
 
-  // ---------------- salvar / testar ----------------
-  _saveCreation() {
-    // exige selecionar a ÁREA que vai compor a construção (não salva o grid/chão todo)
-    if (!this.sel) { this.toast('Selecione a área da construção antes de salvar (ferramenta Seleção)'); this.setTool('select'); this._info(); return; }
+  // ---------------- salvar / exportar / testar ----------------
+  // monta uma criação (chars já recortados) a partir da área selecionada
+  _creationFromSelection(name) {
+    if (!this.sel) { this.toast('Selecione a área da construção primeiro (ferramenta Seleção)'); this.setTool('select'); this._info(); return null; }
     const s = this.sel;
     const region = this._serialize(s.c0, s.r0, s.c1 - s.c0 + 1, s.r1 - s.r0 + 1);
     const trimmed = _trimClip(region.cells.map(x => x.split('')), region.bg.map(x => x.split('')));
-    if (!trimmed) { this.toast('A área selecionada está vazia'); return; }
+    if (!trimmed) { this.toast('A área selecionada está vazia'); return null; }
+    return { key: 'user_' + Date.now().toString(36), name, w: trimmed.w, h: trimmed.h, cells: trimmed.cells, bg: trimmed.bg, custom: true, ground: '#' };
+  },
+  _saveCreation() {
+    if (!this.sel) { this.toast('Selecione a área da construção antes de salvar (ferramenta Seleção)'); this.setTool('select'); this._info(); return; }
     const name = (prompt('Nome da criação:', 'Minha construção') || '').trim();
     if (!name) return;
-    const cr = { key: 'user_' + Date.now().toString(36), name, w: trimmed.w, h: trimmed.h, cells: trimmed.cells, bg: trimmed.bg, custom: true, ground: '#' };
+    const cr = this._creationFromSelection(name); if (!cr) return;
     Creations.add(cr);
     this._clipCache = {};   // novas entradas na enciclopédia
     this.toast('Salvo na enciclopédia: ' + name);
     if (this.tab === 'saved' || this.tab === 'builds') this._buildList();
+  },
+  // baixa a área selecionada como um arquivo .js pronto p/ incorporar ao projeto
+  _exportCreation() {
+    if (!this.sel) { this.toast('Selecione a área a exportar (ferramenta Seleção)'); this.setTool('select'); this._info(); return; }
+    const name = (prompt('Nome da construção (no código):', 'Minha construção') || '').trim();
+    if (!name) return;
+    const cr = this._creationFromSelection(name); if (!cr) return;
+    this._downloadCreationJS(cr);
+  },
+  _downloadCreationJS(cr) {
+    const js = this._buildCreationJS(cr);
+    const fname = (cr.key || 'creation') + '.js';
+    this._downloadText(fname, js);
+    this.toast('Arquivo baixado: ' + fname);
+  },
+  // gera um módulo .js auto-suficiente que registra a construção como prefab
+  _buildCreationJS(cr) {
+    const esc = (str) => "'" + String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'") + "'";
+    const arr = (lines) => '[' + (lines || []).map(esc).join(', ') + ']';
+    return `/* ============================================================
+   Construção exportada do Editor: "${cr.name}"
+   Gerada em ${new Date().toISOString()}.
+   Como usar: inclua este arquivo no index.html DEPOIS de
+   js/world.js e js/buildings.js — a construção fica disponível
+   em BUILDINGS/BUILD (galeria, editor e fases) com a chave abaixo.
+   ============================================================ */
+(function () {
+  const cr = {
+    key: ${esc(cr.key)},
+    name: ${esc(cr.name)},
+    w: ${cr.w}, h: ${cr.h},
+    cells: ${arr(cr.cells)},
+    bg: ${arr(cr.bg)},
+  };
+  const putCell = (g, c, r, ch) => { if (r >= 0 && r < g.length && c >= 0 && c < g[0].length) g[r][c] = ch; };
+  const def = {
+    key: cr.key, name: cr.name, desc: 'Criação personalizada (editor).',
+    w: cr.w, h: cr.h, ground: '#', custom: true,
+    stamp(g, bg, c0, baseR, o) {
+      const top = baseR - cr.h + 1;
+      for (let rr = 0; rr < cr.h; rr++) {
+        const line = cr.cells[rr] || '', bln = (cr.bg && cr.bg[rr]) || '';
+        for (let cc = 0; cc < cr.w; cc++) {
+          const ch = line[cc]; if (ch && ch !== '.') putCell(g, c0 + cc, top + rr, ch);
+          const bch = bln[cc]; if (bch && bch !== '.') putCell(bg, c0 + cc, top + rr, bch);
+        }
+      }
+    },
+  };
+  if (typeof window !== 'undefined' && window.BUILDINGS && window.BUILD && !window.BUILD[cr.key]) {
+    window.BUILDINGS.push(def); window.BUILD[cr.key] = def;
+  }
+  if (typeof module !== 'undefined' && module.exports) module.exports = def;
+})();
+`;
+  },
+  _downloadText(filename, text) {
+    try {
+      const blob = new Blob([text], { type: 'text/javascript;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } catch (e) { this.toast('Falha ao baixar o arquivo'); }
   },
   _test() {
     let hasSpawn = false; for (const v of this.objs.values()) if (v.kind === 'marker' && v.m === 'spawn') hasSpawn = true;
@@ -729,11 +914,11 @@ const Editor = {
 
     const cam = this._cam();
     ctx.save(); ctx.imageSmoothingEnabled = false; ctx.scale(z, z);
-    this.world.draw(ctx, cam);
+    this.world.draw(ctx, cam, this.layers);
 
-    // objetos (decoração, inimigos, recompensas, marcadores)
+    // objetos (decoração, inimigos, recompensas, marcadores) — pertencem à camada da FRENTE
     const ox = cam.ox, oy = cam.oy;
-    for (const [key, o] of this.objs) {
+    if (this.layers.front) for (const [key, o] of this.objs) {
       const p = key.split(','), c = +p[0], r = +p[1];
       if (!cam.visible(c * T - T, r * T - T, T * 3, T * 3)) continue;
       if (o.kind === 'decor') { TEX.decor(ctx, { type: o.type, x: c * T, y: r * T, color: '#7a2a2a' }, ox, oy, this.time, null); continue; }
@@ -748,8 +933,8 @@ const Editor = {
 
     this._drawGrid(ctx, cam, T);
 
-    // seleção (mostrada apenas com a ferramenta Seleção ativa)
-    if (this.sel && this.tool === 'select') {
+    // seleção (contornos azuis enquanto houver área marcada; Esc desfaz)
+    if (this.sel) {
       const s = this.sel; ctx.save(); ctx.strokeStyle = '#6fd0ff'; ctx.lineWidth = 2 / z; ctx.setLineDash([6 / z, 4 / z]);
       ctx.strokeRect(s.c0 * T + ox, s.r0 * T + oy, (s.c1 - s.c0 + 1) * T, (s.r1 - s.r0 + 1) * T);
       ctx.fillStyle = 'rgba(111,208,255,0.10)'; ctx.fillRect(s.c0 * T + ox, s.r0 * T + oy, (s.c1 - s.c0 + 1) * T, (s.r1 - s.r0 + 1) * T);
@@ -814,7 +999,7 @@ const Editor = {
     if (!this.statusEl) return;
     const t = this.TOOLS.find(x => x.id === this.tool);
     const what = this.tool === 'stamp' ? (this.clipName || 'trecho') : (this.cur ? this.cur.name : '—');
-    const lay = this.layer === 2 ? 'Fundo' : 'Frente';
-    this.statusEl.textContent = `${t ? t.label : ''} · ${what} · Camada ${this.layer} (${lay}) · Tam ${this.brushSize} · ${this.hov.c},${this.hov.r} · zoom ${Math.round(this.view.zoom * 100)}%`;
+    const lay = this.layers.front && this.layers.back ? 'Frente+Fundo' : (this.layers.front ? 'Frente' : 'Fundo');
+    this.statusEl.textContent = `${t ? t.label : ''} · ${what} · ${lay} · Tam ${this.brushSize} · ${this.hov.c},${this.hov.r} · zoom ${Math.round(this.view.zoom * 100)}%`;
   },
 };

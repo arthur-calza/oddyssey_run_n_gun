@@ -300,8 +300,12 @@ class World {
   }
 
   // ---- render -----------------------------------------------
-  draw(ctx, cam) {
+  // opts (editor only): { front, back } — restrict which layers are drawn.
+  // Defaults to drawing both (normal gameplay).
+  draw(ctx, cam, opts) {
     if (!TEX.ready) TEX.build();
+    const showFront = !opts || opts.front !== false;
+    const showBack = !opts || opts.back !== false;
     const T = this.T;
     const c0 = Math.max(0, Math.floor(cam.x / T));
     const c1 = Math.min(this.cols - 1, Math.floor((cam.x + cam.vw) / T) + 1);
@@ -309,9 +313,10 @@ class World {
     const r1 = Math.min(this.rows - 1, Math.floor((cam.y + cam.vh) / T) + 1);
     const ox = cam.ox, oy = cam.oy;
     // ---- background-fill layer (building interiors, tunnel walls): darker, behind solids ----
-    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+    if (showBack) for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
       const i = this.idx(c, r); const bid = this.bg[i];
-      if (!bid || (this.mat[i] && MAT[this.mat[i]] && MAT[this.mat[i]].solid)) continue;  // a SOLID tile covers it; ladders/props still show the shaded fill behind
+      // a SOLID front tile covers it (unless the front layer is hidden — editor "Fundo only" view)
+      if (!bid || (showFront && this.mat[i] && MAT[this.mat[i]] && MAT[this.mat[i]].solid)) continue;
       const x = Math.round(c * T + ox), y = Math.round(r * T + oy);
       const variant = ((c * 2 + r * 3) % TEX.V + TEX.V) % TEX.V;
       const img = TEX.tiles[bid] && TEX.tiles[bid][variant];
@@ -320,7 +325,7 @@ class World {
       // inner-edge shading where the interior meets open air / floors (depth)
       if (!this.bg[this.idx(c, r - 1)] && !this.solid(c, r - 1)) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(x, y, T, 4); }
     }
-    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+    if (showFront) for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
       const i = this.idx(c, r); const id = this.mat[i];
       if (!id) continue;
       const m = MAT[id];
