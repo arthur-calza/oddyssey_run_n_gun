@@ -10,8 +10,12 @@ const SPR = {
   ready: false, sheets: {}, defs: {},
   images: {}, whites: {}, imgLoading: false,
   ANIMS: { idle: 6, run: 8, jump: 1, fall: 1, hurt: 2, death: 6 },
+  PXF: 5,          // fator de pixelização: a arte é assada em ~1/PXF da resolução e ampliada (look retrô, ~20px de altura)
+  _pwBuf: null,    // buffer reaproveitado para pixelizar o braço/arma
+  _pwCache: {},    // cache de quadros da arma por (def, modo, ângulo) — evita re-pixelizar todo frame
+  WAIM: 64,        // nº de ângulos discretos da arma no cache
 
-  define(key, d) { this.defs[key] = d; },
+  define(key, d) { d.key = key; this.defs[key] = d; },
 
   // ---- concept-art images (used for the HUD portrait) ----------
   loadImages() {
@@ -42,7 +46,22 @@ const SPR = {
     if (anim === 'death') { const t = f / (n - 1 || 1); g.rotate(-t * 1.45); g.translate(0, t * 6); }
     this._drawBody(g, d, this._pose(anim, f, n));
     g.restore();
-    return this._outline(cv);   // crisp dark outline (pixel-art polish)
+    return this._pixelize(cv, d);   // resolve em poucos pixels + contorno escuro (pixel-art retrô)
+  },
+
+  // downscale a baked (detailed) frame into a few chunky pixels, snap the
+  // silhouette to hard edges and wrap a bold dark outline — the Broforce look.
+  _pixelize(src, d) {
+    const PXF = d.pxf || this.PXF;
+    const sw = Math.max(1, Math.round(src.width / PXF));
+    const sh = Math.max(1, Math.round(src.height / PXF));
+    const small = document.createElement('canvas'); small.width = sw; small.height = sh;
+    const g = small.getContext('2d'); g.imageSmoothingEnabled = true;
+    g.drawImage(src, 0, 0, sw, sh);                       // area-average down to low-res
+    const im = g.getImageData(0, 0, sw, sh), px = im.data; // crisp silhouette (no soft edges)
+    for (let i = 0; i < px.length; i += 4) px[i + 3] = px[i + 3] >= 120 ? 255 : 0;
+    g.putImageData(im, 0, 0);
+    return this._outline(small);                          // 1 low-res px outline = bold on screen
   },
 
   // wrap a baked frame with a 1px dark outline by stamping a black silhouette
@@ -341,81 +360,118 @@ const SPR = {
     const face = e.face < 0 ? -1 : 1;
     ctx.save(); ctx.imageSmoothingEnabled = false;
     ctx.translate(cx, baseY); ctx.scale(face * scale, scale);
-    ctx.drawImage(frames[fi], -W / 2, -(H - 6));
+    const fr = frames[fi];                                     // low-res frame → stretched (nearest) to the WxH footprint
+    ctx.drawImage(fr, 0, 0, fr.width, fr.height, -W / 2, -(H - 6), W, H);
     ctx.restore();
 
-    // live weapon arm at the chest/hands anchor (not while dying)
+    // live weapon arm at the chest/hands anchor (not while dying), pixelized to match
     if (d.weapon && e.aimAng != null && anim !== 'death') {
       const ga = this.gunAnchor(e);
       const recoil = (e.cool && e.coolMax) ? (e.cool / e.coolMax) * 4 : 0;
       const mode = (e.dashT > 0 || e.swordMode) ? 'sword' : null;
-      ctx.save(); ctx.translate(ga.x + cam.ox, ga.y + cam.oy); ctx.scale(scale, scale);
-      this.drawWeaponArm(ctx, d, 0, 0, e.aimAng, recoil, mode);
-      ctx.restore();
+      this._drawPixWeapon(ctx, d, ga.x + cam.ox, ga.y + cam.oy, scale, e.aimAng, recoil, mode);
     }
+  },
+
+  // blit the (cached) pixel-art weapon at the hands anchor; the recoil kicks it
+  // back along the aim direction so the shot still has punch without re-baking.
+  _drawPixWeapon(ctx, d, wx, wy, scale, aim, recoil, mode) {
+    const PXF = d.pxf || this.PXF;
+    const buf = this._pixWeaponFrame(d, mode, aim, PXF);
+    const c = buf.width / 2;
+    const rx = -Math.cos(aim) * recoil * scale, ry = -Math.sin(aim) * recoil * scale;
+    ctx.save(); ctx.imageSmoothingEnabled = false;
+    ctx.translate(wx + rx, wy + ry); ctx.scale(scale * PXF, scale * PXF);
+    ctx.drawImage(buf, -c, -c);
+    ctx.restore();
+  },
+
+  // pixelized arm+weapon for one discrete aim angle, baked once and cached
+  _pixWeaponFrame(d, mode, aim, PXF) {
+    const steps = this.WAIM, bucket = ((Math.round(aim / (TAU / steps)) % steps) + steps) % steps;
+    const ckey = d.key + ':' + (mode || '') + ':' + bucket;
+    let frame = this._pwCache[ckey];
+    if (frame) return frame;
+    const ang = bucket * (TAU / steps);
+    const R = 46 * (d.scale || 1);                             // half-extent of the weapon (generous)
+    const bw = Math.max(8, Math.ceil((2 * R) / PXF) + 2);      // buffer size (+2 px for the outline)
+    let buf = this._pwBuf; if (!buf) buf = this._pwBuf = document.createElement('canvas');
+    if (buf.width !== bw || buf.height !== bw) { buf.width = bw; buf.height = bw; }
+    const g = buf.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, bw, bw); g.imageSmoothingEnabled = true;
+    const c = bw / 2;
+    g.save(); g.translate(c, c); g.scale(1 / PXF, 1 / PXF);    // natural units → buffer pixels
+    this.drawWeaponArm(g, d, 0, 0, ang, 0, mode);
+    g.restore();
+    const im = g.getImageData(0, 0, bw, bw), px = im.data;     // crisp silhouette
+    for (let i = 0; i < px.length; i += 4) px[i + 3] = px[i + 3] >= 120 ? 255 : 0;
+    g.putImageData(im, 0, 0);
+    frame = this._outline(buf);
+    this._pwCache[ckey] = frame;
+    return frame;
   },
 };
 
 /* ================= CHARACTER DEFINITIONS ===================== */
 SPR.define('ragnarok', {
   head: 'human', weapon: 'shotgun', artK: 1.7,
-  pal: { skin: '#d8a273', skinSh: '#b07c50', hair: '#5a3a22',
-    torso: '#aab2be', torsoHi: '#dde3ec', torsoSh: '#6a727e', armor: '#aab2be', armorHi: '#e2e8f0', armorSh: '#6a727e',
-    leg: '#787f8a', legSh: '#525863', legHi: '#aeb6c2', arm: '#aab2be', pauldron: '#cdd4de', plate: '#cdd4de',
-    glove: '#5a4a32', boot: '#33271a', belt: '#5a4127', buckle: '#caa33a', cape: '#7a2222', capeSh: '#561414',
-    metal: '#3a3e44', metalSh: '#20242a', wood: '#6a4424' },
+  pal: { skin: '#b07a52', skinSh: '#7e5132', hair: '#3a2615',
+    torso: '#586673', torsoHi: '#7c8b97', torsoSh: '#343d47', armor: '#586673', armorHi: '#7c8b97', armorSh: '#343d47',
+    leg: '#4c5660', legSh: '#2e353d', legHi: '#727d88', arm: '#586673', pauldron: '#6b7884', plate: '#6b7884',
+    glove: '#43321e', boot: '#241813', belt: '#4a3320', buckle: '#8a6a26', cape: '#9a1f1f', capeSh: '#5e1212',
+    metal: '#2c3036', metalSh: '#181b20', wood: '#5a3c20' },
 });
 SPR.define('zracks', {
   head: 'lizard', weapon: 'bow', digi: true, tail: true, artK: 1.7,
-  pal: { skin: '#5f8038', skinSh: '#3e5a26', skinHi: '#7d9e4e', crest: '#3e5a26', eye: '#e8c84a',
-    torso: '#4a3a24', torsoHi: '#6a5230', torsoSh: '#2e2414', armor: '#4a3a24', armorHi: '#6a5230', armorSh: '#2e2414',
-    leg: '#4f6a30', legSh: '#34491f', arm: '#5f8038', foot: '#3e5a26', claw: '#cabfa0',
-    belt: '#3a2c18', pendant: '#d8d0b8', wood: '#5a3a1a' },
+  pal: { skin: '#4f6e30', skinSh: '#314a1d', skinHi: '#6b8a3f', crest: '#2c4519', eye: '#cf9a28',
+    torso: '#3c2e1a', torsoHi: '#574021', torsoSh: '#241a0d', armor: '#3c2e1a', armorHi: '#574021', armorSh: '#241a0d',
+    leg: '#415423', legSh: '#283619', arm: '#4f6e30', foot: '#2c4519', claw: '#b8ad8a',
+    belt: '#2c2010', pendant: '#c7bf9e', wood: '#4a3216' },
 });
 SPR.define('zombie', {
   head: 'zombie', weapon: 'musket', artK: 1.66,
-  pal: { skin: '#6f9450', skinSh: '#466030', skinHi: '#88a464', hood: '#3a2e1e',
-    torso: '#4a3a26', torsoHi: '#5e4a30', torsoSh: '#2e2416', armor: '#6a5a44', armorHi: '#7e6c52', armorSh: '#46382a',
-    leg: '#4a4230', legSh: '#2e2818', legHi: '#5e553c', arm: '#6f9450', boot: '#33261a', belt: '#4a3318',
-    metal: '#4a4438', metalSh: '#2a261e', wood: '#5a3a1e' },
+  pal: { skin: '#5e7a40', skinSh: '#3a5024', skinHi: '#769255', hood: '#2c2316',
+    torso: '#42341f', torsoHi: '#574226', torsoSh: '#281e12', armor: '#544832', armorHi: '#6a5b3f', armorSh: '#382c1d',
+    leg: '#43381f', legSh: '#281f10', legHi: '#564a2d', arm: '#5e7a40', boot: '#241a10', belt: '#3a280f',
+    metal: '#3e3a2e', metalSh: '#221f18', wood: '#4a3214' },
 });
 SPR.define('werewolf', {
   head: 'wolf', weapon: 'smg', digi: true, tail: true, artK: 1.66,
-  pal: { skin: '#4a3e30', skinSh: '#2a2018', skinHi: '#6a5a48', eye: '#f0e050',
-    torso: '#3a2e22', torsoHi: '#4e4030', torsoSh: '#221a12', armor: '#4a3a28', armorHi: '#5e4c36', armorSh: '#2a2014',
-    leg: '#3a3026', legSh: '#221a12', arm: '#4a3e30', foot: '#1a1410', claw: '#e8e0cf', belt: '#3a2a18',
-    metal: '#2a2a2e', metalSh: '#16161a' },
+  pal: { skin: '#3e342a', skinSh: '#241c14', skinHi: '#5a4c3c', eye: '#e8b020',
+    torso: '#32281c', torsoHi: '#463828', torsoSh: '#1c150e', armor: '#3e3022', armorHi: '#52402c', armorSh: '#241a10',
+    leg: '#322a20', legSh: '#1c150e', arm: '#3e342a', foot: '#161009', claw: '#d8cfba', belt: '#2e2014',
+    metal: '#24242a', metalSh: '#131316' },
 });
 SPR.define('wolf', {
   head: 'wolf', digi: true, tail: true, scale: 0.92, artK: 1.5,
-  pal: { skin: '#5a4a3a', skinSh: '#382a1e', skinHi: '#7a6850', eye: '#f0e050',
-    torso: '#4a3c2c', torsoHi: '#5e4c38', torsoSh: '#2e2418', armor: '#4a3c2c', armorHi: '#6a5640', armorSh: '#2e2418',
-    leg: '#4a3c2c', legSh: '#2e2418', arm: '#5a4a3a', foot: '#1a1410', claw: '#e8e0cf' },
+  pal: { skin: '#4a3c2e', skinSh: '#2a2016', skinHi: '#665440', eye: '#e8b020',
+    torso: '#3e3224', torsoHi: '#524030', torsoSh: '#241c12', armor: '#3e3224', armorHi: '#5a4836', armorSh: '#241c12',
+    leg: '#3e3224', legSh: '#241c12', arm: '#4a3c2e', foot: '#161009', claw: '#d8cfba' },
 });
 SPR.define('direwolf', {
   head: 'wolf', digi: true, tail: true, scale: 1.22, bulk: 1.15, cw: 150, ch: 158, artK: 1.6,
-  pal: { skin: '#3a2e26', skinSh: '#221813', skinHi: '#564438', eye: '#ff5b3a',
-    torso: '#3a2e22', torsoHi: '#4e4030', torsoSh: '#221a12', armor: '#3a2e22', armorHi: '#56463a', armorSh: '#1e160f',
-    leg: '#3a2e22', legSh: '#221a12', arm: '#3a2e26', foot: '#120d0a', claw: '#e8e0cf' },
+  pal: { skin: '#322820', skinSh: '#1c140f', skinHi: '#4c3c30', eye: '#ff4a2a',
+    torso: '#32281c', torsoHi: '#46382a', torsoSh: '#1c140e', armor: '#32281c', armorHi: '#4c3c30', armorSh: '#180f0a',
+    leg: '#32281c', legSh: '#1c140e', arm: '#322820', foot: '#100b08', claw: '#d8cfba' },
 });
 SPR.define('dragonman', {
   head: 'dragon', weapon: 'rifle', digi: true, tail: true, scale: 1.12, cw: 142, ch: 150, artK: 1.66,
-  pal: { skin: '#9a2218', skinSh: '#5a1410', skinHi: '#c23828', crest: '#5a1410', horn: '#2a2018', eye: '#e8c84a',
-    torso: '#4a4438', torsoHi: '#5e5648', torsoSh: '#2e2a22', armor: '#4a4438', armorHi: '#6a6252', armorSh: '#2a261e', pauldron: '#6a6252',
-    leg: '#7a1c14', legSh: '#4a1410', arm: '#9a2218', foot: '#3a1410', claw: '#cabfa0', belt: '#3a2c1a', pendant: '#cabfa0',
-    metal: '#4a4e54', metalSh: '#2a2e34', wood: '#5a4424' },
+  pal: { skin: '#b32a1c', skinSh: '#6e1410', skinHi: '#d8402c', crest: '#5a120e', horn: '#241a12', eye: '#e0b028',
+    torso: '#403a2c', torsoHi: '#544a38', torsoSh: '#26221a', armor: '#403a2c', armorHi: '#5a5040', armorSh: '#241f18', pauldron: '#5a5040',
+    leg: '#8a1c14', legSh: '#54120e', arm: '#b32a1c', foot: '#341210', claw: '#bcb190', belt: '#322414', pendant: '#bcb190',
+    metal: '#42464c', metalSh: '#26292e', wood: '#523c1e' },
 });
 SPR.define('demon', {
   head: 'demon', weapon: 'cannon', scale: 1.25, bulk: 1.15, cw: 168, ch: 176, artK: 1.6,
-  pal: { skin: '#7a2a22', skinSh: '#4a1410', skinHi: '#9a3a2e', horn: '#241a14',
-    torso: '#3a3030', torsoHi: '#4e4242', torsoSh: '#1e1a18', armor: '#3a3030', armorHi: '#564a4a', armorSh: '#1e1a18', pauldron: '#564a4a', plate: '#4a3a2a',
-    leg: '#3a2e2a', legSh: '#1e1814', arm: '#7a2a22', boot: '#2a1c14', belt: '#4a1410', pendant: '#cabfa0',
-    metal: '#3a2e2a', metalSh: '#1e1814' },
+  pal: { skin: '#8e271c', skinSh: '#4e120e', skinHi: '#b23425', horn: '#1f160f',
+    torso: '#322a2a', torsoHi: '#473a3a', torsoSh: '#1a1514', armor: '#322a2a', armorHi: '#4c4040', armorSh: '#1a1514', pauldron: '#4c4040', plate: '#43331f',
+    leg: '#322624', legSh: '#1a1310', arm: '#8e271c', boot: '#241710', belt: '#4e120e', pendant: '#bcb190',
+    metal: '#322624', metalSh: '#1a1310' },
 });
 SPR.define('flayer', {
   head: 'flayer', weapon: 'staff', scale: 1.7, bulk: 1.1, cw: 230, ch: 246, artK: 1.5,
-  pal: { skin: '#6a4a8a', skinSh: '#3e2a5a', skinHi: '#8a6ab0', tentacle: '#5a3a7a',
-    torso: '#2a2040', torsoHi: '#3e3060', torsoSh: '#170f28', armor: '#2a2040', armorHi: '#3e3060', armorSh: '#170f28', pendant: '#caa33a',
-    leg: '#3a2e54', legSh: '#1e1430', arm: '#6a4a8a', foot: '#241a3a', claw: '#caa07a',
-    cape: '#2a1040', capeSh: '#170824', belt: '#3a2c5a', orb: '#b07bff', wood: '#3a2c1a' },
+  pal: { skin: '#5e3e84', skinSh: '#382452', skinHi: '#7e5aa8', tentacle: '#4c3070',
+    torso: '#241c38', torsoHi: '#372a54', torsoSh: '#130d22', armor: '#241c38', armorHi: '#372a54', armorSh: '#130d22', pendant: '#8a6a26',
+    leg: '#322550', legSh: '#1a1230', arm: '#5e3e84', foot: '#201634', claw: '#b8946e',
+    cape: '#241038', capeSh: '#14071f', belt: '#322452', orb: '#a86bff', wood: '#342818' },
 });
