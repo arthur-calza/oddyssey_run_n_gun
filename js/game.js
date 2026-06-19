@@ -413,7 +413,7 @@ class Game {
     // decorations (torches, banners, windows, pillars, vines...)
     for (const d of this.decor) {
       if (!this.cam.visible(d.x - CONFIG.TILE, d.y - CONFIG.TILE, CONFIG.TILE * 3, CONFIG.TILE * 3)) continue;
-      TEX.decor(ctx, d, this.cam.ox, this.cam.oy, this.time, this);
+      TEX.decorPixel(ctx, d, this.cam.ox, this.cam.oy, this.time, this);
     }
 
     // exits as glowing portals
@@ -533,6 +533,15 @@ class Game {
     const c = this._hud.portrait, x = c.getContext('2d');
     x.clearRect(0, 0, 62, 62);
     const key = HEROES[this.currentHero].spr;
+    const def = typeof SPR !== 'undefined' && SPR.defs[key];
+    // retrato detalhado: cabeça recortada da concept art (assets/<spr>.png)
+    if (typeof SPR !== 'undefined' && def && def.portrait && SPR.hasImage(key)) {
+      const img = SPR.images[key], p = def.portrait;
+      x.imageSmoothingEnabled = true;
+      x.drawImage(img, p.x, p.y, p.w, p.h, 1, 1, 60, 60);
+      return;
+    }
+    // fallback: o sprite pixel-art enquanto a concept não carrega
     if (typeof SPR !== 'undefined' && SPR.ready && SPR.sheets[key]) {
       const img = SPR.sheets[key].idle[0];
       x.imageSmoothingEnabled = false;

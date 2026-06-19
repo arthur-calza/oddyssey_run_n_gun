@@ -6,6 +6,8 @@
 
 const TEX = {
   ready: false, V: 3, tiles: {}, caps: {},
+  TQ: 16,            // resolução LÓGICA do tile (px de arte) — baixa p/ casar com os personagens
+  _decorBuf: null,   // buffer reaproveitado p/ pixelizar decorações ao vivo
 
   _cv(s) { const c = document.createElement('canvas'); c.width = c.height = s; return c; },
   _rng(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; },
@@ -17,10 +19,49 @@ const TEX = {
       this.tiles[id] = [];
       for (let v = 0; v < this.V; v++) {
         const c = this._cv(T); this._paint(c.getContext('2d'), id, T, v);
+        this._pixelateTile(c);                 // resolve o tile em poucos pixels (pixel-art)
         this.tiles[id].push(c);
       }
     }
     this.ready = true;
+  },
+
+  // reduz o tile detalhado p/ TQ×TQ, achata a paleta (posterize) e amplia
+  // de volta com vizinho-mais-próximo → blocos em pixel-art casando com os personagens.
+  _pixelateTile(c) {
+    const T = c.width, TQ = this.TQ;
+    const small = this._cv(TQ);
+    const sg = small.getContext('2d'); sg.imageSmoothingEnabled = true;
+    sg.drawImage(c, 0, 0, TQ, TQ);
+    const im = sg.getImageData(0, 0, TQ, TQ), px = im.data, Q = 28;
+    for (let i = 0; i < px.length; i += 4) {
+      if (px[i + 3] < 90) { px[i + 3] = 0; continue; }       // mantém vãos (ex.: escada) transparentes
+      px[i + 3] = 255;
+      px[i]     = Math.min(255, Math.round(px[i]     / Q) * Q);
+      px[i + 1] = Math.min(255, Math.round(px[i + 1] / Q) * Q);
+      px[i + 2] = Math.min(255, Math.round(px[i + 2] / Q) * Q);
+    }
+    sg.putImageData(im, 0, 0);
+    const g = c.getContext('2d'); g.clearRect(0, 0, T, T); g.imageSmoothingEnabled = false;
+    g.drawImage(small, 0, 0, TQ, TQ, 0, 0, T, T);
+  },
+
+  // desenha uma decoração com o mesmo "grão" de pixel dos blocos: renderiza em
+  // baixa resolução num buffer e amplia (nearest). Mantém animações (chama decor()).
+  decorPixel(ctx, d, ox, oy, time, game) {
+    const T = CONFIG.TILE, PXT = Math.max(1, Math.round(T / this.TQ));
+    const bx = d.x - T, by = d.y - Math.round(T * 1.6), bw = T * 3, bh = T * 4;
+    const sw = Math.ceil(bw / PXT), sh = Math.ceil(bh / PXT);
+    let buf = this._decorBuf; if (!buf) buf = this._decorBuf = document.createElement('canvas');
+    if (buf.width !== sw || buf.height !== sh) { buf.width = sw; buf.height = sh; }
+    const g = buf.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, sw, sh); g.imageSmoothingEnabled = true;
+    g.save(); g.scale(1 / PXT, 1 / PXT); g.translate(-bx, -by);
+    this.decor(g, d, 0, 0, time, game);                      // desenha a decoração em coords de mundo
+    g.restore();
+    ctx.save(); ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(buf, 0, 0, sw, sh, Math.round(bx + ox), Math.round(by + oy), bw, bh);
+    ctx.restore();
   },
 
   // exposed-top cap overlay (grass, snow-cap, lighter rim) for open-above tiles

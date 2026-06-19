@@ -5,7 +5,26 @@
    ============================================================ */
 
 const BG = {
+  PXB: 2,        // grão de pixel do fundo (px internos por pixel de arte) — casa com os blocos
+  _buf: null,
   _rng(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; },
+
+  // versão pixelizada: renderiza o parallax numa resolução baixa e amplia (nearest),
+  // deixando o fundo no mesmo estilo gráfico dos blocos e personagens.
+  drawPixel(ctx, cam, L, t) {
+    const W = CONFIG.W, H = CONFIG.H, PXB = this.PXB;
+    const bw = Math.ceil(W / PXB), bh = Math.ceil(H / PXB);
+    let buf = this._buf; if (!buf) buf = this._buf = document.createElement('canvas');
+    if (buf.width !== bw || buf.height !== bh) { buf.width = bw; buf.height = bh; }
+    const g = buf.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, bw, bh);
+    g.save(); g.scale(1 / PXB, 1 / PXB);
+    this.draw(g, cam, L, t);                 // desenha em coords W×H dentro do buffer reduzido
+    g.restore();
+    ctx.save(); ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(buf, 0, 0, bw, bh, 0, 0, W, H);
+    ctx.restore();
+  },
 
   draw(ctx, cam, L, t) {
     const W = CONFIG.W, H = CONFIG.H;

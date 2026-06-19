@@ -46,11 +46,13 @@ const SPR = {
     if (anim === 'death') { const t = f / (n - 1 || 1); g.rotate(-t * 1.45); g.translate(0, t * 6); }
     this._drawBody(g, d, this._pose(anim, f, n));
     g.restore();
-    return this._pixelize(cv, d);   // resolve em poucos pixels + contorno escuro (pixel-art retrô)
+    // contorno aplicado em ALTA resolução (1px no espaço grande) → vira só um leve
+    // escurecimento de borda depois da redução: bordas finas e fluidas (estilo Broforce).
+    return this._pixelize(this._outline(cv), d);
   },
 
-  // downscale a baked (detailed) frame into a few chunky pixels, snap the
-  // silhouette to hard edges and wrap a bold dark outline — the Broforce look.
+  // downscale a baked (detailed) frame into a few chunky pixels and snap the
+  // silhouette to hard edges — the low-res Broforce look (no thick outline).
   _pixelize(src, d) {
     const PXF = d.pxf || this.PXF;
     const sw = Math.max(1, Math.round(src.width / PXF));
@@ -61,7 +63,7 @@ const SPR = {
     const im = g.getImageData(0, 0, sw, sh), px = im.data; // crisp silhouette (no soft edges)
     for (let i = 0; i < px.length; i += 4) px[i + 3] = px[i + 3] >= 120 ? 255 : 0;
     g.putImageData(im, 0, 0);
-    return this._outline(small);                          // 1 low-res px outline = bold on screen
+    return small;
   },
 
   // wrap a baked frame with a 1px dark outline by stamping a black silhouette
@@ -403,10 +405,11 @@ const SPR = {
     g.save(); g.translate(c, c); g.scale(1 / PXF, 1 / PXF);    // natural units → buffer pixels
     this.drawWeaponArm(g, d, 0, 0, ang, 0, mode);
     g.restore();
-    const im = g.getImageData(0, 0, bw, bw), px = im.data;     // crisp silhouette
+    const im = g.getImageData(0, 0, bw, bw), px = im.data;     // crisp silhouette (sem contorno grosso)
     for (let i = 0; i < px.length; i += 4) px[i + 3] = px[i + 3] >= 120 ? 255 : 0;
     g.putImageData(im, 0, 0);
-    frame = this._outline(buf);
+    frame = document.createElement('canvas'); frame.width = bw; frame.height = bw;
+    frame.getContext('2d').drawImage(buf, 0, 0);              // cópia (buf é reaproveitado)
     this._pwCache[ckey] = frame;
     return frame;
   },
@@ -415,6 +418,7 @@ const SPR = {
 /* ================= CHARACTER DEFINITIONS ===================== */
 SPR.define('ragnarok', {
   head: 'human', weapon: 'shotgun', artK: 1.7,
+  portrait: { x: 34, y: 2, w: 78, h: 78 },   // recorte da cabeça na concept (assets/ragnarok.png)
   pal: { skin: '#b07a52', skinSh: '#7e5132', hair: '#3a2615',
     torso: '#586673', torsoHi: '#7c8b97', torsoSh: '#343d47', armor: '#586673', armorHi: '#7c8b97', armorSh: '#343d47',
     leg: '#4c5660', legSh: '#2e353d', legHi: '#727d88', arm: '#586673', pauldron: '#6b7884', plate: '#6b7884',
@@ -423,6 +427,7 @@ SPR.define('ragnarok', {
 });
 SPR.define('zracks', {
   head: 'lizard', weapon: 'bow', digi: true, tail: true, artK: 1.7,
+  portrait: { x: 50, y: 4, w: 80, h: 80 },   // recorte da cabeça na concept (assets/zracks.png)
   pal: { skin: '#4f6e30', skinSh: '#314a1d', skinHi: '#6b8a3f', crest: '#2c4519', eye: '#cf9a28',
     torso: '#3c2e1a', torsoHi: '#574021', torsoSh: '#241a0d', armor: '#3c2e1a', armorHi: '#574021', armorSh: '#241a0d',
     leg: '#415423', legSh: '#283619', arm: '#4f6e30', foot: '#2c4519', claw: '#b8ad8a',

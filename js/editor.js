@@ -921,7 +921,7 @@ const Editor = {
     if (this.layers.front) for (const [key, o] of this.objs) {
       const p = key.split(','), c = +p[0], r = +p[1];
       if (!cam.visible(c * T - T, r * T - T, T * 3, T * 3)) continue;
-      if (o.kind === 'decor') { TEX.decor(ctx, { type: o.type, x: c * T, y: r * T, color: '#7a2a2a' }, ox, oy, this.time, null); continue; }
+      if (o.kind === 'decor') { TEX.decorPixel(ctx, { type: o.type, x: c * T, y: r * T, color: '#7a2a2a' }, ox, oy, this.time, null); continue; }
       const x = c * T + ox, y = r * T + oy;
       if (o.kind === 'enemy') { const info = (Gallery.ENEMY_INFO && Gallery.ENEMY_INFO[o.type]) || { icon: '👾' }; this._badge(ctx, x, y, T, 'rgba(60,12,10,0.6)', '#e0473a', info.icon); }
       else if (o.kind === 'pickup') { const info = this.PICK_INFO[o.pk]; this._badge(ctx, x, y, T, 'rgba(14,40,14,0.55)', '#7be08a', info[0]); }
