@@ -59,9 +59,28 @@ const TEX = {
     g.save(); g.scale(1 / PXT, 1 / PXT); g.translate(-bx, -by);
     this.decor(g, d, 0, 0, time, game);                      // desenha a decoração em coords de mundo
     g.restore();
+    this._posterizeDecor(g, sw, sh);                         // achata em bandas chapadas → pixel-art igual aos blocos
     ctx.save(); ctx.imageSmoothingEnabled = false;
     ctx.drawImage(buf, 0, 0, sw, sh, Math.round(bx + ox), Math.round(by + oy), bw, bh);
     ctx.restore();
+  },
+
+  // posteriza o buffer da decoração: quantiza RGB em bandas chapadas e o alfa em
+  // poucos níveis (brilhos viram halos "em degrau"), deixando a arte com o mesmo
+  // visual pixel-art dos blocos em vez de gradientes suaves.
+  _posterizeDecor(g, sw, sh) {
+    // quantização por bits (rápida): RGB em passos de 32 (top 3 bits, com arredondamento),
+    // alfa em passos de 64 → bandas chapadas e glows "em degrau", sem divisões no laço.
+    const im = g.getImageData(0, 0, sw, sh), px = im.data, n = px.length;
+    for (let i = 0; i < n; i += 4) {
+      const a = px[i + 3];
+      if (a < 20) { px[i + 3] = 0; continue; }
+      px[i + 3] = a >= 232 ? 255 : (a + 32) & 0xC0;
+      px[i]     = px[i]     > 239 ? 255 : (px[i]     + 16) & 0xE0;
+      px[i + 1] = px[i + 1] > 239 ? 255 : (px[i + 1] + 16) & 0xE0;
+      px[i + 2] = px[i + 2] > 239 ? 255 : (px[i + 2] + 16) & 0xE0;
+    }
+    g.putImageData(im, 0, 0);
   },
 
   // exposed-top cap overlay (grass, snow-cap, lighter rim) for open-above tiles

@@ -5,31 +5,31 @@
 // material id -> definition. id 0 = empty.
 const MAT = [
   null, // 0 empty
-  { name: 'dirt',      hp: 22,  solid: true,  c: '#6b4a2c', c2: '#553a22', edge: '#7d5938', soft: true, cap: 'grass', noDebris: true },
-  { name: 'stone',     hp: 46,  solid: true,  c: '#5b5550', c2: '#46413c', edge: '#6e6760' },
-  { name: 'brick',     hp: 80,  solid: true,  c: '#7a3a30', c2: '#5e2a22', edge: '#8f463a' },
-  { name: 'wood',      hp: 16,  solid: true,  c: '#7d5a2e', c2: '#5f4422', edge: '#946b39' },
+  { name: 'dirt',      hp: 22,  solid: true,  c: '#553718', c2: '#3e280f', edge: '#6a4622', soft: true, cap: 'grass', noDebris: true },
+  { name: 'stone',     hp: 46,  solid: true,  c: '#48443e', c2: '#322e29', edge: '#5a554d' },
+  { name: 'brick',     hp: 80,  solid: true,  c: '#6c2c20', c2: '#491c14', edge: '#863628' },
+  { name: 'wood',      hp: 16,  solid: true,  c: '#67431f', c2: '#472d12', edge: '#825527' },
   { name: 'bedrock',   hp: 1e9, solid: true,  c: '#2c2a28', c2: '#201e1c', edge: '#3a3633', indestructible: true },
   { name: 'barrel',    hp: 12,  solid: true,  c: '#caa33a', c2: '#3a2a14', edge: '#e8c24f', barrel: true },
   { name: 'vault',     hp: 34,  solid: true,  c: '#caa33a', c2: '#8a6a1c', edge: '#f4d35e', gold: true },
-  { name: 'cobble',    hp: 54,  solid: true,  c: '#3f4750', c2: '#2b3038', edge: '#545d68' },
-  { name: 'sandstone', hp: 38,  solid: true,  c: '#caa86a', c2: '#a98a4e', edge: '#e0c488', soft: true },
-  { name: 'mossy',     hp: 72,  solid: true,  c: '#4a463f', c2: '#3a3631', edge: '#5b5550' },
-  { name: 'sand',      hp: 14,  solid: true,  c: '#d8c07a', c2: '#b89a52', edge: '#e8d49a', soft: true, falls: true },
-  { name: 'gravel',    hp: 22,  solid: true,  c: '#6a6258', c2: '#4a463e', edge: '#7d756a', falls: true },
+  { name: 'cobble',    hp: 54,  solid: true,  c: '#333b44', c2: '#21262e', edge: '#47525e' },
+  { name: 'sandstone', hp: 38,  solid: true,  c: '#bb9450', c2: '#947038', edge: '#d3ac66', soft: true },
+  { name: 'mossy',     hp: 72,  solid: true,  c: '#3d4432', c2: '#2a3123', edge: '#516046' },
+  { name: 'sand',      hp: 14,  solid: true,  c: '#ccaf5e', c2: '#a8863e', edge: '#dfc57c', soft: true, falls: true },
+  { name: 'gravel',    hp: 22,  solid: true,  c: '#564e44', c2: '#3a362e', edge: '#696157', falls: true },
   { name: 'rocket',    hp: 12,  solid: true,  c: '#b1322c', c2: '#3a1410', edge: '#e0843a', rocket: true },   // launches a rocket when destroyed
   { name: 'ladder',    hp: 1e9, solid: false, c: '#6a4a28', c2: '#3a2a14', edge: '#8a6438', ladder: true, indestructible: true },
   // --- novos materiais (selva / templo) ---
-  { name: 'temple',    hp: 96,  solid: true,  c: '#5b6a4c', c2: '#3e4a36', edge: '#76886a' },                 // 15 pedra de templo esculpida, com musgo
-  { name: 'plank',     hp: 18,  solid: true,  c: '#9a6e3a', c2: '#6f4f24', edge: '#bb8a4c', soft: true },     // 16 tábuas horizontais (passarelas)
-  { name: 'leaf',      hp: 10,  solid: true,  c: '#2f6a2a', c2: '#1f4a1c', edge: '#46993a', soft: true },     // 17 folhagem densa (sebe)
-  { name: 'jungle',    hp: 24,  solid: true,  c: '#4a5a26', c2: '#374518', edge: '#5e7030', soft: true, cap: 'grass', noDebris: true }, // 18 terra de selva
+  { name: 'temple',    hp: 96,  solid: true,  c: '#4c5a3a', c2: '#333f26', edge: '#677a56' },                 // 15 pedra de templo esculpida, com musgo
+  { name: 'plank',     hp: 18,  solid: true,  c: '#875c2c', c2: '#5e4020', edge: '#a8783c', soft: true },     // 16 tábuas horizontais (passarelas)
+  { name: 'leaf',      hp: 10,  solid: true,  c: '#256a20', c2: '#174a14', edge: '#3c8c2e', soft: true },     // 17 folhagem densa (sebe)
+  { name: 'jungle',    hp: 24,  solid: true,  c: '#3d521c', c2: '#2a3a10', edge: '#527026', soft: true, cap: 'grass', noDebris: true }, // 18 terra de selva
   { name: 'darkstone', hp: 130, solid: true,  c: '#3a3e44', c2: '#26282d', edge: '#4c525a' },                 // 19 pedra escura de torre
   // === EXPANSÃO: paleta de construção (pintura genérica via "pattern") ===
-  { name: 'claybrick', hp: 70,  solid: true,  c: '#9a4a32', c2: '#6e3422', edge: '#b85e42', pattern: 'brick' },   // 20 tijolo de barro (casas)
+  { name: 'claybrick', hp: 70,  solid: true,  c: '#883c26', c2: '#5e2c18', edge: '#a64e36', pattern: 'brick' },   // 20 tijolo de barro (casas)
   { name: 'plaster',   hp: 40,  solid: true,  c: '#cabf9a', c2: '#a89c78', edge: '#e2d8b8', pattern: 'flat' },    // 21 reboco branco
   { name: 'woodbeam',  hp: 30,  solid: true,  c: '#5a3f22', c2: '#3e2a16', edge: '#74522e', pattern: 'panel' },   // 22 viga de madeira (enxaimel)
-  { name: 'roof',      hp: 30,  solid: true,  c: '#8a2f2a', c2: '#5e1f1c', edge: '#b0463c', pattern: 'roof' },    // 23 telha de barro
+  { name: 'roof',      hp: 30,  solid: true,  c: '#7c2920', c2: '#501814', edge: '#9e3c30', pattern: 'roof' },    // 23 telha de barro
   { name: 'thatch',    hp: 16,  solid: true,  c: '#b89a4e', c2: '#8a6e30', edge: '#d8bc6a', pattern: 'thatch', soft: true }, // 24 palha
   { name: 'limestone', hp: 84,  solid: true,  c: '#c8c2a8', c2: '#a49e84', edge: '#e4dec4', pattern: 'block' },   // 25 pedra calcária lavrada
   { name: 'marble',    hp: 100, solid: true,  c: '#d8dae2', c2: '#b0b2bc', edge: '#f2f4fa', pattern: 'block' },   // 26 mármore
@@ -341,8 +341,8 @@ class World {
       // grass cap on exposed earth — ONLY on the original surface layer (this.grass flag),
       // so dirt uncovered by digging stays bare dirt (Minecraft-style).
       if (openAbove && m.cap === 'grass' && this.grass[i]) {
-        ctx.fillStyle = '#4a7a3a'; ctx.fillRect(x, y, T, 4);
-        ctx.fillStyle = '#5e9a46';
+        ctx.fillStyle = '#356a22'; ctx.fillRect(x, y, T, 4);
+        ctx.fillStyle = '#478c2e';
         for (let k = 0; k < T; k += 5) ctx.fillRect(x + k, y - 2 - ((c + k) % 2), 3, 4);
       }
       // damage cracks

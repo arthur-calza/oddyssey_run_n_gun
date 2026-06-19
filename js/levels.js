@@ -128,7 +128,7 @@ const LEVELS = (function () {
     capLoot(g, cfg.oregano || 40, cfg.tokens || 1);   // limita orégano/tokens colhíveis na fase
     put(g, 4, startR - 1, 'P');
     const ex = cfg.exit || (W - 5); put(g, ex, S(ex) - 1, 'E');
-    return { name: cfg.name, sub: cfg.sub, win: cfg.keep ? 'boss' : 'exit', biome: cfg.biome, sky: cfg.sky, bannerColor: cfg.banner, rows: toRows(g), bg: toRows(bg), surface: top.slice() };
+    return { name: cfg.name, sub: cfg.sub, win: cfg.keep ? 'boss' : 'exit', biome: cfg.biome, sky: cfg.sky, seed: cfg.seed, bannerColor: cfg.banner, rows: toRows(g), bg: toRows(bg), surface: top.slice() };
   }
 
   // ===================== CAMPANHA ============================
@@ -283,7 +283,7 @@ const LEVELS = (function () {
     put(g, 50, gr - 2, 's'); put(g, 48, gr - 1, 't');   // porta (abre ao passar) + tocha (demo de iluminação)
     capLoot(g, 30, 1);
     put(g, 3, gr - 1, 'P'); put(g, W - 5, gr - 1, 'E');
-    return { name: 'FASE DE TESTES', sub: 'Escada (col 96), parede para escalar (col 170), poções, tokens e barris.', win: 'exit', biome: 'castle', sky: ['#1e2740', '#080a14'], bannerColor: '#6a1a1a', rows: toRows(g), bg: toRows(bg), surface: new Array(W).fill(gr) };
+    return { name: 'FASE DE TESTES', sub: 'Escada (col 96), parede para escalar (col 170), poções, tokens e barris.', win: 'exit', biome: 'castle', sky: ['#1e2740', '#080a14'], seed: 99, bannerColor: '#6a1a1a', rows: toRows(g), bg: toRows(bg), surface: new Array(W).fill(gr) };
   }
 
   return [...CAMPAIGN, lvlTest()];

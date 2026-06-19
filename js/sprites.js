@@ -20,7 +20,11 @@ const SPR = {
   // ---- concept-art images (used for the HUD portrait) ----------
   loadImages() {
     if (this.imgLoading) return; this.imgLoading = true;
-    for (const key in this.defs) { const img = new Image(); img.src = 'assets/' + key + '.png'; this.images[key] = img; }
+    for (const key in this.defs) {
+      const d = this.defs[key], img = new Image();
+      img.src = d.portraitSrc || ('assets/' + key + '.png');   // retrato dedicado (pictures/) ou concept (assets/)
+      this.images[key] = img;
+    }
   },
   hasImage(key) { const i = this.images[key]; return i && i.complete && i.naturalWidth > 0; },
 
@@ -418,6 +422,7 @@ const SPR = {
 /* ================= CHARACTER DEFINITIONS ===================== */
 SPR.define('ragnarok', {
   head: 'human', weapon: 'shotgun', artK: 1.7,
+  portraitSrc: 'pictures/retrato_Ragnarok.png', portraitFull: true,   // retrato dedicado p/ o HUD (busto inteiro)
   portrait: { x: 34, y: 2, w: 78, h: 78 },   // recorte da cabeça na concept (assets/ragnarok.png)
   pal: { skin: '#b07a52', skinSh: '#7e5132', hair: '#3a2615',
     torso: '#586673', torsoHi: '#7c8b97', torsoSh: '#343d47', armor: '#586673', armorHi: '#7c8b97', armorSh: '#343d47',
@@ -427,6 +432,7 @@ SPR.define('ragnarok', {
 });
 SPR.define('zracks', {
   head: 'lizard', weapon: 'bow', digi: true, tail: true, artK: 1.7,
+  portraitSrc: 'pictures/retrato_Zracks.png', portraitFull: true,   // retrato dedicado p/ o HUD (busto inteiro)
   portrait: { x: 50, y: 4, w: 80, h: 80 },   // recorte da cabeça na concept (assets/zracks.png)
   pal: { skin: '#4f6e30', skinSh: '#314a1d', skinHi: '#6b8a3f', crest: '#2c4519', eye: '#cf9a28',
     torso: '#3c2e1a', torsoHi: '#574021', torsoSh: '#241a0d', armor: '#3c2e1a', armorHi: '#574021', armorSh: '#241a0d',
