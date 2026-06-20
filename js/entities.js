@@ -60,8 +60,7 @@ class Bullet {
         const c = Math.floor(this.x / T), r = Math.floor(this.y / T);
         if (this.explosive > 0) { this.detonate(game); }
         else {
-          game.world.damage(c, r, this.tileDmg, { power: 70 });
-          // bouncy retreat a touch then die
+          game.carveTiles(c, r, this.tileDmg, { power: 70 });   // ~2 tiles de altura + ~40% um 3º
           game.fx.spark(this.x, this.y, this.kind === 'flame' ? '#ff8a3c' : '#fff', 3);
           this.alive = false;
         }
@@ -91,6 +90,31 @@ class Bullet {
       ctx.translate(x, y); ctx.rotate(this.ang);
       ctx.fillStyle = this.color || '#bfe8ff'; ctx.shadowColor = this.color || '#bfe8ff'; ctx.shadowBlur = 8;
       ctx.fillRect(-7, -1.4, 14, 2.8); ctx.beginPath(); ctx.arc(7, 0, 1.7, 0, TAU); ctx.fill();
+    } else if (this.kind === 'grenade') {              // bomba em arco (rola/gira)
+      ctx.translate(x, y); ctx.rotate(this.rot || 0);
+      ctx.fillStyle = this.color || '#2a2620'; ctx.beginPath(); ctx.arc(0, 0, this.r, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#15110e'; ctx.fillRect(-this.r * 0.32, -this.r - 1, this.r * 0.64, this.r * 0.5);   // gargalo
+      ctx.fillStyle = pick(['#ffd86b', '#ff8a3c']); ctx.beginPath(); ctx.arc(0, -this.r - 1.5, 1.6, 0, TAU); ctx.fill(); // pavio
+    } else if (this.kind === 'ice') {                  // estilhaço de gelo (losango)
+      ctx.translate(x, y); ctx.rotate(this.ang);
+      ctx.fillStyle = this.color || '#bfe8ff'; ctx.shadowColor = '#bfe8ff'; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.moveTo(this.r * 1.9, 0); ctx.lineTo(0, -this.r); ctx.lineTo(-this.r * 1.2, 0); ctx.lineTo(0, this.r); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#eaf8ff'; ctx.beginPath(); ctx.moveTo(this.r * 1.2, 0); ctx.lineTo(0, -this.r * 0.5); ctx.lineTo(0, this.r * 0.5); ctx.closePath(); ctx.fill();
+    } else if (this.kind === 'spark') {                // raio elétrico (faísca em ziguezague)
+      ctx.translate(x, y); ctx.rotate(this.ang);
+      ctx.strokeStyle = this.color || '#bff0ff'; ctx.shadowColor = '#bff0ff'; ctx.shadowBlur = 10; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-this.r * 2, 0); ctx.lineTo(-this.r * 0.6, -this.r * 0.7); ctx.lineTo(this.r * 0.4, this.r * 0.5); ctx.lineTo(this.r * 2, 0); ctx.stroke();
+    } else if (this.kind === 'disc') {                 // lâmina giratória serrilhada
+      ctx.translate(x, y); ctx.rotate(this.rot || 0);
+      ctx.fillStyle = this.color || '#d8dee6';
+      ctx.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, rr = i % 2 ? this.r : this.r * 0.62; const px = Math.cos(a) * rr, py = Math.sin(a) * rr; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#3a3e44'; ctx.beginPath(); ctx.arc(0, 0, this.r * 0.28, 0, TAU); ctx.fill();
+    } else if (this.kind === 'flask') {                // frasco de ácido
+      ctx.translate(x, y); ctx.rotate(this.rot || 0);
+      ctx.fillStyle = '#2a3a2a'; ctx.fillRect(-1.5, -this.r - 2, 3, 3);
+      ctx.fillStyle = this.color || '#8ef06a'; ctx.shadowColor = this.color || '#8ef06a'; ctx.shadowBlur = 6;
+      ctx.beginPath(); ctx.ellipse(0, 0, this.r * 0.9, this.r, 0, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.beginPath(); ctx.arc(-this.r * 0.3, -this.r * 0.2, this.r * 0.22, 0, TAU); ctx.fill();
     } else if (this.kind === 'dagger') {
       ctx.translate(x, y); ctx.rotate(this.rot || this.ang);
       ctx.fillStyle = '#5a4326'; ctx.fillRect(-5, -1, 4, 2);
@@ -341,8 +365,10 @@ class Player extends Entity {
   // e recupera +VEX_MORPH_HEAL de vida. Reverte sozinho após VEX_MORPH_TIME.
   _tryMetamorph(game) {
     if (this.morph) return false;
-    if ((game.vexCharges || 0) <= 0) { Sound.hurt(); game.fx.text(this.cx, this.y - 8, 'SEM METAMORFOSE', '#9a8f7d'); return false; }
-    game.vexCharges--;
+    if (!game.testMode) {                                  // FASE DE TESTES: metamorfose ilimitada
+      if ((game.vexCharges || 0) <= 0) { Sound.hurt(); game.fx.text(this.cx, this.y - 8, 'SEM METAMORFOSE', '#9a8f7d'); return false; }
+      game.vexCharges--;
+    }
     const pool = HEROES.map((h, i) => i).filter(i => HEROES[i].key !== 'vex');
     this.morphInto(pick(pool), game);
     return true;
@@ -384,7 +410,7 @@ class Player extends Entity {
     this.ammo = this.clip; this.reloading = 0;
   }
   hurt(dmg, dir, game) {
-    if (this.invuln > 0 || this.dead) return;
+    if (this.invuln > 0 || this.dead || (game && game.testMode)) return;   // FASE DE TESTES: vida infinita
     this.hp -= dmg; this.flash = 0.12; this.invuln = 0.6;
     this.vx += dir * 80; this.vy -= 80;
     game.fx.blood(this.cx, this.cy, dir); game.cam.addShake(6); Sound.hurt();
@@ -541,9 +567,10 @@ class Player extends Entity {
       } else {
         // demais heróis — e o Vex transformado usa o especial EMPRESTADO (barra azul)
         const sp = this.morph ? this.morph.special : this.hero.special;
-        if (sp && this.special >= sp.cost) {
+        if (sp && (game.testMode || this.special >= sp.cost)) {
           sp.use(this, game);
-          this.special -= sp.cost; this.specCool = sp.cd;
+          if (!game.testMode) this.special -= sp.cost;   // FASE DE TESTES: não gasta especial
+          this.specCool = sp.cd;
         }
       }
     }

@@ -319,6 +319,13 @@ const SPR = {
         g.fillStyle = '#e8e0f0'; g.beginPath(); g.arc(hx - r * 0.3, cy - r * 0.1, 1.6 * s, 0, TAU); g.arc(hx + r * 0.4, cy - r * 0.1, 1.6 * s, 0, TAU); g.fill();
         g.fillStyle = P.tentacle || P.skinSh; for (let i = -2; i <= 2; i++) { const tx = hx + i * 3.2 * s; g.beginPath(); g.moveTo(tx, cy + r * 0.3); g.quadraticCurveTo(tx + i * 1.5, cy + r * 1.0, tx + i * 3, cy + r * 1.6); g.quadraticCurveTo(tx + i, cy + r * 0.9, tx + 1.5 * s, cy + r * 0.4); g.fill(); } break;
       }
+      case 'skull': {   // crânio (esqueleto): órbitas vazias + dentes (+ brasas se P.eye)
+        oval(hx, cy, r * 0.92, r * 1.0, P.skin); oval(hx - r * 0.4, cy + r * 0.12, r * 0.46, r * 0.72, P.skinSh);
+        g.fillStyle = '#15110e'; g.beginPath(); g.arc(hx - r * 0.32, cy - r * 0.05, r * 0.26, 0, TAU); g.arc(hx + r * 0.34, cy - r * 0.05, r * 0.26, 0, TAU); g.fill();  // órbitas
+        if (P.eye) { g.fillStyle = P.eye; g.shadowColor = P.eye; g.shadowBlur = 5; g.beginPath(); g.arc(hx - r * 0.32, cy - r * 0.05, r * 0.12, 0, TAU); g.arc(hx + r * 0.34, cy - r * 0.05, r * 0.12, 0, TAU); g.fill(); g.shadowBlur = 0; }
+        g.fillStyle = P.skinSh; g.beginPath(); g.moveTo(hx, cy + r * 0.1); g.lineTo(hx - r * 0.12, cy + r * 0.4); g.lineTo(hx + r * 0.12, cy + r * 0.4); g.fill();   // nariz
+        g.fillStyle = '#15110e'; for (let i = -2; i <= 2; i++) g.fillRect(hx + i * 2.0 * s - 0.5 * s, cy + r * 0.52, 1.2 * s, 2.4 * s); break;  // dentes
+      }
     }
     // ---- adereços de cabeça (desenhados POR CIMA) ----
     if (d.goggles) {   // óculos de aviador na testa (Silvyr)
@@ -613,4 +620,56 @@ SPR.define('flayer', {
     torso: '#241c38', torsoHi: '#372a54', torsoSh: '#130d22', armor: '#241c38', armorHi: '#372a54', armorSh: '#130d22', pendant: '#8a6a26',
     leg: '#322550', legSh: '#1a1230', arm: '#5e3e84', foot: '#201634', claw: '#b8946e',
     cape: '#241038', capeSh: '#14071f', belt: '#322452', orb: '#a86bff', wood: '#342818' },
+});
+
+/* ===== NOVOS INIMIGOS (Fase de Testes) ===== */
+SPR.define('skeleton', {
+  head: 'skull', weapon: 'bow', artK: 1.66,
+  pal: { skin: '#e8e0cf', skinSh: '#c2ba9e', eye: '#ff6a2c',
+    torso: '#4a4234', torsoHi: '#5e5444', torsoSh: '#2c271e', armor: '#4a4234', armorHi: '#5e5444', armorSh: '#2c271e',
+    leg: '#d4ccb6', legSh: '#a89f88', arm: '#d4ccb6', boot: '#3a3024', belt: '#3a2c1c', wood: '#5a4326' },
+});
+SPR.define('ghoul', {
+  head: 'zombie', artK: 1.6,
+  pal: { skin: '#7a8a4a', skinSh: '#4e5a2c', skinHi: '#96a85f', hood: '#27291a',
+    torso: '#34301f', torsoHi: '#48422a', torsoSh: '#201d12', armor: '#34301f', armorHi: '#48422a', armorSh: '#201d12',
+    leg: '#48421f', legSh: '#2a2612', arm: '#7a8a4a', boot: '#201810', belt: '#2a2010' },
+});
+SPR.define('imp', {
+  head: 'demon', weapon: 'wand', scale: 0.8, bulk: 0.92, cw: 104, ch: 116, tail: true, artK: 1.5,
+  pal: { skin: '#b23425', skinSh: '#6e1410', skinHi: '#d8503a', horn: '#241a12',
+    torso: '#3a2420', torsoHi: '#4e342c', torsoSh: '#201210', armor: '#3a2420', armorHi: '#4e342c', armorSh: '#201210',
+    leg: '#8a241a', legSh: '#541210', arm: '#b23425', foot: '#241010', claw: '#e8d0a0', orb: '#ff7a2c', wood: '#3a2418' },
+});
+SPR.define('ogre', {
+  head: 'demon', scale: 1.32, bulk: 1.28, cw: 172, ch: 182, artK: 1.6,
+  pal: { skin: '#7a8a52', skinSh: '#4a5a2e', skinHi: '#94a566', horn: '#2a2018',
+    torso: '#4a3a26', torsoHi: '#5e4a32', torsoSh: '#2a2014', armor: '#4a3a26', armorHi: '#5e4a32', armorSh: '#2a2014', pauldron: '#5e4a32',
+    leg: '#3a3020', legSh: '#221a10', arm: '#7a8a52', boot: '#241a10', belt: '#3a2812' },
+});
+SPR.define('musketeer', {
+  head: 'human', weapon: 'musket', artK: 1.68,
+  pal: { skin: '#c89a72', skinSh: '#946a44', hair: '#2a1d12',
+    torso: '#2e3a6a', torsoHi: '#42528a', torsoSh: '#1a2240', armor: '#2e3a6a', armorHi: '#42528a', armorSh: '#1a2240', pauldron: '#8a2a2a',
+    leg: '#3a3550', legSh: '#221f30', arm: '#2e3a6a', glove: '#2a1c12', boot: '#241810', belt: '#caa33a', buckle: '#e8c45a',
+    metal: '#3a3e44', metalSh: '#20242a', wood: '#5a3c20' },
+});
+SPR.define('cultist', {
+  head: 'zombie', weapon: 'staff', artK: 1.66,
+  pal: { skin: '#9a8f7d', skinSh: '#6a6052', hood: '#241038',
+    torso: '#2a1840', torsoHi: '#3a2456', torsoSh: '#160a26', armor: '#2a1840', armorHi: '#3a2456', armorSh: '#160a26',
+    leg: '#241038', legSh: '#140722', arm: '#2a1840', boot: '#180e24', belt: '#caa33a',
+    cape: '#1f0e30', capeSh: '#120720', orb: '#b07bff', wood: '#3a2a18' },
+});
+SPR.define('specter', {
+  head: 'flayer', scale: 1.0, artK: 1.6,
+  pal: { skin: '#b59ad8', skinSh: '#7a5aa8', skinHi: '#d0bce8', tentacle: '#6a4a9a',
+    torso: '#3a2858', torsoHi: '#4e3a72', torsoSh: '#221540', armor: '#3a2858', armorHi: '#4e3a72', armorSh: '#221540',
+    leg: '#2a1c44', legSh: '#160e28', arm: '#b59ad8', cape: '#2a1850', capeSh: '#160a28' },
+});
+SPR.define('hellhound', {
+  head: 'wolf', digi: true, tail: true, artK: 1.55,
+  pal: { skin: '#7a241a', skinSh: '#4a120e', skinHi: '#a8402c', eye: '#ffd84a',
+    torso: '#3a1a14', torsoHi: '#4e2620', torsoSh: '#200d0a', armor: '#3a1a14', armorHi: '#4e2620', armorSh: '#200d0a',
+    leg: '#5a1c14', legSh: '#340f0c', arm: '#7a241a', foot: '#1a0a08', claw: '#e8d0a0' },
 });

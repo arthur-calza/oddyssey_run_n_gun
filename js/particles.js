@@ -138,12 +138,30 @@ class FX {
   magic(x, y, color = '#a86bff', n = 12) {
     for (let i = 0; i < n; i++) { const a = rand(0, TAU), sp = rand(40, 200); this._add({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 30, life: rand(0.3, 0.8), max: 0.8, r: rand(1.5, 3.5), c: color, g: -40, glow: true, shrink: true }); }
   }
-  // jato de chamas (lança-chamas do Silvyr): partículas de fogo num cone à frente
-  flame(x, y, ang, reach, colors = ['#ffe27a', '#ffd86b', '#ff8a3c', '#ff5b2c'], spread = 0.22) {
-    for (let i = 0; i < 4; i++) {
-      const a = ang + rand(-spread, spread), sp = rand(reach * 2.2, reach * 3.4);
-      this._add({ x: x + rand(-3, 3), y: y + rand(-3, 3), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - rand(10, 50),
-        life: rand(0.12, 0.26), max: 0.26, r: rand(3.5, 7), c: pick(colors), g: -110, glow: true, shrink: true });
+  // jato de chamas (lança-chamas do Silvyr): cone que PERCORRE todo o `reach`
+  // (mesma distância em que causa dano — ~3 tiles). A velocidade é calculada a
+  // partir da vida para cada partícula atravessar o alcance inteiro; a gravidade
+  // é quase nula para o jato não "subir" e encurtar à frente.
+  flame(x, y, ang, reach, colors = ['#ffe27a', '#ffd86b', '#ff8a3c', '#ff5b2c'], spread = 0.28) {
+    const ca = Math.cos(ang), sa = Math.sin(ang);
+    for (let i = 0; i < 7; i++) {
+      const a = ang + rand(-spread, spread);
+      const life = rand(0.2, 0.34);
+      const reachF = rand(0.7, 1.12);                 // fração do alcance que esta partícula cobre
+      const sp = (reach * reachF) / life;             // velocidade p/ chegar ao fim dentro da vida
+      const startF = rand(0, 0.25) * reach;           // algumas já adiantadas → preenchem o jato na hora
+      this._add({
+        x: x + ca * startF + rand(-2, 2), y: y + sa * startF + rand(-3, 3),
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - rand(0, 12),
+        life, max: 0.34, r: rand(3.5, 7) + (startF / reach) * 3,
+        c: pick(colors), g: -26, glow: true, shrink: true,
+      });
+    }
+    // brasas finais para reforçar a PONTA do jato (3º tile)
+    for (let i = 0; i < 2; i++) {
+      const a = ang + rand(-spread * 0.7, spread * 0.7), f = rand(0.7, 1.0) * reach;
+      this._add({ x: x + ca * f + rand(-3, 3), y: y + sa * f + rand(-4, 4), vx: ca * rand(20, 90), vy: sa * 40 - rand(10, 40),
+        life: rand(0.12, 0.22), max: 0.22, r: rand(2.5, 5), c: pick(colors), g: -40, glow: true, shrink: true });
     }
   }
   // raio destruidor (Cabeça do Mestre): faixa brilhante com a cabeça flutuante na origem

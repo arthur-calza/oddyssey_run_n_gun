@@ -34,6 +34,14 @@ const Gallery = {
     demon:     { icon: '👹', name: 'Demônio',        note: 'Mini-chefe; canhão explosivo.' },
     wolf:      { icon: '🐕', name: 'Lobo',           note: 'Fera de corpo a corpo, muito rápida.' },
     direwolf:  { icon: '🐺', name: 'Lobo-Gigante',   note: 'Alfa da matilha; mini-chefe.' },
+    skeleton:  { icon: '💀', name: 'Esqueleto',      note: 'Arqueiro morto-vivo; flechas à distância.' },
+    ghoul:     { icon: '🧟', name: 'Carniçal',       note: 'Necrófago veloz; saltador corpo-a-corpo.' },
+    imp:       { icon: '👺', name: 'Diabrete',       note: 'Pequeno e ágil; cospe brasas.' },
+    ogre:      { icon: '🗿', name: 'Ogro',           note: 'Brutamontes tanque; mini-chefe de pancada.' },
+    musketeer: { icon: '🎖', name: 'Mosqueteiro',    note: 'Soldado real; rifle preciso e recua (kite).' },
+    cultist:   { icon: '🕯', name: 'Cultista',       note: 'Conjurador encapuzado; orbes explosivos.' },
+    specter:   { icon: '👻', name: 'Espectro',       note: 'Voa e paira; rajada espectral.' },
+    hellhound: { icon: '🔥', name: 'Cão Infernal',   note: 'Fera flamejante velocíssima; saltadora.' },
     flayer:    { icon: '🧠', name: 'Devorador',      note: 'CHEFE. 3 fases: rajada, invocar, bombas.' },
   },
   STATES: [
@@ -359,7 +367,7 @@ const Gallery = {
       const tags = [];
       if (t.boss) tags.push('CHEFE'); if (t.mini) tags.push('mini-chefe');
       if (t.leaper) tags.push('saltador'); if (t.kite) tags.push('kite');
-      const atk = { blast: 'dispersão', smg: 'metralhadora', rifle: 'rifle', cannon: 'canhão explosivo' };
+      const atk = { blast: 'dispersão', smg: 'metralhadora', rifle: 'rifle', cannon: 'canhão explosivo', arrow: 'flechas', fire: 'brasa' };
       I.innerHTML = `<h3>${info.icon || ''} ${info.name || this.enemyKey}</h3>
         ${row('Vida', t.hp)}${row('Velocidade', t.speed)}${row('Dano contato', t.touch)}
         ${row('Ataque', t.atk ? (atk[t.atk] || t.atk) : 'corpo a corpo')}

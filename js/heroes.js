@@ -159,6 +159,96 @@ const WEAPONS = {
       p.consumeAmmo(); Sound.bow();
     },
   },
+
+  /* ===== ARMAS EXTRAS (criadas p/ a Fase de Testes) ===== */
+  // granada de mão — bomba em arco que explode no impacto
+  grenade: {
+    name: 'Granada de Mão', icon: '💣', visual: 'cannon',
+    cool: 0.7, clip: 5, reload: 1.2, gunLen: 18,
+    desc: 'Bomba arremessada em arco; explode no impacto.',
+    fire(p, game) {
+      p.cool = this.cool; p.coolMax = this.cool;
+      p.shoot(game, { kind: 'grenade', color: '#3a3a2c', speed: 560, dmg: 26, tileDmg: 30, r: 5, recoil: 60, shake: 3, life: 2.2, explosive: 64, grav: 700, knock: 200, spin: 12 });
+      p.consumeAmmo(); Sound.shot('shotgun');
+    },
+  },
+  // lança de gelo — estilhaço perfurante e veloz
+  icelance: {
+    name: 'Lança de Gelo', icon: '❄', visual: 'staff',
+    cool: 0.26, clip: 10, reload: 0.9, gunLen: 24,
+    desc: 'Estilhaço de gelo perfurante e veloz (atravessa 3).',
+    fire(p, game) {
+      p.cool = this.cool; p.coolMax = this.cool;
+      p.shoot(game, { kind: 'ice', color: '#bfe8ff', speed: 1000, dmg: 16, tileDmg: 12, r: 3.4, recoil: 20, shake: 1, life: 1.0, pierce: 3, knock: 90 });
+      p.consumeAmmo(); Sound.cast();
+    },
+  },
+  // cetro trovejante — raio veloz que perfura uma fileira
+  thunder: {
+    name: 'Cetro Trovejante', icon: '⚡', visual: 'staff',
+    cool: 0.2, clip: 14, reload: 0.9, gunLen: 24,
+    desc: 'Raio elétrico velocíssimo; perfura inimigos.',
+    fire(p, game) {
+      p.cool = this.cool; p.coolMax = this.cool;
+      p.shoot(game, { kind: 'spark', color: '#bff0ff', speed: 1500, dmg: 14, tileDmg: 8, r: 3, recoil: 10, shake: 1.2, life: 0.7, pierce: 2, knock: 70 });
+      p.consumeAmmo(); Sound.zap();
+    },
+  },
+  // lâmina giratória — disco que atravessa vários inimigos
+  chakram: {
+    name: 'Lâmina Giratória', icon: '🌀', visual: 'dagger',
+    cool: 0.34, clip: 10, reload: 0.8, gunLen: 18,
+    desc: 'Disco serrilhado que atravessa até 6 inimigos.',
+    fire(p, game) {
+      p.cool = this.cool; p.coolMax = this.cool;
+      p.shoot(game, { kind: 'disc', color: '#d8dee6', speed: 760, dmg: 18, tileDmg: 14, r: 6, recoil: 18, shake: 1, life: 1.4, pierce: 6, knock: 60, spin: 30 });
+      p.consumeAmmo(); Sound.bow();
+    },
+  },
+  // morteiro — tiro alto em arco; explosão enorme ao cair
+  mortar: {
+    name: 'Morteiro', icon: '🎆', visual: 'cannon',
+    cool: 1.0, clip: 3, reload: 1.5, gunLen: 22,
+    desc: 'Projétil alto em arco; explosão imensa ao cair.',
+    fire(p, game) {
+      p.cool = this.cool; p.coolMax = this.cool;
+      p.shoot(game, { kind: 'grenade', color: '#2a2620', speed: 640, dmg: 38, tileDmg: 48, r: 6, recoil: 120, shake: 6, life: 3.0, explosive: 110, grav: 520, knock: 280, spin: 6 });
+      p.vy -= 80; p.consumeAmmo(); Sound.shot('shotgun'); game.cam.addShake(3);
+    },
+  },
+  // frasco de ácido — estoura num respingo corrosivo
+  acidflask: {
+    name: 'Frasco de Ácido', icon: '🧪', visual: 'pistol',
+    cool: 0.5, clip: 6, reload: 1.0, gunLen: 18,
+    desc: 'Frasco arremessado que estoura em respingo corrosivo.',
+    fire(p, game) {
+      p.cool = this.cool; p.coolMax = this.cool;
+      p.shoot(game, { kind: 'flask', color: '#8ef06a', speed: 600, dmg: 18, tileDmg: 16, r: 5, recoil: 30, shake: 1.5, life: 2.0, explosive: 38, grav: 560, knock: 120, poison: true, spin: 8 });
+      p.consumeAmmo(); Sound.cast();
+    },
+  },
+  // trabuco de bronze — bala enorme e lenta; empurrão brutal
+  handcannon: {
+    name: 'Trabuco de Bronze', icon: '🛡', visual: 'cannon',
+    cool: 0.7, clip: 4, reload: 1.3, gunLen: 24,
+    desc: 'Bala enorme e lenta; recuo e empurrão brutais.',
+    fire(p, game) {
+      p.cool = this.cool; p.coolMax = this.cool;
+      p.shoot(game, { kind: 'slug', color: '#e8b060', speed: 880, dmg: 40, tileDmg: 34, r: 5, recoil: 220, shake: 6, life: 1.2, knock: 420 });
+      p.vx -= p.face * 60; p.consumeAmmo(); Sound.shot('shotgun'); game.cam.addShake(4);
+    },
+  },
+  // agulheiro — rajada frenética de agulhas; cadência extrema
+  needler: {
+    name: 'Agulheiro', icon: '📌', visual: 'smg',
+    cool: 0.05, clip: 40, reload: 1.2, gunLen: 20,
+    desc: 'Rajada frenética de agulhas; dano baixo, cadência extrema.',
+    fire(p, game) {
+      p.cool = this.cool; p.coolMax = this.cool;
+      p.shoot(game, { kind: 'pellet', color: '#cfe8ff', speed: 1100, dmg: 4, tileDmg: 3, r: 1.8, recoil: 6, shake: 0.4, life: 0.5, knock: 30 }, 0.05);
+      p.consumeAmmo(); Sound.shot('mg');
+    },
+  },
 };
 
 // jato de chamas reutilizável: chamas (partículas) + DANO EM ÁREA no cone à
@@ -180,9 +270,9 @@ function _flame(p, game, tiles, dmg, colors) {
       if (Math.random() < 0.25) game.fx.spark(e.cx, e.cy, '#ff8a3c', 2);
     }
   }
-  // escava terreno macio ao longo do jato
+  // escava terreno macio ao longo do jato (coluna de ~2 tiles + ~40% um 3º)
   for (let d = T * 0.5; d < reach; d += T * 0.6) {
-    game.world.damage(Math.floor((m.x + dir * d) / T), Math.floor(m.y / T), 5, { power: 20 });
+    game.carveTiles(Math.floor((m.x + dir * d) / T), Math.floor(m.y / T), 5, { power: 20 });
   }
   p.consumeAmmo();
   game.alertEnemies(p.cx, p.cy, 380);
@@ -190,7 +280,8 @@ function _flame(p, game, tiles, dmg, colors) {
 }
 
 // ordem das armas na FASE DE TESTES (teclas 1..N trocam de arma)
-const WEAPON_ORDER = ['scatter', 'repeater', 'flamethrower', 'bolt', 'fireball', 'daggers', 'smg', 'cannon', 'arquebus'];
+const WEAPON_ORDER = ['scatter', 'repeater', 'flamethrower', 'bolt', 'fireball', 'daggers', 'smg', 'cannon', 'arquebus',
+  'grenade', 'icelance', 'thunder', 'chakram', 'mortar', 'acidflask', 'handcannon', 'needler'];
 
 /* ===================== HERÓIS ============================= */
 const HEROES = [

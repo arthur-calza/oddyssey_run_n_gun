@@ -80,6 +80,7 @@ class Game {
     // VEX: cargas de metamorfose da fase (+1 por vida extra ganha)
     this.vexCharges = (typeof VEX_BASE_CHARGES !== 'undefined' ? VEX_BASE_CHARGES : 3);
     this._prevLives = this.lives;
+    this._testWi = 0; this._testEi = null;   // índices da fase de testes (arma/inimigo atual)
     this._setSky(L);
   }
 
@@ -132,6 +133,15 @@ class Game {
   // ---- event hooks -----------------------------------------
   queueExplosion(x, y, r, dmg) { this.explosionQ.push({ x, y, r, dmg }); }
 
+  // dano de tile em COLUNA: ~2 tiles de altura (altura ~2 tiles do personagem)
+  // + ~40% de chance de um 3º tile abaixo. Torna a destruição irregular e
+  // permite de fato "abrir caminho" pelo cenário com tiros retos.
+  carveTiles(c, r, dmg, opts) {
+    this.world.damage(c, r, dmg, opts);
+    this.world.damage(c, r + 1, dmg, opts);
+    if (Math.random() < 0.4) this.world.damage(c, r + 2, dmg, opts);
+  }
+
   damageEntitiesRadial(x, y, radius, dmg, exclude) {
     for (const e of this.enemies) {
       if (!e.alive || e === exclude) continue;
@@ -154,7 +164,7 @@ class Game {
     // escava os tiles ao longo do feixe (abre um corredor)
     for (let d = 0; d < range; d += T * 0.5) {
       const tx = m.x + Math.cos(ang) * d, ty = m.y + Math.sin(ang) * d;
-      this.world.damage(Math.floor(tx / T), Math.floor(ty / T), td, { power: 90 });
+      this.carveTiles(Math.floor(tx / T), Math.floor(ty / T), td, { power: 90 });
     }
     // atinge inimigos cuja faixa horizontal cruza a linha do feixe
     for (const e of this.enemies) {
@@ -368,14 +378,13 @@ class Game {
     const p = this.player;
     if (p) p.update(dt, this);
 
-    // FASE DE TESTES: teclas 1..N trocam a arma equipada do herói atual
+    // FASE DE TESTES: 1–9 = arma rápida · , . = ciclar TODAS · B = invocar inimigo · M = limpar
     if (this.testMode && p && !p.dead) {
-      for (let i = 0; i < WEAPON_ORDER.length && i < 9; i++) {
-        if (Input.once(String(i + 1))) {
-          p.equipWeapon(WEAPON_ORDER[i]);
-          this.fx.text(p.cx, p.y - 12, WEAPONS[WEAPON_ORDER[i]].name, '#6fd0ff'); Sound.swap();
-        }
-      }
+      for (let i = 0; i < WEAPON_ORDER.length && i < 9; i++) if (Input.once(String(i + 1))) this._testEquip(i);
+      if (Input.once(',')) this._testEquip(((this._testWi || 0) - 1 + WEAPON_ORDER.length) % WEAPON_ORDER.length);
+      if (Input.once('.')) this._testEquip(((this._testWi || 0) + 1) % WEAPON_ORDER.length);
+      if (Input.once('b')) this._testSpawnEnemy();
+      if (Input.once('m')) { for (const e of this.enemies) if (!e.boss) e.alive = false; this.fx.text(p.cx, p.y - 12, 'INIMIGOS LIMPOS', '#9be0ff'); Sound.swap(); }
     }
 
     for (const e of this.enemies) e.update(dt, this);
@@ -505,29 +514,55 @@ class Game {
     if (this.paused) this._drawPaused(ctx);
   }
 
-  // legenda da FASE DE TESTES: lista as armas e destaca a equipada
+  // ---- FASE DE TESTES: troca de arma e invocação de inimigos ----
+  _testEquip(i) {
+    if (!this.player) return;
+    this._testWi = i; const k = WEAPON_ORDER[i];
+    this.player.equipWeapon(k);
+    this.fx.text(this.player.cx, this.player.y - 12, (i + 1 <= 9 ? (i + 1) + '· ' : '') + WEAPONS[k].name, '#6fd0ff'); Sound.swap();
+  }
+  _testSpawnEnemy() {
+    const p = this.player; if (!p) return;
+    const keys = Object.keys(ENEMY_TYPES).filter(k => !ENEMY_TYPES[k].boss);
+    this._testEi = (this._testEi == null) ? 0 : (this._testEi + 1) % keys.length;
+    const key = keys[this._testEi], t = ENEMY_TYPES[key];
+    const e = new Enemy(p.cx + p.face * 130, p.y - 30, key);
+    this.enemies.push(e);
+    this.fx.spark(e.cx, e.cy, '#c479ff', 14); this.fx.smoke(e.cx, e.cy, 3);
+    this.fx.text(e.cx, e.y - 8, (t.label || key), '#ff9b6b'); Sound.swap();
+  }
+
+  // legenda da FASE DE TESTES: lista as armas (quebra em linhas) e destaca a equipada
   _drawTestBar(ctx) {
     const list = WEAPON_ORDER;
     ctx.save();
-    ctx.font = 'bold 13px "Trebuchet MS"'; ctx.textBaseline = 'middle';
-    const labels = list.map((k, i) => (i + 1) + '·' + WEAPONS[k].name);
-    const pad = 9, gap = 6, h = 24, y = 14;
+    ctx.font = 'bold 12px "Trebuchet MS"'; ctx.textBaseline = 'middle';
+    const labels = list.map((k, i) => (i < 9 ? (i + 1) + '·' : '') + WEAPONS[k].name);
+    const pad = 8, gap = 5, h = 22, rowGap = 5, maxW = CONFIG.W - 40;
     const widths = labels.map(l => ctx.measureText(l).width + pad * 2);
-    const total = widths.reduce((a, b) => a + b, 0) + gap * (labels.length - 1);
-    let x = (CONFIG.W - total) / 2;
+    // quebra em linhas que cabem na largura
+    const rows = [[]]; let rw = 0;
     for (let i = 0; i < labels.length; i++) {
-      const on = this.player && this.player.weaponKey === list[i];
-      ctx.fillStyle = on ? 'rgba(232,185,74,0.92)' : 'rgba(20,15,10,0.78)';
-      ctx.fillRect(x, y, widths[i], h);
-      ctx.lineWidth = on ? 2 : 1; ctx.strokeStyle = on ? '#fff' : '#5a4326';
-      ctx.strokeRect(x + 0.5, y + 0.5, widths[i] - 1, h - 1);
-      ctx.fillStyle = on ? '#1a140e' : '#e8e0cf'; ctx.textAlign = 'left';
-      ctx.fillText(labels[i], x + pad, y + h / 2 + 1);
-      x += widths[i] + gap;
+      if (rw + widths[i] + gap > maxW && rows[rows.length - 1].length) { rows.push([]); rw = 0; }
+      rows[rows.length - 1].push(i); rw += widths[i] + gap;
+    }
+    const rowsH = rows.length * (h + rowGap) - rowGap;
+    let y = CONFIG.H - rowsH - 30;   // ancorado na base (acima da legenda)
+    for (const row of rows) {
+      const tot = row.reduce((a, i) => a + widths[i], 0) + gap * (row.length - 1);
+      let x = (CONFIG.W - tot) / 2;
+      for (const i of row) {
+        const on = this.player && this.player.weaponKey === list[i];
+        ctx.fillStyle = on ? 'rgba(232,185,74,0.94)' : 'rgba(20,15,10,0.82)'; ctx.fillRect(x, y, widths[i], h);
+        ctx.lineWidth = on ? 2 : 1; ctx.strokeStyle = on ? '#fff' : '#5a4326'; ctx.strokeRect(x + 0.5, y + 0.5, widths[i] - 1, h - 1);
+        ctx.fillStyle = on ? '#1a140e' : '#e8e0cf'; ctx.textAlign = 'left'; ctx.fillText(labels[i], x + pad, y + h / 2 + 1);
+        x += widths[i] + gap;
+      }
+      y += h + rowGap;
     }
     ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center';
     ctx.fillStyle = '#9a8f7d'; ctx.font = '12px "Trebuchet MS"';
-    ctx.fillText('Teclas 1–' + list.length + ' trocam a arma  ·  S / D trocam o herói', CONFIG.W / 2, y + h + 15);
+    ctx.fillText('1–9 armas · , . ciclam todas · B invoca inimigo · M limpa · S/D herói', CONFIG.W / 2, CONFIG.H - 9);
     ctx.restore(); ctx.textAlign = 'left';
   }
 

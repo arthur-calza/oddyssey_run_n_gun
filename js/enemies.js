@@ -11,13 +11,22 @@ function lineClear(world, x0, y0, x1, y1) {
 }
 
 const ENEMY_TYPES = {
-  zombie:    { spr: 'zombie',    hp: 42,  w: 28, h: 46, speed: 66,  aggro: 520, range: 320, fireCd: 1.7, touch: 12, score: 120, atk: 'blast', gore: '#5a7a3a' },
-  werewolf:  { spr: 'werewolf',  hp: 50,  w: 30, h: 44, speed: 235, aggro: 660, range: 360, fireCd: 0.7, touch: 16, score: 180, atk: 'smg', leaper: true, gore: '#7a2a2a' },
-  dragonman: { spr: 'dragonman', hp: 140, w: 34, h: 54, speed: 112, aggro: 720, range: 580, fireCd: 1.2, touch: 18, score: 420, atk: 'rifle', kite: true, gore: '#6a1410' },
-  demon:     { spr: 'demon',     hp: 230, w: 40, h: 58, speed: 70,  aggro: 780, range: 600, fireCd: 1.9, touch: 26, score: 760, atk: 'cannon', mini: true, gore: '#7a1a14' },
-  wolf:      { spr: 'wolf',      hp: 34,  w: 30, h: 36, speed: 285, aggro: 720, range: 0,   fireCd: 99,  touch: 14, score: 140, leaper: true, gore: '#6a3a2a' },        // feral, fast melee
-  direwolf:  { spr: 'direwolf',  hp: 90,  w: 40, h: 46, speed: 230, aggro: 820, range: 0,   fireCd: 99,  touch: 22, score: 360, leaper: true, mini: true, gore: '#5a2e22' }, // pack alpha
-  flayer:    { spr: 'flayer',    hp: 720, w: 56, h: 74, speed: 56,  aggro: 1300, range: 1000, fireCd: 1.3, touch: 30, score: 3200, boss: true, name: 'O DEVORADOR DE MENTES', gore: '#7b3aff' },
+  zombie:    { spr: 'zombie',    label: 'Zumbi',        hp: 42,  w: 28, h: 46, speed: 66,  aggro: 520, range: 320, fireCd: 1.7, touch: 12, score: 120, atk: 'blast', gore: '#5a7a3a' },
+  werewolf:  { spr: 'werewolf',  label: 'Lobisomem',    hp: 50,  w: 30, h: 44, speed: 235, aggro: 660, range: 360, fireCd: 0.7, touch: 16, score: 180, atk: 'smg', leaper: true, gore: '#7a2a2a' },
+  dragonman: { spr: 'dragonman', label: 'Homem-Dragão', hp: 140, w: 34, h: 54, speed: 112, aggro: 720, range: 580, fireCd: 1.2, touch: 18, score: 420, atk: 'rifle', kite: true, gore: '#6a1410' },
+  demon:     { spr: 'demon',     label: 'Demônio',      hp: 230, w: 40, h: 58, speed: 70,  aggro: 780, range: 600, fireCd: 1.9, touch: 26, score: 760, atk: 'cannon', mini: true, gore: '#7a1a14' },
+  wolf:      { spr: 'wolf',      label: 'Lobo',         hp: 34,  w: 30, h: 36, speed: 285, aggro: 720, range: 0,   fireCd: 99,  touch: 14, score: 140, leaper: true, gore: '#6a3a2a' },        // feral, fast melee
+  direwolf:  { spr: 'direwolf',  label: 'Lobo-Gigante', hp: 90,  w: 40, h: 46, speed: 230, aggro: 820, range: 0,   fireCd: 99,  touch: 22, score: 360, leaper: true, mini: true, gore: '#5a2e22' }, // pack alpha
+  // --- novos inimigos (criados p/ a Fase de Testes) ---
+  skeleton:  { spr: 'skeleton',  label: 'Esqueleto',     hp: 46,  w: 28, h: 48, speed: 120, aggro: 640, range: 520, fireCd: 1.3, touch: 12, score: 200, atk: 'arrow', gore: '#d8d0bc' },
+  ghoul:     { spr: 'ghoul',     label: 'Carniçal',      hp: 60,  w: 30, h: 46, speed: 250, aggro: 680, range: 0,   fireCd: 99,  touch: 18, score: 220, leaper: true, gore: '#6a7a3a' },
+  imp:       { spr: 'imp',       label: 'Diabrete',      hp: 30,  w: 22, h: 34, speed: 240, aggro: 700, range: 440, fireCd: 0.9, touch: 12, score: 180, atk: 'fire', leaper: true, gore: '#b23425' },
+  ogre:      { spr: 'ogre',      label: 'Ogro',          hp: 300, w: 46, h: 64, speed: 80,  aggro: 760, range: 0,   fireCd: 99,  touch: 30, score: 700, mini: true, gore: '#7a5a3a' },
+  musketeer: { spr: 'musketeer', label: 'Mosqueteiro',   hp: 70,  w: 28, h: 50, speed: 110, aggro: 760, range: 640, fireCd: 1.6, touch: 14, score: 280, atk: 'rifle', kite: true, gore: '#7a2a2a' },
+  cultist:   { spr: 'cultist',   label: 'Cultista',      hp: 90,  w: 30, h: 50, speed: 90,  aggro: 820, range: 640, fireCd: 1.8, touch: 16, score: 360, atk: 'cannon', gore: '#3a2a5a' },
+  specter:   { spr: 'specter',   label: 'Espectro',      hp: 54,  w: 30, h: 48, speed: 140, aggro: 900, range: 520, fireCd: 1.1, touch: 16, score: 300, atk: 'smg', fly: true, gore: '#7b3aff' },
+  hellhound: { spr: 'hellhound', label: 'Cão Infernal',  hp: 60,  w: 32, h: 38, speed: 320, aggro: 780, range: 0,   fireCd: 99,  touch: 18, score: 260, leaper: true, gore: '#b23425' },
+  flayer:    { spr: 'flayer',    label: 'O Devorador',  hp: 720, w: 56, h: 74, speed: 56,  aggro: 1300, range: 1000, fireCd: 1.3, touch: 30, score: 3200, boss: true, name: 'O DEVORADOR DE MENTES', gore: '#7b3aff' },
 };
 
 const CHAR2ENEMY = { z: 'zombie', w: 'werewolf', r: 'dragonman', d: 'demon', O: 'flayer', f: 'wolf', F: 'direwolf' };
@@ -122,7 +131,14 @@ class Enemy extends Entity {
       this._patrol(dt, game);
     }
 
-    this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, CONFIG.TERMINAL_VY);
+    if (def.fly) {
+      // VOADORES (Espectro): pairam na altura do alvo, com leve flutuação — sem gravidade
+      const ty = target ? target.cy - 26 : this.cy;
+      this.vy = approach(this.vy, clamp(ty - this.cy, -140, 140) + Math.sin(this.anim * 4) * 22, 700 * dt);
+      this.onGround = false;
+    } else {
+      this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, CONFIG.TERMINAL_VY);
+    }
     game.world.moveAndCollide(this, dt);
     if (this.y > game.world.pixelH + 100) { this.hp = 0; this.alive = false; }
 
@@ -175,6 +191,12 @@ class Enemy extends Entity {
     } else if (atk === 'cannon') {
       game.bullets.push(new Bullet(m.x, m.y, this.aimAng - rand(0.05, 0.2), 380, { faction: 'enemy', dmg: 22, kind: 'cannon', r: 7, explosive: 64, grav: 520, tileDmg: 34, spin: 8 }));
       game.fx.muzzle(m.x, m.y, this.aimAng); game.cam.addShake(3); Sound.thump();
+    } else if (atk === 'arrow') {                  // esqueleto arqueiro
+      game.bullets.push(new Bullet(m.x, m.y, this.aimAng, 720, { faction: 'enemy', dmg: 12, kind: 'arrow', r: 3, tileDmg: 6, life: 1.2 }));
+      game.fx.muzzle(m.x, m.y, this.aimAng); Sound.bow();
+    } else if (atk === 'fire') {                   // diabrete cospe brasa
+      game.bullets.push(new Bullet(m.x, m.y, this.aimAng, 520, { faction: 'enemy', dmg: 12, kind: 'fireball', color: '#ff7a2c', r: 5, tileDmg: 8, life: 1.4 }));
+      game.fx.muzzle(m.x, m.y, this.aimAng); Sound.cast();
     }
   }
 

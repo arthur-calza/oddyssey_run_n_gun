@@ -37,6 +37,8 @@ const SpriteLab = {
   ENEMY_LABEL: {
     zombie: 'Zumbi', werewolf: 'Lobisomem', dragonman: 'Homem-Dragão', demon: 'Demônio',
     wolf: 'Lobo', direwolf: 'Lobo-Gigante', flayer: 'Devorador (Chefe)',
+    skeleton: 'Esqueleto', ghoul: 'Carniçal', imp: 'Diabrete', ogre: 'Ogro',
+    musketeer: 'Mosqueteiro', cultist: 'Cultista', specter: 'Espectro', hellhound: 'Cão Infernal',
   },
 
   open(canvas, onBack) {
