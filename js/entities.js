@@ -318,6 +318,7 @@ class Player extends Entity {
     this.jumps = 0; this.hoverT = 0; this.dashT = 0; this.dashCd = 0;
     this.aimAng = 0; this.dead = false; this.deathT = 0;
     this.meleeCd = 0; this._prevFeet = null;
+    this.morph = null; this.morphT = 0;   // VEX: forma emprestada (herói) + tempo restante
   }
   setHero(i) {
     this.heroIndex = i;
@@ -328,8 +329,48 @@ class Player extends Entity {
     if (oldBottom != null) this.y = oldBottom - this.h;
     this.maxhp = H.hp; this.hp = H.hp;
     this.speed = H.speed; this.jumpV = H.jumpV; this.maxJumps = H.jumps;
+    this.fallMult = H.fallMult; this.terminalVy = H.terminalVy;   // queda própria (Edward levita)
     this.skin = H.skin; this.spr = H.spr;
+    this.morph = null; this.morphT = 0;       // trocar de herói cancela qualquer metamorfose ativa
     this.equipWeapon(H.weaponKey);            // a arma define cadência/pente/recarga/alcance
+  }
+
+  // ---- VEX: metamorfose -------------------------------------------------
+  // Vira temporariamente OUTRO herói: adota sprite, arma, especial e atributos
+  // de movimento dele, mantém a IDENTIDADE (nome) e a vida máxima do Vex,
+  // e recupera +VEX_MORPH_HEAL de vida. Reverte sozinho após VEX_MORPH_TIME.
+  _tryMetamorph(game) {
+    if (this.morph) return false;
+    if ((game.vexCharges || 0) <= 0) { Sound.hurt(); game.fx.text(this.cx, this.y - 8, 'SEM METAMORFOSE', '#9a8f7d'); return false; }
+    game.vexCharges--;
+    const pool = HEROES.map((h, i) => i).filter(i => HEROES[i].key !== 'vex');
+    this.morphInto(pick(pool), game);
+    return true;
+  }
+  morphInto(heroIndex, game) {
+    const H = HEROES[heroIndex];
+    this.morph = H; this.morphT = VEX_MORPH_TIME;
+    this.spr = H.spr;
+    this.speed = H.speed; this.jumpV = H.jumpV; this.maxJumps = H.jumps;
+    this.fallMult = H.fallMult; this.terminalVy = H.terminalVy;
+    this.equipWeapon(H.weaponKey);
+    this.special = this.maxSpecial;            // barra azul cheia: pode usar o especial emprestado
+    this.specCool = 0; this.invuln = Math.max(this.invuln, 0.4);
+    this.hp = clamp(this.hp + VEX_MORPH_HEAL, 0, this.maxhp);   // +50 vida (cap na vida máx. do Vex)
+    if (game) {
+      game.fx.magic(this.cx, this.cy, '#c479ff', 22); game.fx.smoke(this.cx, this.cy, 6);
+      game.fx.text(this.cx, this.y - 10, 'METAMORFOSE: ' + H.name + '!', '#c479ff');
+      game.cam.addShake(6); game.flashScreen(0.22); Sound.cast();
+    }
+  }
+  unmorph(game) {
+    const H = this.hero;
+    this.morph = null; this.morphT = 0;
+    this.spr = H.spr;
+    this.speed = H.speed; this.jumpV = H.jumpV; this.maxJumps = H.jumps;
+    this.fallMult = H.fallMult; this.terminalVy = H.terminalVy;
+    this.equipWeapon(H.weaponKey);
+    if (game) { game.fx.magic(this.cx, this.cy, '#c479ff', 16); game.fx.smoke(this.cx, this.cy, 5); game.fx.text(this.cx, this.y - 10, 'VEX!', '#c479ff'); Sound.swap(); }
   }
   // troca a arma ativa (herói padrão OU override da fase de testes). A WEAPON é
   // a dona da cadência/pente/recarga/comprimento do cano e do visual do braço.
@@ -371,6 +412,7 @@ class Player extends Entity {
     this.swordMode = Math.max(0, (this.swordMode || 0) - dt);
     this.powered = Math.max(0, (this.powered || 0) - dt); // magic-potion buff timer
     this.gainSpecial(dt * 6); // passive charge
+    if (this.morph) { this.morphT -= dt; if (this.morphT <= 0) this.unmorph(game); }   // VEX: fim da forma
 
     // ---- mira 1D: vira na direção do movimento e atira sempre para a frente ----
     // (sem mouse; disparo horizontal — funciona também durante o pulo)
@@ -464,8 +506,8 @@ class Player extends Entity {
       // queda "pesada" padrão; heróis podem definir fallMult/terminalVy próprios
       // (ex.: Edward, o mago, cai bem devagar → sensação de levitar)
       const falling = this.vy > 0 && !this.clinging;
-      const fm = falling ? (this.hero.fallMult != null ? this.hero.fallMult : CONFIG.FALL_MULT) : 1;
-      const term = this.hero.terminalVy || CONFIG.TERMINAL_VY;
+      const fm = falling ? (this.fallMult != null ? this.fallMult : CONFIG.FALL_MULT) : 1;
+      const term = this.terminalVy || CONFIG.TERMINAL_VY;
       this.vy = Math.min(this.vy + CONFIG.GRAVITY * fm * dt, term);
     }
     game.world.moveAndCollide(this, dt);
@@ -491,9 +533,19 @@ class Player extends Entity {
       if (this.powered > 0 && w.poweredFire) w.poweredFire(this, game);
       else w.fire(this, game);
     }
-    if (c.special && this.specCool <= 0 && this.special >= this.hero.special.cost) {
-      this.hero.special.use(this, game);
-      this.special -= this.hero.special.cost; this.specCool = this.hero.special.cd;
+    if (c.special && this.specCool <= 0) {
+      if (this.hero.special && this.hero.special.metamorph && !this.morph) {
+        // VEX em sua forma própria: gasta 1 CARGA e vira um herói aleatório
+        if (this._tryMetamorph(game)) this.specCool = 0.4;
+        else this.specCool = 0.3;
+      } else {
+        // demais heróis — e o Vex transformado usa o especial EMPRESTADO (barra azul)
+        const sp = this.morph ? this.morph.special : this.hero.special;
+        if (sp && this.special >= sp.cost) {
+          sp.use(this, game);
+          this.special -= sp.cost; this.specCool = sp.cd;
+        }
+      }
     }
 
     // ---- melee: golpe em VOLTA do jogador (C), disponível a todo herói ----

@@ -16,17 +16,24 @@ const SpriteLab = {
   active: false, canvas: null, ctx: null, onBack: null, time: 0,
   panel: null, listEl: null, infoEl: null, ctrlEl: null,
   charKey: null, charName: '', action: 'idle', frameIdx: 0,
-  playing: false, playT: 0, grid: true, zoomK: 1, showWeaponOverlay: false,
+  playing: false, playT: 0, grid: true, zoomK: 1, slowmo: false,
+  _sandbox: null, _sbHero: null, _sbT: 0,
 
   ACTIONS: [
-    { id: 'idle',   label: 'Parado',   fps: 4 },
-    { id: 'run',    label: 'Correndo', fps: 12 },
-    { id: 'jump',   label: 'Pulo',     fps: 1 },
-    { id: 'fall',   label: 'Queda',    fps: 1 },
-    { id: 'hurt',   label: 'Dano',     fps: 6 },
-    { id: 'death',  label: 'Morte',    fps: 8 },
-    { id: 'weapon', label: 'Arma',     fps: 2 },
+    { id: 'idle',    label: 'Parado',   fps: 4 },
+    { id: 'run',     label: 'Correndo', fps: 12 },
+    { id: 'jump',    label: 'Pulo',     fps: 1 },
+    { id: 'fall',    label: 'Queda',    fps: 1 },
+    { id: 'hurt',    label: 'Dano',     fps: 6 },
+    { id: 'death',   label: 'Morte',    fps: 8 },
+    { id: 'weapon',  label: 'Arma',     fps: 2 },
+    { id: 'special', label: 'Especial', fps: 1 },
   ],
+  // controle "vazio" para o sandbox do especial (não reage ao teclado do jogo)
+  _NOINPUT: {
+    left: false, right: false, up: false, down: false, jumpHeld: false, fire: false, special: false,
+    jumpPressed: () => false, meleePressed: () => false, swapNext: () => false, swapPrev: () => false,
+  },
   ENEMY_LABEL: {
     zombie: 'Zumbi', werewolf: 'Lobisomem', dragonman: 'Homem-Dragão', demon: 'Demônio',
     wolf: 'Lobo', direwolf: 'Lobo-Gigante', flayer: 'Devorador (Chefe)',
@@ -36,6 +43,7 @@ const SpriteLab = {
     this.canvas = canvas; this.ctx = canvas.getContext('2d');
     this.onBack = onBack; this.active = true; this.time = 0;
     if (!SPR.ready) SPR.build();
+    if (typeof TEX !== 'undefined' && !TEX.ready) TEX.build();   // p/ a prévia ao vivo do especial
     this._buildDOM();
     this._buildList();
     // seleciona o primeiro herói por padrão
@@ -46,13 +54,22 @@ const SpriteLab = {
   },
   close() {
     this.active = false; this.playing = false;
+    this._sandbox = null; this._sbHero = null;   // libera o sandbox do especial
     if (this.panel) this.panel.style.display = 'none';
     removeEventListener('keydown', this._key, true);
   },
 
   // ---------- helpers ----------
   _isHero(key) { return HEROES.some(h => h.spr === key); },
+  _heroIndex(key) { return HEROES.findIndex(h => h.spr === key); },
   _actionLabel(id) { const a = this.ACTIONS.find(x => x.id === id); return a ? a.label : id; },
+  // 'special' só p/ heróis; 'weapon' só p/ armados; demais p/ todos
+  _actionAvailable(id) {
+    const def = SPR.defs[this.charKey];
+    if (id === 'weapon') return !!(def && def.weapon);
+    if (id === 'special') return this._isHero(this.charKey);
+    return true;
+  },
 
   // quadros (canvas) da ação atual: corpo (sheets) OU arma (braço+arma pixelizado)
   _frames(action) {
@@ -151,8 +168,8 @@ const SpriteLab = {
 
   selectChar(key, name) {
     this.charKey = key; this.charName = name;
-    // mantém a ação se existir quadros; senão volta p/ idle
-    if (!this._frames(this.action).length) this.action = 'idle';
+    this._sandbox = null; this._sbHero = null;   // novo personagem → novo sandbox de especial
+    if (!this._actionAvailable(this.action)) this.action = 'idle';
     this.frameIdx = 0; this.playT = 0;
     this._buildList(); this._buildCtrl(); this._buildInfo();
   },
@@ -161,32 +178,44 @@ const SpriteLab = {
 
   _buildCtrl() {
     const c = this.ctrlEl; c.innerHTML = '';
-    const def = SPR.defs[this.charKey];
     this.ACTIONS.forEach(a => {
-      if (a.id === 'weapon' && (!def || !def.weapon)) return;       // só personagens armados têm "Arma"
+      if (!this._actionAvailable(a.id)) return;
       const b = document.createElement('button'); b.className = 'gsbtn' + (this.action === a.id ? ' on' : '');
-      b.textContent = a.label + ' (' + this._frames(a.id).length + ')';
+      const n = a.id === 'special' ? null : this._frames(a.id).length;
+      b.textContent = a.label + (n != null ? ' (' + n + ')' : '');
       b.onclick = () => this.setAction(a.id); c.appendChild(b);
     });
     const sep = () => { const s = document.createElement('div'); s.className = 'gsep'; c.appendChild(s); };
+    const nav = (txt, fn, on) => { const b = document.createElement('button'); b.className = 'gsbtn' + (on ? ' on' : ''); b.textContent = txt; b.onclick = fn; c.appendChild(b); return b; };
     sep();
-    const nav = (txt, fn) => { const b = document.createElement('button'); b.className = 'gsbtn'; b.textContent = txt; b.onclick = fn; c.appendChild(b); return b; };
+    if (this.action === 'special') {   // prévia AO VIVO: repetir / câmera lenta
+      nav('↻ Repetir', () => { if (this._sandbox) this._resetSandbox(this._sandbox); });
+      nav('🐢 Lento', () => { this.slowmo = !this.slowmo; this._buildCtrl(); }, this.slowmo);
+      return;
+    }
     nav('◄', () => { this.playing = false; this.setFrame(this.frameIdx - 1); this._buildCtrl(); });
-    const play = nav(this.playing ? '⏸' : '▶', () => { this.playing = !this.playing; this.playT = 0; this._buildCtrl(); });
-    play.classList.toggle('on', this.playing);
+    nav(this.playing ? '⏸' : '▶', () => { this.playing = !this.playing; this.playT = 0; this._buildCtrl(); }, this.playing);
     nav('►', () => { this.playing = false; this.setFrame(this.frameIdx + 1); this._buildCtrl(); });
     sep();
-    const gr = nav('▦ Grade', () => { this.grid = !this.grid; this._buildCtrl(); }); gr.classList.toggle('on', this.grid);
+    nav('▦ Grade', () => { this.grid = !this.grid; this._buildCtrl(); }, this.grid);
     nav('－', () => { this.zoomK = clamp(this.zoomK - 0.34, 0.5, 3); });
     nav('＋', () => { this.zoomK = clamp(this.zoomK + 0.34, 0.5, 3); });
-    const flip = nav('⇄ Virar', () => { this._flip = !this._flip; });
-    flip.classList.toggle('on', !!this._flip);
+    nav('⇄ Virar', () => { this._flip = !this._flip; this._buildCtrl(); }, !!this._flip);
   },
 
   _buildInfo() {
     const I = this.infoEl; if (!I) return;
     const def = SPR.defs[this.charKey];
-    const counts = this.ACTIONS.filter(a => a.id !== 'weapon' || (def && def.weapon)).map(a => `${a.label}: ${this._frames(a.id).length}`).join(' · ');
+    if (this.action === 'special') {   // especiais são procedurais (não há quadros)
+      const h = HEROES.find(x => x.spr === this.charKey);
+      I.innerHTML = `<h3>${this.charName}</h3>
+        <div class="gsub">${this.charKey} · especial</div>
+        <div class="filmlabel">Especial — por que não há quadros?</div>
+        <div class="gsub" style="line-height:1.5">Os especiais são <b>procedurais</b>: efeitos (raio, fogo, campo elétrico, explosões) + estados como investida e lâmina — <b>não</b> são sprites pré-assados. Por isso aqui mostramos uma <b>prévia AO VIVO</b>, em loop, do herói executando o especial num cenário de teste com alvos.</div>
+        <div class="gsub" style="margin-top:8px;color:#caa86a">${h ? h.desc : ''}</div>`;
+      return;
+    }
+    const counts = this.ACTIONS.filter(a => a.id !== 'special' && (a.id !== 'weapon' || (def && def.weapon))).map(a => `${a.label}: ${this._frames(a.id).length}`).join(' · ');
     I.innerHTML = `<h3>${this.charName}</h3>
       <div class="gsub">${this.charKey} · ${def && def.weapon ? 'arma: ' + def.weapon : 'sem arma'}</div>
       <div class="gsub">${counts}</div>
@@ -210,10 +239,70 @@ const SpriteLab = {
     this.infoEl.querySelectorAll('.fcell').forEach(el => el.classList.toggle('on', +el.dataset.idx === this.frameIdx));
   },
 
+  // ---------- prévia AO VIVO do especial (sandbox) ----------
+  // Os especiais não são quadros: rodamos uma mini-cena com o herói num cenário
+  // plano + alvos imortais, disparando o especial em loop para visualizá-lo.
+  _arena() {
+    const W = 60, H = 24, gr = H - 6, g = [];
+    for (let r = 0; r < H; r++) g.push(new Array(W).fill('.'));
+    for (let c = 0; c < W; c++) for (let r = gr; r < H - 1; r++) g[r][c] = (r === gr ? 'D' : '#');
+    g[gr - 1][20] = 'P';
+    const rows = g.map(a => a.join(''));
+    return { name: 'Arena', sub: '', win: 'none', biome: 'castle', sky: ['#1e2740', '#080a14'], seed: 1, bannerColor: '#6a1a1a', rows, bg: rows.map(() => '.'.repeat(W)), surface: new Array(W).fill(gr) };
+  },
+  _makeSandbox(heroIndex) {
+    const sb = new Game(this.canvas);
+    sb.onEnd = () => {}; sb.roster = [heroIndex]; sb.currentHero = heroIndex; sb.lives = 99; sb.testMode = false;
+    this._resetSandbox(sb);
+    return sb;
+  },
+  _resetSandbox(sb) {
+    sb.loadLevelDef(this._arena());
+    sb.controller = this._NOINPUT; sb.vexCharges = 99;
+    const p = sb.player; p.invuln = 9e9; p.special = p.maxSpecial; p.face = 1;
+    sb.enemies.length = 0;
+    for (const dx of [-130, -70, 70, 130, 190]) {
+      const e = new Enemy(p.cx + dx, p.y, 'wolf');
+      e.hp = e.maxhp = 1e9; e.speed = 0; e.alert = 999; e.face = dx < 0 ? -1 : 1;
+      sb.enemies.push(e);
+    }
+    sb.cam.x = clamp(p.cx - sb.cam.vw / 2, 0, Math.max(0, sb.world.pixelW - sb.cam.vw));
+    sb.cam.y = clamp(p.cy - sb.cam.vh / 2 - 20, 0, Math.max(0, sb.world.pixelH - sb.cam.vh));
+    this._sbCamX = sb.cam.x; this._sbCamY = sb.cam.y; this._sbT = 0; sb._fired = false;
+  },
+  _tickSpecial(dt) {
+    const hi = this._heroIndex(this.charKey);
+    if (!this._sandbox || this._sbHero !== this.charKey) { this._sandbox = this._makeSandbox(hi); this._sbHero = this.charKey; }
+    const sb = this._sandbox;
+    this._sbT += dt;
+    if (this._sbT > 2.8) this._resetSandbox(sb);          // reinicia o ciclo (cenário limpo + alvos)
+    const p = sb.player;
+    if (p) {
+      p.invuln = 9e9; p.special = p.maxSpecial;
+      if (!sb._fired && this._sbT > 0.5) {                 // dispara o especial uma vez por ciclo
+        sb._fired = true;
+        const sp = HEROES[hi].special;
+        if (sp && sp.metamorph) { const pool = HEROES.map((h, i) => i).filter(i => HEROES[i].key !== 'vex'); p.morphInto(pick(pool), sb); }
+        else if (sp) sp.use(p, sb);
+      }
+    }
+    sb.update(dt);
+    for (const e of sb.enemies) if (e.dying == null) e.hp = e.maxhp;   // alvos imortais
+    sb.cam.x = this._sbCamX; sb.cam.y = this._sbCamY;                  // câmera fixa
+    sb.draw();
+    // rótulo
+    const ctx = this.ctx; ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = 'rgba(20,15,10,0.72)'; ctx.fillRect(CONFIG.W / 2 - 250, 12, 500, 30);
+    ctx.fillStyle = '#e8b94a'; ctx.font = 'bold 16px "Trebuchet MS"'; ctx.textAlign = 'center';
+    ctx.fillText(this.charName + ' — ESPECIAL · prévia ao vivo (em loop)' + (this.slowmo ? ' · LENTO' : ''), CONFIG.W / 2, 32);
+    ctx.restore(); ctx.textAlign = 'left';
+  },
+
   // ---------- loop ----------
   tick(dt) {
     if (!this.active) return;
     this.time += dt;
+    if (this.action === 'special' && this._isHero(this.charKey)) { this._tickSpecial(this.slowmo ? dt * 0.4 : dt); return; }
     if (this.playing) {
       const a = this.ACTIONS.find(x => x.id === this.action), n = this._frames(this.action).length;
       if (n > 1) { this.playT += dt; const step = 1 / (a ? a.fps : 6); if (this.playT >= step) { this.playT -= step; this.setFrame(this.frameIdx + 1); } }

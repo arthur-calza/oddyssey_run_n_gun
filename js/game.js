@@ -77,6 +77,9 @@ class Game {
     this.cam.x = clamp(this.player.x - CONFIG.W / 2, 0, Math.max(0, world.pixelW - CONFIG.W));
     this.cam.y = clamp(this.player.y - CONFIG.H / 2, 0, Math.max(0, world.pixelH - CONFIG.H));
     this.state = 'playing'; this.paused = false;
+    // VEX: cargas de metamorfose da fase (+1 por vida extra ganha)
+    this.vexCharges = (typeof VEX_BASE_CHARGES !== 'undefined' ? VEX_BASE_CHARGES : 3);
+    this._prevLives = this.lives;
     this._setSky(L);
   }
 
@@ -347,6 +350,9 @@ class Game {
   update(dt) {
     if (this.paused || this.state !== 'playing') return;
     this.time += dt;
+    // VEX: cada VIDA EXTRA concede +1 carga de metamorfose
+    if (this.lives > (this._prevLives != null ? this._prevLives : this.lives)) this.vexCharges = (this.vexCharges || 0) + (this.lives - this._prevLives);
+    this._prevLives = this.lives;
     if (this.freeze > 0) { this.freeze -= dt; dt *= 0.18; }
 
     // swap input
@@ -586,9 +592,20 @@ class Game {
     h.name.textContent = p.hero.name;
     h.hp.style.width = clamp(p.hp / p.maxhp * 100, 0, 100) + '%';
     h.hpTxt.textContent = Math.ceil(p.hp) + ' / ' + p.maxhp;
-    h.sp.style.width = clamp(p.special / p.maxSpecial * 100, 0, 100) + '%';
-    const ready = p.special >= p.hero.special.cost;
-    h.spTxt.textContent = p.reloading > 0 ? 'RECARREGANDO…' : (ready ? 'ESPECIAL PRONTO' : 'ESPECIAL');
+    // medidor do especial: Vex (forma própria) usa CARGAS; demais usam a barra azul
+    if (p.hero.key === 'vex' && !p.morph) {
+      const cur = this.vexCharges || 0, base = (typeof VEX_BASE_CHARGES !== 'undefined' ? VEX_BASE_CHARGES : 3);
+      h.sp.style.background = 'linear-gradient(#f0d36a,#caa33a)';   // dourado p/ diferenciar da azul
+      h.sp.style.width = clamp(cur / Math.max(base, cur) * 100, 0, 100) + '%';
+      h.spTxt.textContent = cur > 0 ? ('METAMORFOSE ×' + cur) : 'SEM METAMORFOSE';
+    } else {
+      const sp = p.morph ? p.morph.special : p.hero.special;
+      h.sp.style.background = '';   // volta ao azul padrão (CSS)
+      h.sp.style.width = clamp(p.special / p.maxSpecial * 100, 0, 100) + '%';
+      const ready = sp && p.special >= sp.cost;
+      if (p.morph) h.spTxt.textContent = 'FORMA ' + p.morph.name + ' · ' + Math.ceil(p.morphT) + 's' + (ready ? ' · PRONTO' : '');
+      else h.spTxt.textContent = p.reloading > 0 ? 'RECARREGANDO…' : (ready ? 'ESPECIAL PRONTO' : 'ESPECIAL');
+    }
     h.lives.textContent = '♥'.repeat(Math.max(0, this.lives));
     h.coins.textContent = '🌿 ' + this.oregano + '  (vida em ' + this.nextLifeAt + ')';
     if (h.tokens) h.tokens.textContent = this.tokens > 0 ? ('⬡ ' + this.tokens + ' Rei do Picadão') : '';
@@ -610,7 +627,8 @@ class Game {
   }
 
   _drawPortrait() {
-    const key = HEROES[this.currentHero].spr;
+    // VEX transformado: mostra o RETRATO da forma atual (o nome no HUD continua VEX)
+    const key = (this.player && this.player.morph) ? this.player.morph.spr : HEROES[this.currentHero].spr;
     const hasImg = typeof SPR !== 'undefined' && SPR.hasImage(key);
     // só redesenha quando muda (troca de herói ou a imagem terminou de carregar) → barato
     const sig = key + (hasImg ? '#img' : (SPR.ready ? '#spr' : '#none'));

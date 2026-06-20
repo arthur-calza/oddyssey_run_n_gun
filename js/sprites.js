@@ -338,6 +338,22 @@ const SPR = {
       g.fillStyle = P.hatHi || '#6a4626'; g.beginPath(); g.ellipse(hx + r * 0.05, cy - r * 1.14, r * 0.6, r * 0.26, 0, 0, TAU); g.fill();
       g.fillStyle = P.trim || '#caa33a'; g.fillRect(hx - r * 0.82, cy - r * 0.92, r * 1.64, r * 0.16); // faixa
     }
+    if (d.hat === 'jester') {   // gorro de bobo da corte: pontas caídas com guizos (Vex)
+      const c1 = P.hat || '#6a1f2e', c2 = P.hat2 || '#241a1f', bell = P.bell || '#caa33a';
+      const lobe = (tx, ty, col) => {   // ponta mole terminando num guizo
+        g.fillStyle = col; g.beginPath();
+        g.moveTo(hx - r * 0.45, cy - r * 0.78);
+        g.quadraticCurveTo((hx + tx) / 2, cy - r * 1.55, tx, ty);
+        g.quadraticCurveTo((hx + tx) / 2 + r * 0.35, cy - r * 0.95, hx + r * 0.45, cy - r * 0.78);
+        g.closePath(); g.fill();
+        g.fillStyle = bell; g.beginPath(); g.arc(tx, ty + 1.6 * s, 1.9 * s, 0, TAU); g.fill();
+      };
+      lobe(hx - r * 1.7, cy - r * 0.35, c1);                     // ponta esquerda
+      lobe(hx + r * 1.7, cy - r * 0.35, c2);                     // ponta direita
+      lobe(hx + r * 0.15, cy - r * 2.15, c1);                    // ponta central (p/ cima)
+      g.fillStyle = c2; g.beginPath(); g.ellipse(hx, cy - r * 0.72, r * 1.06, r * 0.46, 0, 0, TAU); g.fill();  // copa
+      g.fillStyle = c1; g.fillRect(hx - r * 1.02, cy - r * 0.66, r * 2.04, r * 0.26);                          // banda na testa
+    }
   },
 
   // ---- live front arm + weapon, rotated toward aim --------------
@@ -385,6 +401,11 @@ const SPR = {
         ctx.fillStyle = Md; ctx.fillRect(2 * s, 1 * s, 19 * s, 1.4 * s);
         ctx.fillStyle = '#b1322c'; ctx.fillRect(20 * s, -2.6 * s, 4 * s, 5.2 * s); // bico
         ctx.fillStyle = '#ff8a3c'; ctx.beginPath(); ctx.arc(25 * s, 0, 2 * s, 0, TAU); ctx.fill(); break; // chama-piloto
+      case 'dagger':   // adaga empunhada (Vex)
+        ctx.fillStyle = Wd; ctx.fillRect(0, -1.3 * s, 4 * s, 2.6 * s);                  // cabo
+        ctx.fillStyle = '#caa33a'; ctx.fillRect(4 * s, -2.4 * s, 1.8 * s, 4.8 * s);     // guarda
+        ctx.fillStyle = P.metal || '#dfe3e8'; ctx.beginPath(); ctx.moveTo(5.6 * s, -1.8 * s); ctx.lineTo(13 * s, 0); ctx.lineTo(5.6 * s, 1.8 * s); ctx.fill();  // lâmina
+        ctx.fillStyle = P.metalSh || '#9aa6b2'; ctx.beginPath(); ctx.moveTo(5.6 * s, -1.8 * s); ctx.lineTo(13 * s, 0); ctx.lineTo(5.6 * s, 0); ctx.fill(); break;  // bisel
       case 'bow':
         ctx.strokeStyle = P.wood || '#7a5a2a'; ctx.lineWidth = 2.4 * s; ctx.beginPath(); ctx.arc(4 * s, 0, 13 * s, -1.25, 1.25); ctx.stroke();
         ctx.strokeStyle = '#d8d0b8'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(4 * s + Math.cos(-1.25) * 13 * s, Math.sin(-1.25) * 13 * s); ctx.lineTo(20 * s, 0); ctx.lineTo(4 * s + Math.cos(1.25) * 13 * s, Math.sin(1.25) * 13 * s); ctx.stroke();
@@ -535,6 +556,16 @@ SPR.define('edward', {
     leg: '#2e2a44', legSh: '#1a1726', legHi: '#3e3860', arm: '#3a3550', glove: '#5a4326', boot: '#3a2614',
     belt: '#7a5a2a', buckle: '#caa33a', cape: '#3a2658', capeSh: '#241038',
     orb: '#7fd8ff', metal: '#5a5e66', metalSh: '#34383e', wood: '#4a3220' },
+});
+SPR.define('vex', {
+  head: 'human', hat: 'jester', noBeard: true, weapon: 'dagger', artK: 1.7,
+  portraitSrc: 'pictures/retrato_Vex.png', portraitFull: true,
+  pal: { skin: '#b6b096', skinSh: '#827c66', hair: '#241d15', eye: '#1a140e',   // pele pálida de bobo
+    torso: '#5a2030', torsoHi: '#7a2e40', torsoSh: '#371320', armor: '#5a2030', armorHi: '#7a2e40', armorSh: '#371320',
+    leg: '#3a1622', legSh: '#23101a', legHi: '#52202e', arm: '#5a2030', glove: '#1a1410', boot: '#241018',
+    belt: '#2a1410', buckle: '#caa33a', cape: '#2a2230', capeSh: '#171420',
+    hat: '#6a1f2e', hat2: '#26181d', bell: '#caa33a', trim: '#caa33a',
+    metal: '#cfd2d6', metalSh: '#8a9098', wood: '#4a3220' },
 });
 SPR.define('zombie', {
   head: 'zombie', weapon: 'musket', artK: 1.66,

@@ -21,6 +21,12 @@ const FLAME_COOL    = 0.045; // cadência do jato (s) — menor = jato mais dens
 const FLAME_DMG     = 4;     // dano por tick de queima
 /* ================================================== */
 
+/* ===== VEX (metamorfo) — PERSONALIZE AQUI ===== */
+const VEX_MORPH_TIME   = 10;  // duração da transformação, em SEGUNDOS
+const VEX_BASE_CHARGES = 3;   // quantas metamorfoses por fase (ganha +1 por vida extra)
+const VEX_MORPH_HEAL   = 50;  // vida recuperada ao se transformar
+/* ============================================== */
+
 const WEAPONS = {
   // espingarda de dispersão — leque curto e forte de perto (Ragnarok)
   scatter: {
@@ -136,6 +142,23 @@ const WEAPONS = {
       p.consumeAmmo(); Sound.shot('rifle'); game.cam.addShake(2);
     },
   },
+
+  // adagas arremessadas — giratórias, rápidas, perfuram 1 alvo (Vex)
+  daggers: {
+    name: 'Adagas Arremessadas', icon: '🗡', visual: 'dagger',
+    cool: 0.17, clip: 16, reload: 0.7, gunLen: 16,
+    desc: 'Adagas giratórias velozes. Alta cadência; perfuram 1 inimigo.',
+    fire(p, game) {
+      p.cool = this.cool; p.coolMax = this.cool;
+      p.shoot(game, { kind: 'dagger', color: '#cfd2d6', speed: 880, dmg: 12, tileDmg: 8, r: 3, recoil: 14, shake: 0.8, life: 0.9, knock: 80, pierce: 1, spin: 18 });
+      p.consumeAmmo(); Sound.bow();
+    },
+    poweredFire(p, game) {   // POÇÃO: leque triplo envenenado
+      p.cool = 0.2; p.coolMax = 0.2;
+      p.shoot(game, { kind: 'dagger', color: '#b0ffd0', speed: 840, dmg: 13, tileDmg: 9, r: 3, recoil: 16, shake: 1, life: 0.95, knock: 90, pierce: 2, spin: 20 }, 0.04, 3);
+      p.consumeAmmo(); Sound.bow();
+    },
+  },
 };
 
 // jato de chamas reutilizável: chamas (partículas) + DANO EM ÁREA no cone à
@@ -167,7 +190,7 @@ function _flame(p, game, tiles, dmg, colors) {
 }
 
 // ordem das armas na FASE DE TESTES (teclas 1..N trocam de arma)
-const WEAPON_ORDER = ['scatter', 'repeater', 'flamethrower', 'bolt', 'fireball', 'smg', 'cannon', 'arquebus'];
+const WEAPON_ORDER = ['scatter', 'repeater', 'flamethrower', 'bolt', 'fireball', 'daggers', 'smg', 'cannon', 'arquebus'];
 
 /* ===================== HERÓIS ============================= */
 const HEROES = [
@@ -202,7 +225,7 @@ const HEROES = [
     },
   },
   {
-    key: 'nicolau', name: 'NICOLAU', icon: '⚗', spr: 'nicolau',
+    key: 'nicolau', name: 'SAINT-GERMAN', icon: '⚗', spr: 'nicolau',
     desc: 'Vendedor de poções e tônicos. Pistola veloz e a Cabeça do Mestre.',
     hp: 120, speed: 268, jumpV: 1400, jumps: 2, w: 26, h: 46,
     weaponKey: 'repeater',
@@ -249,6 +272,15 @@ const HEROES = [
         Sound.zap();
       },
     },
+  },
+  {
+    key: 'vex', name: 'VEX', icon: '🃏', spr: 'vex',
+    desc: 'Bobo da corte metamorfo. Adagas arremessadas e a Metamorfose: vira outro herói por ' + VEX_MORPH_TIME + 's.',
+    hp: 115, speed: 280, jumpV: 1420, jumps: 2, w: 26, h: 46,
+    weaponKey: 'daggers',
+    // Especial PRÓPRIO do Vex: metamorfose (medida por CARGAS, não pela barra azul).
+    // Tratada de forma especial em Player.update (procura por special.metamorph).
+    special: { cost: 0, cd: 0.5, metamorph: true, use(p, game) { /* ver Player._tryMetamorph */ } },
   },
 ];
 

@@ -109,7 +109,7 @@
     appState = 'playing';
     resumeGame();
     game.testMode = false;
-    game.roster = [0, 1, 2, 3, 4]; game.currentHero = 0; game.score = 0;
+    game.roster = [0, 1, 2, 3, 4, 5]; game.currentHero = 0; game.score = 0;
     game.oregano = 0; game.tokens = 0; game.nextLifeAt = 50;
     game.lives = 3; game.levelIndex = -1; game._editorReturn = true;
     game.onEnd = (res) => {
@@ -259,7 +259,7 @@
     appState = 'playing';
     resumeGame();                     // garante que o micromenu de pausa não fique aberto
     game.testMode = (i === LEVELS.length - 1);   // fase de testes: troca de arma por teclas
-    game.roster = [0, 1, 2, 3, 4]; game.currentHero = 0; game.score = 0;   // os 4 heróis disponíveis (troca com S/D)
+    game.roster = [0, 1, 2, 3, 4, 5]; game.currentHero = 0; game.score = 0;   // os 4 heróis disponíveis (troca com S/D)
     game.oregano = 0; game.tokens = 0; game.nextLifeAt = 50;
     game.lives = 3 + (Save.hasPerk('extralife') ? 1 : 0);
     game.onEnd = onGameEnd;

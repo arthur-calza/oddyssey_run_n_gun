@@ -23,6 +23,7 @@ const Gallery = {
     nicolau:  { icon: '⚗', name: 'Nicolau Saint-German', note: 'Vendedor de poções: pistola veloz + a Cabeça do Mestre (raio destruidor).' },
     silvyr:   { icon: '⚙', name: 'Silvyr',   note: 'Elfo artífice: lança-chamas + o Arranque Explosivo do braço mecânico.' },
     edward:   { icon: '✦', name: 'Edward Magnus', note: 'Mago humano: bola de fogo arcana + o Poder da Constituição (campo elétrico). Queda suave (levita).' },
+    vex:      { icon: '🃏', name: 'Vex', note: 'Bobo da corte metamorfo: adagas arremessadas + a Metamorfose (vira outro herói por 10s, +50 de vida).' },
   },
 
   // labels/ícones legíveis (a chave técnica fica entre parênteses)
