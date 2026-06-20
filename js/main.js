@@ -79,19 +79,16 @@
     showScreen(true);
   }
 
+  // seletor de fases = MAPA-MÚNDI top-down (ilha de Termath)
   function showLevelSelect() {
-    appState = 'levelselect'; subtitle.textContent = 'ESCOLHA O CAMPO DE BATALHA';
-    menu.innerHTML = '';
-    const grid = document.createElement('div'); grid.className = 'lvgrid';
-    LEVELS.slice(0, LEVELS.length - 1).forEach((L, i) => {   // campaign levels (last entry is the test stage)
-      const locked = false;   // todas as fases liberadas desde o início
-      const b = btn(`${i + 1}. ${L.name}${locked ? '  🔒' : ''}`, () => startLevel(i), locked);
-      b.style.fontSize = '15px';
-      grid.appendChild(b);
+    appState = 'map';
+    screen.style.display = 'none';          // libera o canvas para o mapa
+    controlsBox.style.display = 'none';
+    game.showHUD(false);
+    WorldMap.open(canvas, {
+      onBack: () => { WorldMap.close(); showMenu(); },
+      onPlay: (i) => { WorldMap.close(); startLevel(i); },
     });
-    menu.appendChild(grid);
-    menu.appendChild(btn('‹ Voltar', showMenu));
-    showScreen(true);
   }
 
   function showHeroes() {
@@ -334,6 +331,8 @@
       game.update(dt);
       game.draw();
       game.updateHUD();
+    } else if (appState === 'map') {
+      WorldMap.tick(dt);
     } else if (appState === 'gallery') {
       Gallery.tick(dt);
     } else if (appState === 'editor') {
