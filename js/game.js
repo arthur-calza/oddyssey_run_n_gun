@@ -413,7 +413,7 @@ class Game {
     // decorations (torches, banners, windows, pillars, vines...)
     for (const d of this.decor) {
       if (!this.cam.visible(d.x - CONFIG.TILE, d.y - CONFIG.TILE, CONFIG.TILE * 3, CONFIG.TILE * 3)) continue;
-      TEX.decor(ctx, d, this.cam.ox, this.cam.oy, this.time, this);
+      TEX.decorPixel(ctx, d, this.cam.ox, this.cam.oy, this.time, this);
     }
 
     // exits as glowing portals
@@ -530,13 +530,25 @@ class Game {
   }
 
   _drawPortrait() {
-    const c = this._hud.portrait, x = c.getContext('2d');
-    x.clearRect(0, 0, 62, 62);
     const key = HEROES[this.currentHero].spr;
-    if (typeof SPR !== 'undefined' && SPR.ready && SPR.sheets[key]) {
+    const hasImg = typeof SPR !== 'undefined' && SPR.hasImage(key);
+    // só redesenha quando muda (troca de herói ou a imagem terminou de carregar) → barato
+    const sig = key + (hasImg ? '#img' : (SPR.ready ? '#spr' : '#none'));
+    if (sig === this._portraitSig) return;
+    this._portraitSig = sig;
+    const c = this._hud.portrait, x = c.getContext('2d'), W = c.width, H = c.height;
+    x.clearRect(0, 0, W, H);
+    const def = typeof SPR !== 'undefined' && SPR.defs[key];
+    if (hasImg) {                                   // retrato (pictures/retrato_*.png ou concept)
+      const img = SPR.images[key]; x.imageSmoothingEnabled = true;
+      if (def && def.portraitFull) x.drawImage(img, 0, 0, img.width, img.height, 0, 0, W, H);   // busto inteiro
+      else { const p = def.portrait; x.drawImage(img, p.x, p.y, p.w, p.h, 0, 0, W, H); }        // recorte da cabeça
+      return;
+    }
+    if (typeof SPR !== 'undefined' && SPR.ready && SPR.sheets[key]) {   // fallback: sprite pixel-art
       const img = SPR.sheets[key].idle[0];
       x.imageSmoothingEnabled = false;
-      x.drawImage(img, 0, 0, img.width, img.height, 1, 4, 58, 58);
+      x.drawImage(img, 0, 0, img.width, img.height, 0, 0, W, H);
     }
   }
 

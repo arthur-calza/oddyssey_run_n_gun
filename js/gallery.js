@@ -13,9 +13,14 @@ const Gallery = {
   active: false, canvas: null, ctx: null, time: 0, onBack: null,
   tab: 'enemies',
   panel: null, listEl: null, infoEl: null, ctrlEl: null, tabsEl: null,
-  // estado do inimigo em exibição
-  m: null, enemyKey: null, state: 'idle', autoStates: true, autoT: 0,
+  // estado do ator (inimigo/herói) em exibição
+  m: null, enemyKey: null, heroKey: null, state: 'idle', autoStates: true, autoT: 0,
   matId: null, decorType: null, biome: null, biomeCamX: 0,
+
+  HERO_INFO: {
+    ragnarok: { icon: '⚔', name: 'Ragnarok', note: 'Cavaleiro de placas: espingarda de dispersão + Tiro Explosivo.' },
+    zracks:   { icon: '➶', name: 'Zracks',   note: 'Lagarto caçador: arco perfurante + Investida com lâmina.' },
+  },
 
   // labels/ícones legíveis (a chave técnica fica entre parênteses)
   ENEMY_INFO: {
@@ -133,6 +138,7 @@ const Gallery = {
     g.innerHTML = `
       <div class="gpanel gtop">
         <button class="gback" data-back>‹ Menu</button>
+        <button class="gtab" data-tab="heroes">♟ Heróis</button>
         <button class="gtab" data-tab="enemies">🧟 Bestiário</button>
         <button class="gtab" data-tab="builds">🏰 Construções</button>
         <button class="gtab" data-tab="dungeons">🕳 Masmorras</button>
@@ -153,11 +159,12 @@ const Gallery = {
     g.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => this.setTab(b.dataset.tab));
   },
 
+  _isActor(tab) { return (tab || this.tab) === 'enemies' || (tab || this.tab) === 'heroes'; },
   setTab(tab) {
     this.tab = tab;
     this.tabsEl.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
-    this.ctrlEl.style.display = (tab === 'enemies') ? 'flex' : 'none';
-    if (tab === 'enemies') this._buildEnemyCtrl();
+    this.ctrlEl.style.display = this._isActor(tab) ? 'flex' : 'none';
+    if (this._isActor(tab)) this._buildEnemyCtrl();
     this._buildList();
   },
 
@@ -180,7 +187,7 @@ const Gallery = {
   setState(id) {
     this.state = id;
     if (this.m) { this.m.dying = null; this.m.dead = false; this.m.flash = 0; this.m._hold = 0; }
-    if (this.tab === 'enemies') this._buildEnemyCtrl();
+    if (this._isActor()) this._buildEnemyCtrl();
   },
 
   // ---------- listas por aba ----------
@@ -190,7 +197,15 @@ const Gallery = {
       const b = document.createElement('button'); b.className = 'gitem' + (on ? ' on' : '');
       fill(b); b.onclick = onclick; L.appendChild(b); return b;
     };
-    if (this.tab === 'enemies') {
+    if (this.tab === 'heroes') {
+      HEROES.forEach(h => {
+        const info = this.HERO_INFO[h.key] || { icon: h.icon || '♟', name: h.name };
+        mk(this.heroKey === h.key, () => this.selectHero(h.key), b => {
+          b.innerHTML = `<span class="gem">${info.icon}</span><span><div class="gname">${info.name}</div><div class="gsub">${h.key}</div></span>`;
+        });
+      });
+      if (!this.heroKey) this.selectHero(HEROES[0].key);
+    } else if (this.tab === 'enemies') {
       for (const key in ENEMY_TYPES) {
         const info = this.ENEMY_INFO[key] || { icon: '❓', name: key, note: '' };
         const t = ENEMY_TYPES[key];
@@ -246,12 +261,25 @@ const Gallery = {
 
   // ---------- seleção ----------
   selectEnemy(key) {
-    this.enemyKey = key; const t = ENEMY_TYPES[key];
+    this.enemyKey = key; this.heroKey = null; const t = ENEMY_TYPES[key];
     this.m = {
       spr: t.spr, w: t.w, h: t.h, x: 0, y: 0, face: 1,
       vx: 0, vy: 0, onGround: true, anim: 0, runDist: 0,
       flash: 0, aimAng: 0, cool: 0, coolMax: 0.18, dying: null, dead: false,
-      dyingMax: t.boss ? 1.2 : 0.55, dashT: 0, _hold: 0,
+      dyingMax: t.boss ? 1.2 : 0.55, dashT: 0, _hold: 0, _spd: t.speed,
+      get cx() { return this.x + this.w / 2; },
+    };
+    if (this.autoStates) this.autoT = 0; else this.setState(this.state);
+    this._buildList(); this._info();
+  },
+  selectHero(key) {
+    const h = HEROES.find(x => x.key === key) || HEROES[0];
+    this.heroKey = h.key; this.enemyKey = null;
+    this.m = {
+      spr: h.spr, w: h.w, h: h.h, x: 0, y: 0, face: 1,
+      vx: 0, vy: 0, onGround: true, anim: 0, runDist: 0,
+      flash: 0, aimAng: 0, cool: 0, coolMax: 0.2, dying: null, dead: false,
+      dyingMax: 0.7, dashT: 0, _hold: 0, _spd: h.speed,
       get cx() { return this.x + this.w / 2; },
     };
     if (this.autoStates) this.autoT = 0; else this.setState(this.state);
@@ -312,7 +340,16 @@ const Gallery = {
   _info() {
     const I = this.infoEl; if (!I) return;
     const row = (k, v) => `<div class="grow"><b>${k}</b><span>${v}</span></div>`;
-    if (this.tab === 'enemies') {
+    if (this.tab === 'heroes') {
+      const h = HEROES.find(x => x.key === this.heroKey) || HEROES[0];
+      const info = this.HERO_INFO[h.key] || {};
+      const wpn = SPR.defs[h.spr] ? SPR.defs[h.spr].weapon : '';
+      const WP = { shotgun: 'espingarda', bow: 'arco', rifle: 'rifle', musket: 'mosquete', cannon: 'canhão', smg: 'metralhadora', staff: 'cajado' };
+      I.innerHTML = `<h3>${info.icon || h.icon || ''} ${info.name || h.name}</h3>
+        ${row('Vida', h.hp)}${row('Velocidade', h.speed)}${row('Pulos', h.jumps)}
+        ${row('Arma', WP[wpn] || wpn || '—')}${row('Pente', h.clip)}${row('Recarga', h.reload + 's')}
+        <div class="gnote">${h.desc || info.note || ''}</div>`;
+    } else if (this.tab === 'enemies') {
       const t = ENEMY_TYPES[this.enemyKey], info = this.ENEMY_INFO[this.enemyKey] || {};
       const tags = [];
       if (t.boss) tags.push('CHEFE'); if (t.mini) tags.push('mini-chefe');
@@ -360,7 +397,7 @@ const Gallery = {
   tick(dt) {
     if (!this.active) return;
     this.time += dt;
-    if (this.tab === 'enemies') this._updateEnemy(dt);
+    if (this._isActor()) this._updateEnemy(dt);
     else this.biomeCamX += dt * 60;
     this._draw();
   },
@@ -375,8 +412,7 @@ const Gallery = {
       if (ns !== this.state) { this.state = ns; m.dying = null; m.dead = false; m.flash = 0; m._hold = 0; }
     }
     m.anim += dt;
-    const def = ENEMY_TYPES[this.enemyKey];
-    const spd = Math.max(60, def.speed);
+    const spd = Math.max(60, m._spd || 120);
     // aim sweep (mostra o braço/arma)
     m.aimAng = Math.sin(this.time * 0.9) * 0.5;
     m.cool = Math.max(0, m.cool - dt);
@@ -420,7 +456,7 @@ const Gallery = {
     ctx.save(); ctx.imageSmoothingEnabled = false; ctx.scale(z, z);
     const vw = W / z, vh = H / z;
 
-    if (this.tab === 'enemies') {
+    if (this._isActor()) {
       const m = this.m; if (m) {
         const feetF = 0.70;
         const feetY = vh * feetF;
@@ -449,7 +485,7 @@ const Gallery = {
     const offX = (W / z - wpx) / 2, offY = (H / z - hpx) / 2;
     const cam = { x: 0, y: 0, vw: W / z, vh: H / z, ox: offX, oy: offY, visible: () => true };
     P.world.draw(ctx, cam);
-    for (const d of P.decor) TEX.decor(ctx, d, offX, offY, this.time, null);
+    for (const d of P.decor) TEX.decorPixel(ctx, d, offX, offY, this.time, null);
     ctx.restore();
   },
 
@@ -465,7 +501,7 @@ const Gallery = {
     const offX = (W / z - wpx) / 2, offY = (H / z - hpx) / 2;
     const cam = { x: 0, y: 0, vw: W / z, vh: H / z, ox: offX, oy: offY, visible: () => true };
     P.world.draw(ctx, cam);
-    for (const d of P.decor) TEX.decor(ctx, d, offX, offY, this.time, null);
+    for (const d of P.decor) TEX.decorPixel(ctx, d, offX, offY, this.time, null);
     // marcadores de monstros (●) e tesouros (orégano/token/poção/vida)
     const LOOT = { o: ['#7be08a', '🌿'], T: ['#e0843a', '⬡'], Q: ['#6fd0ff', '⚗'], H: ['#ff5b6e', '✚'] };
     for (const mk of P.marks) {

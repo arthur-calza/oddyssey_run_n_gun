@@ -7,7 +7,18 @@
       "PowerShell(\"node done\")",
       "PowerShell(foreach\\($c in 'node','deno','bun','py','python3','npx'\\){ $p=\\(Get-Command $c -ErrorAction SilentlyContinue\\); if\\($p\\){ \"$c -> $\\($p.Source\\)\" } else { \"$c -> \\(ausente\\)\" } })",
       "PowerShell(try { $v = & py -3 --version 2>&1; \"py-3: $v\" } catch { \"py-3 falhou: $_\" }; try { $list = & py --list 2>&1; \"list: $list\" } catch { \"list falhou\" })",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "Bash(node --check js/background.js)",
+      "Bash(node --check js/world.js)",
+      "Bash(python -c ' *)",
+      "Bash(node -e \"const fs=require\\('fs'\\);for\\(const f of ['pictures/retrato_Ragnarok.png','pictures/retrato_Zracks.png']\\){const b=fs.readFileSync\\(f\\);console.log\\(f,b.readUInt32BE\\(16\\)+'x'+b.readUInt32BE\\(20\\)\\);}\")",
+      "Bash(node --check js/levels.js)",
+      "Bash(node --check js/sprites.js)",
+      "Bash(node --check js/game.js)",
+      "Bash(ls -la concept/)",
+      "Bash(find . -iname \"*concept*\" -not -path \"./.git/*\")",
+      "Bash(node --check js/worldmap.js)",
+      "Bash(node --check js/main.js)"
     ]
   }
 }
