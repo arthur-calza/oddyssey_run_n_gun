@@ -204,16 +204,33 @@ const SPR = {
     g.fillStyle = P.glove || P.skin || col; g.beginPath(); g.arc(hx, hy, 3 * s, 0, TAU); g.fill();
   },
 
+  // capa ESVOAÇANTE — maior e bem mais animada (corre/pula/cai). Puramente
+  // visual: sai pelas laterais e por baixo do corpo e ondula na barra inferior.
   _cape(g, P, s, shY, hipY, lean, p) {
-    const sway = (p.anim === 'run' ? Math.sin(p.ph) * 4 : Math.sin((p.ph || 0) * 0.6) * 1.5) + (p.air ? -6 : 0);
-    const bot = hipY + 24 * s;
+    const run = p.anim === 'run', jump = p.anim === 'jump', fall = p.anim === 'fall', air = !!p.air;
+    const t = p.ph || 0;
+    // deslocamento p/ TRÁS (-x), comprimento extra e ondulação da barra
+    const back = (run ? 6 + Math.sin(t) * 3.5 : air ? 12 : 2.5 + Math.sin(t * 0.6) * 1.4) * s;
+    const lift = (jump ? -7 : fall ? -3 : 0) * s;
+    const topHW = 11 * s, botHW = (run ? 18 : air ? 21 : 14.5) * s;
+    const topY = shY - 2 * s, botY = hipY + 30 * s + lift;
+    const wob = (run ? Math.sin(t * 2) * 4.5 : air ? Math.sin(t) * 2.5 : Math.sin(t * 0.8) * 1.6) * s;
+    // capa principal (pano)
     g.fillStyle = P.cape;
-    g.beginPath(); g.moveTo(lean - 9 * s, shY - 1 * s);
-    g.quadraticCurveTo(lean - 11 * s + sway * 0.5, (shY + bot) / 2, lean - 7 * s + sway, bot);
-    g.quadraticCurveTo(lean + sway, bot + 4 * s, lean + 8 * s + sway, bot);
-    g.quadraticCurveTo(lean + 11 * s + sway * 0.5, (shY + bot) / 2, lean + 9 * s, shY - 1 * s);
+    g.beginPath();
+    g.moveTo(lean - topHW, topY);                                                                      // ombro esquerdo
+    g.quadraticCurveTo(lean - topHW - back * 0.7, (topY + botY) * 0.5, lean - botHW - back, botY + wob); // desce esvoaçando p/ trás
+    g.quadraticCurveTo(lean - back, botY + 7 * s + wob * 0.4, lean + botHW * 0.55 - back, botY - wob);   // barra ondulada
+    g.quadraticCurveTo(lean + topHW + back * 0.2, (topY + botY) * 0.5, lean + topHW, topY);              // volta ao ombro direito
+    g.quadraticCurveTo(lean, topY - 4 * s, lean - topHW, topY);                                          // gola sobre os ombros
     g.closePath(); g.fill();
-    g.fillStyle = P.capeSh; g.beginPath(); g.moveTo(lean, shY); g.quadraticCurveTo(lean - 3 * s + sway, (shY + bot) / 2, lean - 7 * s + sway, bot); g.quadraticCurveTo(lean + sway, bot + 4 * s, lean + 1 * s + sway, bot - 2 * s); g.closePath(); g.fill();
+    // dobra interna (sombra) p/ profundidade
+    g.fillStyle = P.capeSh;
+    g.beginPath();
+    g.moveTo(lean + 1.5 * s, topY);
+    g.quadraticCurveTo(lean - back * 0.5, (topY + botY) * 0.5, lean - botHW * 0.4 - back, botY + wob * 0.7);
+    g.quadraticCurveTo(lean - back, botY + 4 * s, lean + 2 * s - back * 0.5, botY - 2 * s);
+    g.closePath(); g.fill();
   },
 
   _tail(g, P, s, hipY, p) {

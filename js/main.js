@@ -47,35 +47,20 @@
     appState = 'menu'; subtitle.textContent = 'CRÔNICAS DE FERRO E SANGUE';
     menu.innerHTML = '';
     menu.appendChild(purse());
-    menu.appendChild(btn('▶  INICIAR CRUZADA', () => startLevel(0)));
-    menu.appendChild(btn('☰  SELECIONAR FASE', showLevelSelect));
-    menu.appendChild(btn('🛒  LOJA', showShop));
-    menu.appendChild(btn('♟  HERÓIS', showHeroes));
-    menu.appendChild(btn('📖  ENCICLOPÉDIA VISUAL', showGallery));
-    menu.appendChild(btn('🔨  CRIAÇÃO', showEditor));
-    menu.appendChild(btn('🛠  FASE DE TESTES', () => startLevel(LEVELS.length - 1)));
+    menu.appendChild(btn('▶  CAMPANHA', showLevelSelect));
+    menu.appendChild(btn('🔨  MODO CRIAÇÃO', showCreationMenu));
     showScreen(true);
   }
 
-  function showShop() {
-    appState = 'shop'; subtitle.textContent = 'LOJA DO MERCADOR';
-    menu.innerHTML = ''; menu.appendChild(purse());
-    PERKS.forEach(perk => {
-      const owned = Save.hasPerk(perk.id);
-      const b = btn(`${owned ? '✔ ' : ''}${perk.name} — ${owned ? 'ADQUIRIDO' : '🌿 ' + perk.cost}`, () => {
-        if (!owned && Save.buy(perk.id, perk.cost)) { Sound.coin(); showShop(); }
-        else if (!owned) { Sound.hurt(); }
-      }, owned || Save.oregano < perk.cost);
-      b.title = perk.desc; b.style.fontSize = '15px';
-      const wrap = document.createElement('div'); wrap.style.cssText = 'pointer-events:auto;text-align:left;';
-      wrap.appendChild(b);
-      const dd = document.createElement('div'); dd.style.cssText = 'color:#9a8f7d;font-size:12px;margin:-4px 0 8px 4px;'; dd.textContent = perk.desc;
-      wrap.appendChild(dd); menu.appendChild(wrap);
-    });
-    const note = document.createElement('div'); note.style.cssText = 'color:#9a8f7d;font-size:12px;margin-top:4px;';
-    note.textContent = 'Os tokens "Rei do Picadão" são artefatos colecionáveis — junte-os para recompensas futuras.';
-    menu.appendChild(note);
-    menu.appendChild(btn('‹ Voltar', showMenu));
+  // submenu de ferramentas de criação/depuração
+  function showCreationMenu() {
+    appState = 'creation'; subtitle.textContent = 'MODO CRIAÇÃO';
+    menu.innerHTML = '';
+    menu.appendChild(btn('📖  ENCICLOPÉDIA VISUAL', showGallery));
+    menu.appendChild(btn('🔨  CRIAÇÃO DE FASES', showEditor));
+    menu.appendChild(btn('🛠  FASE DE TESTES', () => startLevel(LEVELS.length - 1)));
+    menu.appendChild(btn('🎞  ANIMAÇÕES DOS PERSONAGENS', showSpriteLab));
+    menu.appendChild(btn('‹  Voltar', showMenu));
     showScreen(true);
   }
 
@@ -91,26 +76,21 @@
     });
   }
 
-  function showHeroes() {
-    appState = 'heroes'; subtitle.textContent = 'OS LIBERTADORES';
-    menu.innerHTML = '';
-    HEROES.forEach(h => {
-      const d = document.createElement('div');
-      d.style.cssText = 'pointer-events:auto;background:#241a10;border:2px solid #5a4326;border-radius:8px;padding:10px 14px;text-align:left;';
-      d.innerHTML = `<div style="color:#e8b94a;font-size:17px">${h.icon} ${h.name}</div>
-        <div style="color:#9a8f7d;font-size:13px;margin-top:3px">${h.desc}</div>`;
-      menu.appendChild(d);
-    });
-    menu.appendChild(btn('‹ Voltar', showMenu));
-    showScreen(true);
-  }
-
   function showGallery() {
     appState = 'gallery';
     screen.style.display = 'none';          // libera o canvas para o visualizador
     controlsBox.style.display = 'none';
     game.showHUD(false);
-    Gallery.open(canvas, () => { Gallery.close(); showMenu(); });
+    Gallery.open(canvas, () => { Gallery.close(); showCreationMenu(); });
+  }
+
+  // ambiente de inspeção de sprites (Animações dos Personagens)
+  function showSpriteLab() {
+    appState = 'spritelab';
+    screen.style.display = 'none';
+    controlsBox.style.display = 'none';
+    game.showHUD(false);
+    SpriteLab.open(canvas, () => { SpriteLab.close(); showCreationMenu(); });
   }
 
   function showEditor() {
@@ -119,7 +99,7 @@
     controlsBox.style.display = 'none';
     game.showHUD(false);
     Editor.open(canvas, {
-      onBack: () => { Editor.close(); showMenu(); },
+      onBack: () => { Editor.close(); showCreationMenu(); },
       onPlay: (def) => { Editor.close(); startEditorTest(def); },
     });
   }
@@ -337,6 +317,8 @@
       WorldMap.tick(dt);
     } else if (appState === 'gallery') {
       Gallery.tick(dt);
+    } else if (appState === 'spritelab') {
+      SpriteLab.tick(dt);
     } else if (appState === 'editor') {
       Editor.tick(dt);
     }
