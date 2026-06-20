@@ -236,10 +236,26 @@ const SPR = {
         oval(hx - r * 0.42, cy + r * 0.1, r * 0.5, r * 0.9, P.skinSh);  // back/jaw shadow
         g.fillStyle = P.hair; g.beginPath(); g.ellipse(hx, cy - r * 0.42, r * 1.02, r * 0.8, 0, Math.PI, TAU); g.fill();  // hair top
         g.beginPath(); g.moveTo(hx - r, cy - r * 0.5); g.quadraticCurveTo(hx - r * 1.1, cy + r * 0.4, hx - r * 0.6, cy + r * 0.6); g.lineTo(hx - r * 0.5, cy - r * 0.3); g.fill(); // sideburn
-        oval(hx, cy + r * 0.62, r * 0.78, r * 0.55, P.hair);            // beard
+        if (d.longHair) { g.fillStyle = P.hair; g.beginPath(); g.moveTo(hx - r * 0.95, cy - r * 0.2); g.quadraticCurveTo(hx - r * 1.25, cy + r * 0.9, hx - r * 0.7, cy + r * 1.5); g.lineTo(hx - r * 0.2, cy + r * 0.6); g.lineTo(hx - r * 0.4, cy - r * 0.2); g.fill(); } // cabelo longo
+        if (!d.noBeard) oval(hx, cy + r * 0.62, r * 0.78, r * 0.55, P.hair);  // barba (opcional)
         oval(hx + r * 0.28, cy + r * 0.06, r * 0.55, r * 0.58, P.skin); // face
-        g.fillStyle = '#241c14'; g.beginPath(); g.arc(hx + r * 0.38, cy - r * 0.02, 1.5 * s, 0, TAU); g.fill();  // eye
-        g.fillStyle = P.skinSh; g.fillRect(hx + r * 0.72, cy + r * 0.05, 1.2 * s, 2.5 * s); break;               // nose
+        if (P.eye) { g.shadowColor = P.eye; g.shadowBlur = 5; }         // olhos brilhantes (mago)
+        g.fillStyle = P.eye || '#241c14'; g.beginPath(); g.arc(hx + r * 0.38, cy - r * 0.02, 1.5 * s, 0, TAU); g.fill();  // eye
+        g.shadowBlur = 0; g.fillStyle = P.skinSh; g.fillRect(hx + r * 0.72, cy + r * 0.05, 1.2 * s, 2.5 * s); break;      // nose
+      }
+      case 'elf': {
+        // ouvido pontudo (atrás), desenhado antes da cabeça
+        g.fillStyle = P.skinSh; g.beginPath(); g.moveTo(hx - r * 0.5, cy - r * 0.05); g.lineTo(hx - r * 1.15, cy - r * 0.55); g.lineTo(hx - r * 0.4, cy - r * 0.35); g.closePath(); g.fill();
+        oval(hx, cy, r * 0.9, r * 1.02, P.skin);                       // cabeça (jovem, fina)
+        oval(hx - r * 0.42, cy + r * 0.1, r * 0.48, r * 0.85, P.skinSh);// sombra do maxilar
+        g.fillStyle = P.skin; g.beginPath(); g.moveTo(hx - r * 0.42, cy + r * 0.02); g.lineTo(hx - r * 0.95, cy - r * 0.42); g.lineTo(hx - r * 0.34, cy - r * 0.28); g.closePath(); g.fill(); // ponta da orelha
+        g.fillStyle = P.hair; g.beginPath(); g.ellipse(hx, cy - r * 0.46, r * 1.04, r * 0.82, 0, Math.PI, TAU); g.fill();   // cabelo bagunçado
+        g.beginPath(); g.moveTo(hx - r, cy - r * 0.5); g.quadraticCurveTo(hx - r * 1.15, cy + r * 0.2, hx - r * 0.62, cy + r * 0.42); g.lineTo(hx - r * 0.5, cy - r * 0.25); g.fill(); // mecha lateral
+        g.beginPath(); g.moveTo(hx + r * 0.2, cy - r * 1.0); g.lineTo(hx + r * 0.7, cy - r * 0.5); g.lineTo(hx - r * 0.1, cy - r * 0.7); g.fill(); // topete
+        oval(hx + r * 0.3, cy + r * 0.06, r * 0.5, r * 0.55, P.skin);   // rosto
+        g.fillStyle = '#241c14'; g.beginPath(); g.arc(hx + r * 0.42, cy - r * 0.02, 1.5 * s, 0, TAU); g.fill();             // olho
+        g.fillStyle = P.skinSh; g.fillRect(hx + r * 0.76, cy + r * 0.05, 1.2 * s, 2.5 * s);                                 // nariz
+        break;
       }
       case 'lizard': case 'dragon': {
         for (let i = 0; i < 4; i++) { g.fillStyle = P.crest || P.skinSh; g.beginPath(); g.moveTo(hx - r * 0.7 + i * 4 * s, cy - r * 0.7); g.lineTo(hx - r * 0.5 + i * 4 * s, cy - r * 1.3 - (i % 2) * 2 * s); g.lineTo(hx - r * 0.3 + i * 4 * s, cy - r * 0.7); g.fill(); }
@@ -287,12 +303,30 @@ const SPR = {
         g.fillStyle = P.tentacle || P.skinSh; for (let i = -2; i <= 2; i++) { const tx = hx + i * 3.2 * s; g.beginPath(); g.moveTo(tx, cy + r * 0.3); g.quadraticCurveTo(tx + i * 1.5, cy + r * 1.0, tx + i * 3, cy + r * 1.6); g.quadraticCurveTo(tx + i, cy + r * 0.9, tx + 1.5 * s, cy + r * 0.4); g.fill(); } break;
       }
     }
+    // ---- adereços de cabeça (desenhados POR CIMA) ----
+    if (d.goggles) {   // óculos de aviador na testa (Silvyr)
+      g.strokeStyle = P.metal || '#6a5030'; g.lineWidth = 1.4 * s; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(hx - r * 0.8, cy - r * 0.72); g.lineTo(hx + r * 0.8, cy - r * 0.72); g.stroke();
+      g.fillStyle = P.metal || '#9a7d44'; g.beginPath(); g.arc(hx - r * 0.34, cy - r * 0.72, 2.4 * s, 0, TAU); g.arc(hx + r * 0.36, cy - r * 0.72, 2.4 * s, 0, TAU); g.fill();
+      g.fillStyle = P.goggle || '#7fd8e8'; g.beginPath(); g.arc(hx - r * 0.34, cy - r * 0.72, 1.5 * s, 0, TAU); g.arc(hx + r * 0.36, cy - r * 0.72, 1.5 * s, 0, TAU); g.fill();
+    }
+    if (d.hat === 'plumed') {   // chapéu de aba larga com pluma vermelha (Nicolau)
+      g.fillStyle = P.plume || '#b1322c';                                          // pluma (atrás, varrida)
+      g.beginPath(); g.moveTo(hx - r * 0.2, cy - r * 0.85);
+      g.quadraticCurveTo(hx - r * 1.7, cy - r * 1.7, hx - r * 1.25, cy - r * 2.45);
+      g.quadraticCurveTo(hx - r * 0.5, cy - r * 1.7, hx + r * 0.35, cy - r * 0.95); g.fill();
+      g.fillStyle = P.hat || '#5a3a1e';
+      g.beginPath(); g.ellipse(hx, cy - r * 0.78, r * 1.5, r * 0.42, 0, 0, TAU); g.fill();   // aba
+      g.beginPath(); g.ellipse(hx + r * 0.05, cy - r * 1.06, r * 0.82, r * 0.5, 0, 0, TAU); g.fill(); // copa
+      g.fillStyle = P.hatHi || '#6a4626'; g.beginPath(); g.ellipse(hx + r * 0.05, cy - r * 1.14, r * 0.6, r * 0.26, 0, 0, TAU); g.fill();
+      g.fillStyle = P.trim || '#caa33a'; g.fillRect(hx - r * 0.82, cy - r * 0.92, r * 1.64, r * 0.16); // faixa
+    }
   },
 
   // ---- live front arm + weapon, rotated toward aim --------------
-  drawWeaponArm(ctx, d, sx, sy, aim, recoil, mode) {
+  drawWeaponArm(ctx, d, sx, sy, aim, recoil, mode, wpnName) {
     const P = d.pal, s = d.scale || 1;
-    const wpn = mode === 'sword' ? 'sword' : d.weapon;
+    const wpn = mode === 'sword' ? 'sword' : (wpnName || d.weapon);
     ctx.save(); ctx.translate(sx, sy); ctx.rotate(aim); ctx.translate(-(recoil || 0), 0);
     ctx.fillStyle = P.arm || P.armor; ctx.fillRect(-2 * s, -2.5 * s, 9 * s, 5 * s);
     if (P.glove) { ctx.fillStyle = P.glove; ctx.fillRect(6 * s, -2.5 * s, 4 * s, 5 * s); }
@@ -319,6 +353,21 @@ const SPR = {
         ctx.fillStyle = '#0c0a08'; ctx.fillRect(24 * s, -3.5 * s, 4 * s, 7 * s); ctx.fillStyle = Md; ctx.fillRect(10 * s, 3 * s, 16 * s, 2 * s); break;
       case 'smg':
         ctx.fillStyle = Md; ctx.fillRect(2 * s, -2 * s, 6 * s, 4 * s); ctx.fillStyle = M; ctx.fillRect(7 * s, -2 * s, 16 * s, 3 * s); ctx.fillRect(9 * s, 2 * s, 4 * s, 5 * s); break;
+      case 'pistol':   // flintlock de engenho: cabo curto + cano + cão
+        ctx.fillStyle = Wd; ctx.fillRect(-1 * s, -1 * s, 4 * s, 7 * s);          // cabo (curva p/ baixo)
+        ctx.fillStyle = Wd; ctx.fillRect(1 * s, -2 * s, 6 * s, 4 * s);           // corpo de madeira
+        ctx.fillStyle = M; ctx.fillRect(6 * s, -2 * s, 13 * s, 3 * s);            // cano
+        ctx.fillStyle = Md; ctx.fillRect(6 * s, 0.4 * s, 13 * s, 1.2 * s);
+        ctx.fillStyle = '#caa33a'; ctx.fillRect(4 * s, -3.5 * s, 2.4 * s, 3 * s); // cão/martelo
+        ctx.fillStyle = '#caa33a'; ctx.fillRect(17 * s, -2.6 * s, 2 * s, 1.6 * s); break; // mira
+      case 'flamethrower':   // tanque de combustível + cano + bico com chama-piloto
+        ctx.fillStyle = Md; ctx.fillRect(-5 * s, -3.5 * s, 7 * s, 9 * s);         // tanque
+        ctx.fillStyle = M; ctx.fillRect(-4 * s, -2.5 * s, 5 * s, 7 * s);
+        ctx.fillStyle = '#caa33a'; ctx.fillRect(-1.5 * s, -4 * s, 2.5 * s, 2 * s); // válvula
+        ctx.fillStyle = M; ctx.fillRect(2 * s, -2 * s, 19 * s, 4 * s);            // cano
+        ctx.fillStyle = Md; ctx.fillRect(2 * s, 1 * s, 19 * s, 1.4 * s);
+        ctx.fillStyle = '#b1322c'; ctx.fillRect(20 * s, -2.6 * s, 4 * s, 5.2 * s); // bico
+        ctx.fillStyle = '#ff8a3c'; ctx.beginPath(); ctx.arc(25 * s, 0, 2 * s, 0, TAU); ctx.fill(); break; // chama-piloto
       case 'bow':
         ctx.strokeStyle = P.wood || '#7a5a2a'; ctx.lineWidth = 2.4 * s; ctx.beginPath(); ctx.arc(4 * s, 0, 13 * s, -1.25, 1.25); ctx.stroke();
         ctx.strokeStyle = '#d8d0b8'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(4 * s + Math.cos(-1.25) * 13 * s, Math.sin(-1.25) * 13 * s); ctx.lineTo(20 * s, 0); ctx.lineTo(4 * s + Math.cos(1.25) * 13 * s, Math.sin(1.25) * 13 * s); ctx.stroke();
@@ -375,15 +424,16 @@ const SPR = {
       const ga = this.gunAnchor(e);
       const recoil = (e.cool && e.coolMax) ? (e.cool / e.coolMax) * 4 : 0;
       const mode = (e.dashT > 0 || e.swordMode) ? 'sword' : null;
-      this._drawPixWeapon(ctx, d, ga.x + cam.ox, ga.y + cam.oy, scale, e.aimAng, recoil, mode);
+      const wpn = e.weaponVisual || d.weapon;   // a arma equipada pode trocar o visual (ex.: fase de testes)
+      this._drawPixWeapon(ctx, d, ga.x + cam.ox, ga.y + cam.oy, scale, e.aimAng, recoil, mode, wpn);
     }
   },
 
   // blit the (cached) pixel-art weapon at the hands anchor; the recoil kicks it
   // back along the aim direction so the shot still has punch without re-baking.
-  _drawPixWeapon(ctx, d, wx, wy, scale, aim, recoil, mode) {
+  _drawPixWeapon(ctx, d, wx, wy, scale, aim, recoil, mode, wpn) {
     const PXF = d.pxf || this.PXF;
-    const buf = this._pixWeaponFrame(d, mode, aim, PXF);
+    const buf = this._pixWeaponFrame(d, mode, aim, PXF, wpn);
     const c = buf.width / 2;
     const rx = -Math.cos(aim) * recoil * scale, ry = -Math.sin(aim) * recoil * scale;
     ctx.save(); ctx.imageSmoothingEnabled = false;
@@ -393,9 +443,9 @@ const SPR = {
   },
 
   // pixelized arm+weapon for one discrete aim angle, baked once and cached
-  _pixWeaponFrame(d, mode, aim, PXF) {
+  _pixWeaponFrame(d, mode, aim, PXF, wpn) {
     const steps = this.WAIM, bucket = ((Math.round(aim / (TAU / steps)) % steps) + steps) % steps;
-    const ckey = d.key + ':' + (mode || '') + ':' + bucket;
+    const ckey = d.key + ':' + (mode || '') + ':' + (wpn || d.weapon || '') + ':' + bucket;
     let frame = this._pwCache[ckey];
     if (frame) return frame;
     const ang = bucket * (TAU / steps);
@@ -407,7 +457,7 @@ const SPR = {
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, bw, bw); g.imageSmoothingEnabled = true;
     const c = bw / 2;
     g.save(); g.translate(c, c); g.scale(1 / PXF, 1 / PXF);    // natural units → buffer pixels
-    this.drawWeaponArm(g, d, 0, 0, ang, 0, mode);
+    this.drawWeaponArm(g, d, 0, 0, ang, 0, mode, wpn);
     g.restore();
     const im = g.getImageData(0, 0, bw, bw), px = im.data;     // crisp silhouette (sem contorno grosso)
     for (let i = 0; i < px.length; i += 4) px[i + 3] = px[i + 3] >= 120 ? 255 : 0;
@@ -438,6 +488,36 @@ SPR.define('zracks', {
     torso: '#3c2e1a', torsoHi: '#574021', torsoSh: '#241a0d', armor: '#3c2e1a', armorHi: '#574021', armorSh: '#241a0d',
     leg: '#415423', legSh: '#283619', arm: '#4f6e30', foot: '#2c4519', claw: '#b8ad8a',
     belt: '#2c2010', pendant: '#c7bf9e', wood: '#4a3216' },
+});
+SPR.define('nicolau', {
+  head: 'human', hat: 'plumed', weapon: 'pistol', artK: 1.7,
+  portraitSrc: 'pictures/retrato_Nicolau_Saint_German.png', portraitFull: true,
+  pal: { skin: '#c98f6a', skinSh: '#92593a', hair: '#3a2414',
+    torso: '#6a4426', torsoHi: '#86582f', torsoSh: '#3e2614', armor: '#6a4426', armorHi: '#86582f', armorSh: '#3e2614',
+    leg: '#2e3552', legSh: '#1c2236', legHi: '#3e4a72', arm: '#6a4426', glove: '#43321e', boot: '#2a1c12',
+    pauldron: '#8a929d', plate: '#6b7884', belt: '#caa33a', buckle: '#8a6a26',
+    hat: '#5a3a1e', hatHi: '#6e4926', plume: '#b1322c', trim: '#caa33a',
+    metal: '#3a3e44', metalSh: '#20242a', wood: '#5a3c20' },
+});
+SPR.define('silvyr', {
+  head: 'elf', goggles: true, weapon: 'flamethrower', artK: 1.7,
+  portraitSrc: 'pictures/retrato_Silvyr.png', portraitFull: true,
+  pal: { skin: '#d9b89a', skinSh: '#a8835f', hair: '#4a3220',
+    torso: '#2a3450', torsoHi: '#3a4868', torsoSh: '#161f30', armor: '#2a3450', armorHi: '#3a4868', armorSh: '#161f30',
+    leg: '#2a2f3e', legSh: '#171b26', legHi: '#3a4150', arm: '#34405e', glove: '#9a7d44', boot: '#3a2a1a',
+    pauldron: '#9a7d44', belt: '#8a7340', buckle: '#b59a55',
+    cape: '#1f2536', capeSh: '#141926', goggle: '#7fd8e8',
+    metal: '#4a4e54', metalSh: '#2a2e34', wood: '#46341e' },
+});
+SPR.define('edward', {
+  head: 'human', noBeard: true, longHair: true, weapon: 'staff', artK: 1.7,
+  portraitSrc: 'pictures/retrato_Edward.png', portraitFull: true,
+  pal: { skin: '#c89a72', skinSh: '#946a44', hair: '#241a12', eye: '#6fd0ff',
+    torso: '#3a3550', torsoHi: '#4e4870', torsoSh: '#221f30', armor: '#3a3550', armorHi: '#4e4870', armorSh: '#221f30',
+    plate: '#9aa2ad', armorHi2: '#c3cad3', pauldron: '#6a4a32', pendant: '#b07bff',
+    leg: '#2e2a44', legSh: '#1a1726', legHi: '#3e3860', arm: '#3a3550', glove: '#5a4326', boot: '#3a2614',
+    belt: '#7a5a2a', buckle: '#caa33a', cape: '#3a2658', capeSh: '#241038',
+    orb: '#7fd8ff', metal: '#5a5e66', metalSh: '#34383e', wood: '#4a3220' },
 });
 SPR.define('zombie', {
   head: 'zombie', weapon: 'musket', artK: 1.66,

@@ -12,6 +12,7 @@ class FX {
     this.texts = [];   // floating combat text
     this.slashes = []; // melee swoosh arcs
     this.bolts = [];   // lightning bolts
+    this.beams = [];   // destructive rays (Nicolau's Master's Head)
     this.decals = [];  // PERSISTENT marks (blood, rubble, scorch) — the trail of destruction
   }
 
@@ -137,6 +138,19 @@ class FX {
   magic(x, y, color = '#a86bff', n = 12) {
     for (let i = 0; i < n; i++) { const a = rand(0, TAU), sp = rand(40, 200); this._add({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 30, life: rand(0.3, 0.8), max: 0.8, r: rand(1.5, 3.5), c: color, g: -40, glow: true, shrink: true }); }
   }
+  // jato de chamas (lança-chamas do Silvyr): partículas de fogo num cone à frente
+  flame(x, y, ang, reach, colors = ['#ffe27a', '#ffd86b', '#ff8a3c', '#ff5b2c'], spread = 0.22) {
+    for (let i = 0; i < 4; i++) {
+      const a = ang + rand(-spread, spread), sp = rand(reach * 2.2, reach * 3.4);
+      this._add({ x: x + rand(-3, 3), y: y + rand(-3, 3), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - rand(10, 50),
+        life: rand(0.12, 0.26), max: 0.26, r: rand(3.5, 7), c: pick(colors), g: -110, glow: true, shrink: true });
+    }
+  }
+  // raio destruidor (Cabeça do Mestre): faixa brilhante com a cabeça flutuante na origem
+  beam(x1, y1, x2, y2, color = '#9be86a', width = 16) {
+    this.beams.push({ x1, y1, x2, y2, color, width, life: 0.32, max: 0.32 });
+    this.spark(x2, y2, color, 10);
+  }
   slash(x, y, ang, reach, color = 'rgba(255,255,255,0.9)') { this.slashes.push({ x, y, ang, reach, color, life: 0.16, max: 0.16 }); }
   bolt(x1, y1, x2, y2, color = '#bfe8ff') { this.bolts.push({ x1, y1, x2, y2, color, life: 0.14, max: 0.14, seed: Math.random() * 999 }); }
   shock(x, y, max, color = '#ffd86b') { this.rings.push({ x, y, r: 6, max, life: 0.4, t: 0.4, color }); }
@@ -249,6 +263,7 @@ class FX {
     // slashes & bolts
     for (let i = this.slashes.length - 1; i >= 0; i--) { this.slashes[i].life -= dt; if (this.slashes[i].life <= 0) this.slashes.splice(i, 1); }
     for (let i = this.bolts.length - 1; i >= 0; i--) { this.bolts[i].life -= dt; if (this.bolts[i].life <= 0) this.bolts.splice(i, 1); }
+    for (let i = this.beams.length - 1; i >= 0; i--) { this.beams[i].life -= dt; if (this.beams[i].life <= 0) this.beams.splice(i, 1); }
   }
 
   draw(ctx, cam) {
@@ -309,6 +324,23 @@ class FX {
         i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
       }
       ctx.stroke(); ctx.restore();
+    }
+    // destructive beams (Master's Head): glowing band + bright core + floating skull at origin
+    for (const bm of this.beams) {
+      const a = clamp(bm.life / bm.max, 0, 1);
+      const x1 = bm.x1 + ox, y1 = bm.y1 + oy, x2 = bm.x2 + ox, y2 = bm.y2 + oy;
+      ctx.save(); ctx.lineCap = 'round'; ctx.shadowColor = bm.color; ctx.shadowBlur = 18;
+      ctx.globalAlpha = a * 0.85; ctx.strokeStyle = bm.color; ctx.lineWidth = bm.width * (0.5 + a * 0.7);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.globalAlpha = a; ctx.strokeStyle = '#fbffe8'; ctx.lineWidth = bm.width * 0.32 * (0.6 + a * 0.5);
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      // cabeça do mestre flutuante na origem (caveira de olhos abertos)
+      ctx.shadowBlur = 10; ctx.globalAlpha = a;
+      ctx.fillStyle = '#e8e0cf'; ctx.beginPath(); ctx.arc(x1, y1, 7, 0, TAU); ctx.fill();
+      ctx.fillRect(x1 - 4, y1 + 4, 8, 4);
+      ctx.fillStyle = bm.color; ctx.shadowColor = bm.color;
+      ctx.beginPath(); ctx.arc(x1 - 2.6, y1 - 1, 1.8, 0, TAU); ctx.arc(x1 + 2.6, y1 - 1, 1.8, 0, TAU); ctx.fill();
+      ctx.restore();
     }
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
     ctx.restore();   // balance the save() opened for the rings (was leaking the zoom transform every frame)

@@ -9,7 +9,7 @@ class Game {
     this.roster = [0, 1];       // both heroes available (Ragnarok & Zracks)
     this.currentHero = 0;
     this.lives = 3; this.score = 0; this.oregano = 0; this.tokens = 0; this.nextLifeAt = 50;
-    this.state = 'playing'; this.paused = false;
+    this.state = 'playing'; this.paused = false; this.testMode = false;
     this.freeze = 0; this.respawnT = 0; this.time = 0;
     this._hud = this._cacheHud();
   }
@@ -140,6 +140,49 @@ class Game {
       const d = Math.hypot(p.cx - x, p.cy - y);
       if (d < radius) p.hurt(Math.round(dmg * (1 - d / radius) * 0.7), sign(p.cx - x) || 1, this);
     }
+  }
+
+  // raio destruidor horizontal à frente do herói (Cabeça do Mestre, do Nicolau):
+  // queima uma fileira de tiles e atinge todos os inimigos na linha do feixe.
+  beamAttack(p, o) {
+    const m = p.muzzlePos(), dir = p.face, ang = p.aimAng;
+    const range = o.range, width = o.width, dmg = o.dmg, td = o.tileDmg != null ? o.tileDmg : dmg;
+    const T = this.world.T;
+    // escava os tiles ao longo do feixe (abre um corredor)
+    for (let d = 0; d < range; d += T * 0.5) {
+      const tx = m.x + Math.cos(ang) * d, ty = m.y + Math.sin(ang) * d;
+      this.world.damage(Math.floor(tx / T), Math.floor(ty / T), td, { power: 90 });
+    }
+    // atinge inimigos cuja faixa horizontal cruza a linha do feixe
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      const fwd = (e.cx - m.x) * dir, off = Math.abs(e.cy - m.y);
+      if (fwd > -e.w * 0.5 && fwd < range && off < width + e.h * 0.45) {
+        e.hurt(dmg, dir, this); e.vx += dir * 140;
+        this.fx.spark(e.cx, e.cy, o.color, 6);
+      }
+    }
+    this.fx.beam(m.x, m.y, m.x + Math.cos(ang) * range, m.y + Math.sin(ang) * range, o.color, width);
+  }
+
+  // campo elétrico radial (Poder da Constituição, do Edward): atinge TODOS os
+  // inimigos num raio (6 tiles em todas as direções), mas NÃO danifica blocos.
+  electricBurst(p, o) {
+    const cx = p.cx, cy = p.cy, radius = o.radius, dmg = o.dmg, kn = o.knock != null ? o.knock : 180;
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      const d = Math.hypot(e.cx - cx, e.cy - cy);
+      if (d > radius + e.w * 0.5) continue;
+      const kd = sign(e.cx - cx) || 1;
+      e.hurt(Math.round(dmg * (1 - d / (radius * 1.5))), kd, this);   // dano cai com a distância
+      e.vx += kd * kn; e.vy -= 80;
+      this.fx.bolt(cx, cy, e.cx, e.cy, '#bfe8ff'); this.fx.spark(e.cx, e.cy, '#bfe8ff', 8);
+    }
+    // campo visível: anéis de choque + raios radiais (sem tocar o terreno)
+    this.fx.shock(cx, cy, radius, '#7fd8ff'); this.fx.shock(cx, cy, radius * 0.66, '#bfe8ff');
+    for (let i = 0; i < 12; i++) { const a = (i / 12) * TAU; this.fx.bolt(cx, cy, cx + Math.cos(a) * radius, cy + Math.sin(a) * radius, i % 2 ? '#bfe8ff' : '#7fd8ff'); }
+    this.fx.spark(cx, cy, '#bfe8ff', 20);
+    this.cam.addShake(6); this.flashScreen(0.2);
   }
 
   // melee: sweep in front (o.radial=false) OR a 360° hit around the actor (o.radial=true)
@@ -319,6 +362,16 @@ class Game {
     const p = this.player;
     if (p) p.update(dt, this);
 
+    // FASE DE TESTES: teclas 1..N trocam a arma equipada do herói atual
+    if (this.testMode && p && !p.dead) {
+      for (let i = 0; i < WEAPON_ORDER.length && i < 9; i++) {
+        if (Input.once(String(i + 1))) {
+          p.equipWeapon(WEAPON_ORDER[i]);
+          this.fx.text(p.cx, p.y - 12, WEAPONS[WEAPON_ORDER[i]].name, '#6fd0ff'); Sound.swap();
+        }
+      }
+    }
+
     for (const e of this.enemies) e.update(dt, this);
     for (const b of this.bullets) b.update(dt, this);
     for (const a of this.allies) a.update(dt, this);
@@ -442,7 +495,34 @@ class Game {
     this._drawLighting(ctx);   // superfície clara, áreas cobertas escuras (tochas/lanternas iluminam)
 
     if (this.boss && this.boss.alive) this._drawBossBar(ctx);
+    if (this.testMode) this._drawTestBar(ctx);
     if (this.paused) this._drawPaused(ctx);
+  }
+
+  // legenda da FASE DE TESTES: lista as armas e destaca a equipada
+  _drawTestBar(ctx) {
+    const list = WEAPON_ORDER;
+    ctx.save();
+    ctx.font = 'bold 13px "Trebuchet MS"'; ctx.textBaseline = 'middle';
+    const labels = list.map((k, i) => (i + 1) + '·' + WEAPONS[k].name);
+    const pad = 9, gap = 6, h = 24, y = 14;
+    const widths = labels.map(l => ctx.measureText(l).width + pad * 2);
+    const total = widths.reduce((a, b) => a + b, 0) + gap * (labels.length - 1);
+    let x = (CONFIG.W - total) / 2;
+    for (let i = 0; i < labels.length; i++) {
+      const on = this.player && this.player.weaponKey === list[i];
+      ctx.fillStyle = on ? 'rgba(232,185,74,0.92)' : 'rgba(20,15,10,0.78)';
+      ctx.fillRect(x, y, widths[i], h);
+      ctx.lineWidth = on ? 2 : 1; ctx.strokeStyle = on ? '#fff' : '#5a4326';
+      ctx.strokeRect(x + 0.5, y + 0.5, widths[i] - 1, h - 1);
+      ctx.fillStyle = on ? '#1a140e' : '#e8e0cf'; ctx.textAlign = 'left';
+      ctx.fillText(labels[i], x + pad, y + h / 2 + 1);
+      x += widths[i] + gap;
+    }
+    ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#9a8f7d'; ctx.font = '12px "Trebuchet MS"';
+    ctx.fillText('Teclas 1–' + list.length + ' trocam a arma  ·  S / D trocam o herói', CONFIG.W / 2, y + h + 15);
+    ctx.restore(); ctx.textAlign = 'left';
   }
 
   // ---- iluminação 2D simples ---------------------------------

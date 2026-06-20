@@ -19,7 +19,10 @@ const Gallery = {
 
   HERO_INFO: {
     ragnarok: { icon: '⚔', name: 'Ragnarok', note: 'Cavaleiro de placas: espingarda de dispersão + Tiro Explosivo.' },
-    zracks:   { icon: '➶', name: 'Zracks',   note: 'Lagarto caçador: arco perfurante + Investida com lâmina.' },
+    zracks:   { icon: '➶', name: 'Zracks',   note: 'Lagarto caçador: besta perfurante + Investida com lâmina.' },
+    nicolau:  { icon: '⚗', name: 'Nicolau Saint-German', note: 'Vendedor de poções: pistola veloz + a Cabeça do Mestre (raio destruidor).' },
+    silvyr:   { icon: '⚙', name: 'Silvyr',   note: 'Elfo artífice: lança-chamas + o Arranque Explosivo do braço mecânico.' },
+    edward:   { icon: '✦', name: 'Edward Magnus', note: 'Mago humano: bola de fogo arcana + o Poder da Constituição (campo elétrico). Queda suave (levita).' },
   },
 
   // labels/ícones legíveis (a chave técnica fica entre parênteses)
@@ -343,12 +346,13 @@ const Gallery = {
     if (this.tab === 'heroes') {
       const h = HEROES.find(x => x.key === this.heroKey) || HEROES[0];
       const info = this.HERO_INFO[h.key] || {};
-      const wpn = SPR.defs[h.spr] ? SPR.defs[h.spr].weapon : '';
-      const WP = { shotgun: 'espingarda', bow: 'arco', rifle: 'rifle', musket: 'mosquete', cannon: 'canhão', smg: 'metralhadora', staff: 'cajado' };
+      const w = (typeof WEAPONS !== 'undefined' && WEAPONS[h.weaponKey]) || {};
       I.innerHTML = `<h3>${info.icon || h.icon || ''} ${info.name || h.name}</h3>
         ${row('Vida', h.hp)}${row('Velocidade', h.speed)}${row('Pulos', h.jumps)}
-        ${row('Arma', WP[wpn] || wpn || '—')}${row('Pente', h.clip)}${row('Recarga', h.reload + 's')}
-        <div class="gnote">${h.desc || info.note || ''}</div>`;
+        ${row('Arma', w.name || '—')}${row('Pente', w.clip != null ? w.clip : '—')}${row('Recarga', w.reload != null ? w.reload + 's' : '—')}
+        ${row('Cadência', w.cool != null ? w.cool + 's' : '—')}
+        <div class="gnote">${h.desc || info.note || ''}</div>
+        <div class="gnote">${w.desc || ''}</div>`;
     } else if (this.tab === 'enemies') {
       const t = ENEMY_TYPES[this.enemyKey], info = this.ENEMY_INFO[this.enemyKey] || {};
       const tags = [];
@@ -413,8 +417,8 @@ const Gallery = {
     }
     m.anim += dt;
     const spd = Math.max(60, m._spd || 120);
-    // aim sweep (mostra o braço/arma)
-    m.aimAng = Math.sin(this.time * 0.9) * 0.5;
+    // mira 1D: arma SEMPRE apontada para a frente (sem balanço de mouse)
+    m.aimAng = (m.face || 1) > 0 ? 0 : Math.PI;
     m.cool = Math.max(0, m.cool - dt);
     // defaults do quadro
     m.onGround = true; m.vy = 0; m.flash = 0;
@@ -423,8 +427,7 @@ const Gallery = {
       case 'idle': break;
       case 'run': m.vx = spd * (m.face || 1); m.runDist += Math.abs(m.vx) * dt; break;
       case 'attack':
-        m.aimAng = Math.sin(this.time * 1.6) * 0.6;
-        if (m.cool <= 0) { m.cool = m.coolMax; }   // pulsa o recuo
+        if (m.cool <= 0) { m.cool = m.coolMax; }   // pulsa apenas o recuo (arma estática)
         break;
       case 'jump': m.onGround = false; m.vy = -200; break;
       case 'fall': m.onGround = false; m.vy = 200; break;

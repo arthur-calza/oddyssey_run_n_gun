@@ -45,6 +45,7 @@ class Bullet {
   update(dt, game) {
     this.life -= dt;
     if (this.life <= 0) { this.detonate(game); return; }
+    if (this.kind === 'fireball' && Math.random() < 0.7) game.fx.spark(this.x, this.y, pick(['#ff8a3c', '#ffd86b', '#ff5b2c']), 1); // rastro flamejante
     if (this.grav) this.vy += this.grav * dt;
     this.rot += this.spin * dt;
     // step movement so fast bullets don't tunnel through terrain
@@ -79,6 +80,17 @@ class Bullet {
       ctx.globalAlpha = clamp(this.life / 0.3, 0, 1);
       ctx.fillStyle = pick(['#ffd86b', '#ff8a3c', '#ff5b2c']);
       ctx.beginPath(); ctx.arc(x, y, this.r, 0, TAU); ctx.fill();
+    } else if (this.kind === 'fireball') {              // bola de fogo cintilante (mago) — núcleo claro + brilho
+      const fl = 0.82 + Math.sin(this.life * 38) * 0.18;
+      ctx.shadowColor = '#ff7a2c'; ctx.shadowBlur = 14;
+      ctx.fillStyle = '#ff5b2c'; ctx.beginPath(); ctx.arc(x, y, this.r * 1.3 * fl, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#ffae3c'; ctx.beginPath(); ctx.arc(x, y, this.r * 0.95, 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0; ctx.fillStyle = '#ffe9a8';
+      ctx.beginPath(); ctx.arc(x - Math.cos(this.ang) * this.r * 0.3, y - Math.sin(this.ang) * this.r * 0.3, this.r * 0.5, 0, TAU); ctx.fill();
+    } else if (this.kind === 'slug') {                 // tracer alongado (arcabuz/incendiária)
+      ctx.translate(x, y); ctx.rotate(this.ang);
+      ctx.fillStyle = this.color || '#bfe8ff'; ctx.shadowColor = this.color || '#bfe8ff'; ctx.shadowBlur = 8;
+      ctx.fillRect(-7, -1.4, 14, 2.8); ctx.beginPath(); ctx.arc(7, 0, 1.7, 0, TAU); ctx.fill();
     } else if (this.kind === 'dagger') {
       ctx.translate(x, y); ctx.rotate(this.rot || this.ang);
       ctx.fillStyle = '#5a4326'; ctx.fillRect(-5, -1, 4, 2);
@@ -316,9 +328,19 @@ class Player extends Entity {
     if (oldBottom != null) this.y = oldBottom - this.h;
     this.maxhp = H.hp; this.hp = H.hp;
     this.speed = H.speed; this.jumpV = H.jumpV; this.maxJumps = H.jumps;
-    this.clip = H.clip; this.reloadTime = H.reload;
-    this.skin = H.skin; this.spr = H.spr; this.gunLen = H.gunLen || 16;
-    this.ammo = H.clip;
+    this.skin = H.skin; this.spr = H.spr;
+    this.equipWeapon(H.weaponKey);            // a arma define cadência/pente/recarga/alcance
+  }
+  // troca a arma ativa (herói padrão OU override da fase de testes). A WEAPON é
+  // a dona da cadência/pente/recarga/comprimento do cano e do visual do braço.
+  equipWeapon(key) {
+    const w = (typeof WEAPONS !== 'undefined' && WEAPONS[key]) ? WEAPONS[key] : (typeof WEAPONS !== 'undefined' ? WEAPONS.scatter : null);
+    this.weaponKey = (w && WEAPONS[key]) ? key : (w ? 'scatter' : key);
+    if (!w) { this.clip = 6; this.reloadTime = 0.9; this.gunLen = 16; this.ammo = 6; return; }
+    this.clip = w.clip; this.reloadTime = w.reload;
+    this.gunLen = w.gunLen || (this.hero && this.hero.gunLen) || 16;
+    this.weaponVisual = w.visual;
+    this.ammo = this.clip; this.reloading = 0;
   }
   hurt(dmg, dir, game) {
     if (this.invuln > 0 || this.dead) return;
@@ -360,12 +382,23 @@ class Player extends Entity {
     let move = (c.right ? 1 : 0) - (c.left ? 1 : 0);
     const accel = this.onGround ? 2600 : 1500;
     if (this.dashT > 0) {
-      this.dashT -= dt; this.vx = this.face * this.speed * 2.5; this.invuln = Math.max(this.invuln, 0.05);
+      this.dashT -= dt; this.vx = this.face * this.speed * (this.dashSpeedK || 2.5); this.invuln = Math.max(this.invuln, 0.05);
       // smash through terrain and enemies in front
       const T = game.world.T, col = Math.floor((this.cx + this.face * 12) / T);
       for (let r = Math.floor(this.y / T); r <= Math.floor((this.y + this.h) / T); r++) game.world.damage(col, r, 50, { power: 100 });
-      game.damageEntitiesRadial(this.cx + this.face * 16, this.cy, 28, 16, this);
-      game.fx.muzzle(this.cx, this.cy, this.face > 0 ? 0 : Math.PI);
+      game.damageEntitiesRadial(this.cx + this.face * 16, this.cy, this.dashRadius || 28, this.dashDmg || 16, this);
+      if (this._explosiveDash > 0) {                      // SILVYR: arranque explosivo (braço mecânico)
+        this._explosiveDash -= dt;
+        this._exTrail = (this._exTrail || 0) - dt;
+        if (this._exTrail <= 0) { this._exTrail = 0.05; game.fx.explosion(this.cx + this.face * 12, this.cy, 22); game.damageEntitiesRadial(this.cx + this.face * 12, this.cy, 30, 14, this); game.cam.addShake(2); }
+        game.fx.smoke(this.cx - this.face * 8, this.cy, 1);
+        if (this.dashT <= 0) {                            // estouro FINAL maior (já gera fx/som/abalo/dano radial)
+          game.world.explode(this.cx + this.face * 18, this.cy, 58, 32);
+          this._explosiveDash = 0; this.dashSpeedK = 0; this.dashRadius = 0; this.dashDmg = 0;
+        }
+      } else {
+        game.fx.muzzle(this.cx, this.cy, this.face > 0 ? 0 : Math.PI);
+      }
     } else {
       if (move !== 0) this.vx = approach(this.vx, move * this.speed, accel * dt);
       else this.vx = approach(this.vx, 0, (this.onGround ? 3400 : 1200) * dt);
@@ -428,8 +461,12 @@ class Player extends Entity {
     // (pulo alto + queda acentuada). Ao agarrar a parede usa gravidade normal — o cap
     // do deslize (WALL_*) controla a descida, então não acelera demais.
     if (!onLadder) {
-      const mult = (this.vy > 0 && !this.clinging) ? CONFIG.FALL_MULT : 1;
-      this.vy = Math.min(this.vy + CONFIG.GRAVITY * mult * dt, CONFIG.TERMINAL_VY);
+      // queda "pesada" padrão; heróis podem definir fallMult/terminalVy próprios
+      // (ex.: Edward, o mago, cai bem devagar → sensação de levitar)
+      const falling = this.vy > 0 && !this.clinging;
+      const fm = falling ? (this.hero.fallMult != null ? this.hero.fallMult : CONFIG.FALL_MULT) : 1;
+      const term = this.hero.terminalVy || CONFIG.TERMINAL_VY;
+      this.vy = Math.min(this.vy + CONFIG.GRAVITY * fm * dt, term);
     }
     game.world.moveAndCollide(this, dt);
 
@@ -450,7 +487,9 @@ class Player extends Entity {
       this.reloading -= dt;
       if (this.reloading <= 0) { this.ammo = this.clip; }
     } else if (c.fire && this.cool <= 0) {
-      this.hero.weapon.fire(this, game);
+      const w = WEAPONS[this.weaponKey] || WEAPONS.scatter;
+      if (this.powered > 0 && w.poweredFire) w.poweredFire(this, game);
+      else w.fire(this, game);
     }
     if (c.special && this.specCool <= 0 && this.special >= this.hero.special.cost) {
       this.hero.special.use(this, game);

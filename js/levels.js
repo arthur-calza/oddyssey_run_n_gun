@@ -283,7 +283,7 @@ const LEVELS = (function () {
     put(g, 50, gr - 2, 's'); put(g, 48, gr - 1, 't');   // porta (abre ao passar) + tocha (demo de iluminação)
     capLoot(g, 30, 1);
     put(g, 3, gr - 1, 'P'); put(g, W - 5, gr - 1, 'E');
-    return { name: 'FASE DE TESTES', sub: 'Escada (col 96), parede para escalar (col 170), poções, tokens e barris.', win: 'exit', biome: 'castle', sky: ['#1e2740', '#080a14'], seed: 99, bannerColor: '#6a1a1a', rows: toRows(g), bg: toRows(bg), surface: new Array(W).fill(gr) };
+    return { name: 'FASE DE TESTES', sub: 'Teclas 1–8 trocam de arma · S/D trocam de herói · escada, parede, poções e barris.', win: 'exit', biome: 'castle', sky: ['#1e2740', '#080a14'], seed: 99, bannerColor: '#6a1a1a', rows: toRows(g), bg: toRows(bg), surface: new Array(W).fill(gr) };
   }
 
   return [...CAMPAIGN, lvlTest()];
