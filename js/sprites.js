@@ -9,7 +9,7 @@
 const SPR = {
   ready: false, sheets: {}, defs: {},
   images: {}, whites: {}, imgLoading: false,
-  ANIMS: { idle: 6, run: 8, jump: 1, fall: 1, hurt: 2, death: 6 },
+  ANIMS: { idle: 6, run: 8, jump: 4, fall: 4, crouch: 4, hurt: 2, death: 6 },
   PXF: 5,          // fator de pixelização: a arte é assada em ~1/PXF da resolução e ampliada (look retrô, ~20px de altura)
   _pwBuf: null,    // buffer reaproveitado para pixelizar o braço/arma
   _pwCache: {},    // cache de quadros da arma por (def, modo, ângulo) — evita re-pixelizar todo frame
@@ -40,6 +40,52 @@ const SPR = {
       }
     }
     this.ready = true;
+  },
+
+  /* ===== EDIÇÃO DE SPRITES (SpriteLab) =====
+     As folhas (sheets) são canvases editáveis: o editor pinta DIRETO nelas, então
+     o jogo reflete as edições na hora. Reverter = reassar o quadro original. As
+     alterações persistem em localStorage (por par "personagem/ação"). */
+  _editKey: 'oddyssey_sprite_edits_v1',
+  _dirty: {},                       // { "key/anim": true }
+  markDirty(key, anim) { this._dirty[key + '/' + anim] = true; },
+  frameCanvas(key, anim, fi) { const a = this.sheets[key] && this.sheets[key][anim]; return a && a[fi]; },
+  _blankLike(ref) { const c = document.createElement('canvas'); c.width = ref.width; c.height = ref.height; return c; },
+  _copyOf(ref) { const c = this._blankLike(ref); c.getContext('2d').drawImage(ref, 0, 0); return c; },
+  addFrame(key, anim, blank) {
+    const arr = this.sheets[key] && this.sheets[key][anim]; if (!arr || !arr.length) return -1;
+    arr.push(blank ? this._blankLike(arr[arr.length - 1]) : this._copyOf(arr[arr.length - 1]));
+    this.markDirty(key, anim); return arr.length - 1;
+  },
+  removeFrame(key, anim, fi) {
+    const arr = this.sheets[key] && this.sheets[key][anim]; if (!arr || arr.length <= 1) return false;
+    arr.splice(fi, 1); this.markDirty(key, anim); return true;
+  },
+  revertFrame(key, anim, fi) {
+    const d = this.defs[key], arr = this.sheets[key] && this.sheets[key][anim]; if (!d || !arr) return;
+    if (fi < this.ANIMS[anim]) arr[fi] = this._bake(d, anim, fi, this.ANIMS[anim]);   // quadro original → reassa
+    else { const c = this._blankLike(arr[fi]); arr[fi] = c; }                          // quadro extra → limpa
+    this.markDirty(key, anim);
+  },
+  saveEdits() {
+    const out = {};
+    for (const id in this._dirty) { const [key, anim] = id.split('/'); const arr = this.sheets[key] && this.sheets[key][anim]; if (arr) out[id] = arr.map(c => c.toDataURL()); }
+    try { localStorage.setItem(this._editKey, JSON.stringify(out)); return true; } catch (e) { return false; }
+  },
+  loadEdits() {
+    let raw; try { raw = localStorage.getItem(this._editKey); } catch (e) { return; }
+    if (!raw) return; let obj; try { obj = JSON.parse(raw); } catch (e) { return; }
+    for (const id in obj) {
+      const [key, anim] = id.split('/'); if (!this.sheets[key]) continue;
+      const urls = obj[id], frames = new Array(urls.length);
+      this.sheets[key][anim] = frames; this.markDirty(key, anim);
+      urls.forEach((u, i) => { const img = new Image(); img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img, 0, 0); frames[i] = c; }; img.src = u; frames[i] = document.createElement('canvas'); frames[i].width = 1; frames[i].height = 1; });
+    }
+  },
+  clearAllEdits() {
+    try { localStorage.removeItem(this._editKey); } catch (e) {}
+    for (const id in this._dirty) { const [key, anim] = id.split('/'); const d = this.defs[key]; if (!d) continue; const n = this.ANIMS[anim], frames = []; for (let f = 0; f < n; f++) frames.push(this._bake(d, anim, f, n)); this.sheets[key][anim] = frames; }
+    this._dirty = {};
   },
 
   _bake(d, anim, f, n) {
@@ -93,9 +139,19 @@ const SPR = {
     } else if (anim === 'idle') {
       p.legF = 0.12; p.legB = -0.12; p.bob = Math.sin(ph) * 1.2; p.arm = Math.sin(ph) * 0.08;
     } else if (anim === 'jump') {
-      p.air = true; p.legF = 0.5; p.legB = -0.25; p.crouch = 5; p.lean = 3; p.arm = -0.4;
+      // 4 quadros: impulso agachado → estica subindo → ápice
+      p.air = true; const t = n > 1 ? f / (n - 1) : 0;
+      p.crouch = lerp(9, -3, t); p.legF = lerp(0.75, 0.32, t); p.legB = lerp(-0.55, -0.08, t);
+      p.arm = lerp(-0.05, -0.6, t); p.lean = 3; p.bob = -t * 2;
     } else if (anim === 'fall') {
-      p.air = true; p.legF = -0.3; p.legB = 0.4; p.lean = -2; p.arm = -0.7;
+      // 4 quadros: logo após o ápice → queda acentuada (pernas para trás, braços p/ cima)
+      p.air = true; const t = n > 1 ? f / (n - 1) : 0;
+      p.legF = lerp(-0.1, -0.5, t); p.legB = lerp(0.2, 0.58, t);
+      p.arm = lerp(-0.45, -0.95, t); p.lean = lerp(-1, -4, t); p.crouch = lerp(-2, 2, t); p.bob = t * 1.5;
+    } else if (anim === 'crouch') {
+      // agachado: corpo bem baixo, pernas dobradas (tratadas em _leg), leve respiração
+      const s2 = Math.sin(ph);
+      p.crouch = 17 + s2 * 1.0; p.legF = 0.5; p.legB = -0.5; p.arm = 0.16 + s2 * 0.05; p.lean = 1; p.bob = s2 * 0.6;
     } else if (anim === 'hurt') {
       p.lean = -6 - f * 2; p.legF = -0.4; p.legB = 0.3; p.arm = -0.9;
     } else if (anim === 'death') {
@@ -174,6 +230,7 @@ const SPR = {
     let thighA, bend;
     if (p.air) { thighA = (back ? -1 : 1) * 0.35 + Math.sin(phase) * 0.1; bend = 0.55 + (back ? 0.25 : 0); }
     else if (p.anim === 'run') { thighA = Math.sin(phase) * 0.5; bend = 0.2 + Math.max(0, Math.cos(phase)) * 0.7; }
+    else if (p.anim === 'crouch') { thighA = phase; bend = 1.05; }   // agachado: joelhos bem dobrados
     else { thighA = phase; bend = 0.1; }
     const kx = hx + Math.sin(thighA) * thighLen, ky = hy + Math.cos(thighA) * thighLen;
     const shinA = thighA + (digi ? bend : -bend);    // digitigrade knee bends backward
@@ -434,7 +491,8 @@ const SPR = {
     const d = this.defs[e.spr];
     if (!d) return { x: e.cx, y: e.y + e.h * 0.32 };
     const H = d.ch || 132, scale = e.h * (d.artK || 1.7) / H, s = d.scale || 1;
-    return { x: e.cx + (e.face || 1) * 5 * s * scale, y: (e.y + e.h) - 56 * s * scale };
+    const drop = e.crouching ? e.h * 0.34 : 0;   // AGACHADO: abaixa o cano p/ acertar objetos de 1 tile
+    return { x: e.cx + (e.face || 1) * 5 * s * scale, y: (e.y + e.h) - 56 * s * scale + drop };
   },
 
   // ---- public draw ---------------------------------------------
@@ -450,12 +508,15 @@ const SPR = {
     if (dying) anim = 'death';
     else if (e.flash > 0.04 && e.onGround && Math.abs(e.vx) < 30) anim = 'hurt';
     else if (!e.onGround) anim = (e.vy < -40 ? 'jump' : 'fall');
+    else if (e.crouching) anim = 'crouch';
     else if (Math.abs(e.vx) > 24) anim = 'run';
     const frames = this.sheets[e.spr][anim] || this.sheets[e.spr].idle;
     let fi;
     if (anim === 'death') { const dt = e.dying != null ? (1 - clamp(e.dying / (e.dyingMax || 0.6), 0, 1)) : clamp((1 - (e.deathT || 0)), 0, 1); fi = Math.min(frames.length - 1, Math.floor(dt * frames.length)); }
     else if (anim === 'run') { fi = Math.floor((e.runDist || 0) / (d.stride || 22)) % frames.length; }   // foot-locked: legs match ground speed
-    else { const fps = anim === 'idle' ? 3.5 : 1; fi = Math.floor((e.anim || 0) * fps) % frames.length; }
+    else if (anim === 'jump') { const t = clamp(1 - (-(e.vy || 0)) / 1400, 0, 1); fi = clamp(Math.round(t * (frames.length - 1)), 0, frames.length - 1); }   // quadro pelo impulso vertical
+    else if (anim === 'fall') { const t = clamp((e.vy || 0) / 1200, 0, 1); fi = clamp(Math.round(t * (frames.length - 1)), 0, frames.length - 1); }          // quadro pela velocidade de queda
+    else { const fps = anim === 'idle' ? 3.5 : anim === 'crouch' ? 3 : 1; fi = Math.floor((e.anim || 0) * fps) % frames.length; }
 
     const face = e.face < 0 ? -1 : 1;
     ctx.save(); ctx.imageSmoothingEnabled = false;

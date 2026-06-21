@@ -9,6 +9,7 @@
   const controlsBox = document.getElementById('controlsBox');
   Input.init(canvas);
   SPR.build();        // bake procedural fallbacks
+  SPR.loadEdits();    // aplica edições de pixel salvas (SpriteLab) por cima dos quadros assados
   SPR.loadImages();   // concept-art portraits (assets/*.png)
   RIG.load();         // cut-out rig parts (assets/parts/*) — the in-game characters
   Creations.load();   // criações salvas pelo jogador (editor)

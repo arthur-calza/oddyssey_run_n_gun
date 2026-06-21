@@ -343,6 +343,7 @@ class Player extends Entity {
     this.aimAng = 0; this.dead = false; this.deathT = 0;
     this.meleeCd = 0; this._prevFeet = null;
     this.morph = null; this.morphT = 0;   // VEX: forma emprestada (herói) + tempo restante
+    this.crouching = false;               // agachado (seta p/ baixo no chão): abaixa o cano
   }
   setHero(i) {
     this.heroIndex = i;
@@ -446,6 +447,10 @@ class Player extends Entity {
     if (moveDir !== 0) this.face = moveDir;
     this.aimAng = this.face > 0 ? 0 : Math.PI;
 
+    // ---- AGACHAR: seta p/ baixo no chão (não em escada/parede/investida) ----
+    // abaixa o cano (SPR.gunAnchor) e usa as sprites 'crouch'; pode atirar/atacar agachado
+    this.crouching = c.down && this.onGround && !this.onLadder && !this.clinging && this.dashT <= 0;
+
     // ---- movement ----
     let move = (c.right ? 1 : 0) - (c.left ? 1 : 0);
     const accel = this.onGround ? 2600 : 1500;
@@ -468,7 +473,8 @@ class Player extends Entity {
         game.fx.muzzle(this.cx, this.cy, this.face > 0 ? 0 : Math.PI);
       }
     } else {
-      if (move !== 0) this.vx = approach(this.vx, move * this.speed, accel * dt);
+      const tgt = this.crouching ? this.speed * 0.45 : this.speed;   // agachado anda mais devagar
+      if (move !== 0) this.vx = approach(this.vx, move * tgt, accel * dt);
       else this.vx = approach(this.vx, 0, (this.onGround ? 3400 : 1200) * dt);
     }
 
