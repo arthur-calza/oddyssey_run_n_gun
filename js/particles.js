@@ -11,6 +11,7 @@ class FX {
     this.rings = [];   // shockwave rings
     this.texts = [];   // floating combat text
     this.slashes = []; // melee swoosh arcs
+    this.swirls = [];  // continuous 270° melee swirl (sword arc around the hero)
     this.bolts = [];   // lightning bolts
     this.beams = [];   // destructive rays (Nicolau's Master's Head)
     this.decals = [];  // PERSISTENT marks (blood, rubble, scorch) — the trail of destruction
@@ -170,6 +171,8 @@ class FX {
     this.spark(x2, y2, color, 10);
   }
   slash(x, y, ang, reach, color = 'rgba(255,255,255,0.9)') { this.slashes.push({ x, y, ang, reach, color, life: 0.16, max: 0.16 }); }
+  // corte CONTÍNUO: um arco de ~270° que varre ao redor do herói (cima→frente→baixo→trás)
+  swirl(x, y, r, color = 'rgba(255,255,255,0.95)', dir = 1) { this.swirls.push({ x, y, r, color, dir: dir < 0 ? -1 : 1, life: 0.26, max: 0.26 }); }
   bolt(x1, y1, x2, y2, color = '#bfe8ff') { this.bolts.push({ x1, y1, x2, y2, color, life: 0.14, max: 0.14, seed: Math.random() * 999 }); }
   shock(x, y, max, color = '#ffd86b') { this.rings.push({ x, y, r: 6, max, life: 0.4, t: 0.4, color }); }
   smoke(x, y, n = 5, c = 'rgba(60,55,50,') {
@@ -280,6 +283,7 @@ class FX {
     }
     // slashes & bolts
     for (let i = this.slashes.length - 1; i >= 0; i--) { this.slashes[i].life -= dt; if (this.slashes[i].life <= 0) this.slashes.splice(i, 1); }
+    for (let i = this.swirls.length - 1; i >= 0; i--) { this.swirls[i].life -= dt; if (this.swirls[i].life <= 0) this.swirls.splice(i, 1); }
     for (let i = this.bolts.length - 1; i >= 0; i--) { this.bolts[i].life -= dt; if (this.bolts[i].life <= 0) this.bolts.splice(i, 1); }
     for (let i = this.beams.length - 1; i >= 0; i--) { this.beams[i].life -= dt; if (this.beams[i].life <= 0) this.beams.splice(i, 1); }
   }
@@ -329,7 +333,22 @@ class FX {
       ctx.beginPath(); ctx.arc(0, 0, sl.reach, -1.0 - (1 - a) * 0.6, 1.0 + (1 - a) * 0.6); ctx.stroke();
       ctx.restore();
     }
-    ctx.globalAlpha = 1; ctx.lineCap = 'butt';
+    // swirl contínuo (golpe de espada): arco que CRESCE de cima→frente→baixo→trás, com ponta brilhante
+    for (const sw of this.swirls) {
+      const a = clamp(sw.life / sw.max, 0, 1), prog = 1 - a;            // 0→1 ao longo do golpe
+      const a0 = -Math.PI / 2, a1 = a0 + Math.PI * 1.5;                 // 270°
+      const cur = a0 + (a1 - a0) * prog;
+      ctx.save(); ctx.translate(sw.x + ox, sw.y + oy); if (sw.dir < 0) ctx.scale(-1, 1);
+      ctx.lineCap = 'round'; ctx.shadowColor = sw.color; ctx.shadowBlur = 12;
+      ctx.strokeStyle = sw.color; ctx.globalAlpha = 0.4 + a * 0.55; ctx.lineWidth = 5 + a * 5;
+      ctx.beginPath(); ctx.arc(0, 0, sw.r, a0, cur); ctx.stroke();      // rastro do corte
+      ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = a; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(0, 0, sw.r, Math.max(a0, cur - 0.7), cur); ctx.stroke();   // fio brilhante na ponta
+      const tx = Math.cos(cur) * sw.r, ty = Math.sin(cur) * sw.r;
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(tx, ty, 3 + a * 2, 0, TAU); ctx.fill();   // brilho da ponta
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1; ctx.lineCap = 'butt'; ctx.shadowBlur = 0;
     // lightning bolts (jagged)
     for (const b of this.bolts) {
       const a = clamp(b.life / b.max, 0, 1);

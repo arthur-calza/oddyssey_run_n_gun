@@ -344,6 +344,7 @@ class Player extends Entity {
     this.meleeCd = 0; this._prevFeet = null;
     this.morph = null; this.morphT = 0;   // VEX: forma emprestada (herói) + tempo restante
     this.crouching = false;               // agachado (seta p/ baixo no chão): abaixa o cano
+    this.shootT = 0; this.attackArc = 0;  // timers de animação: tiro recente / golpe de espada
   }
   setHero(i) {
     this.heroIndex = i;
@@ -436,6 +437,8 @@ class Player extends Entity {
     this.dashCd = Math.max(0, this.dashCd - dt);
     this.meleeCd = Math.max(0, this.meleeCd - dt);
     this.attackT = Math.max(0, this.attackT - dt * 5); // melee swing decay
+    this.attackArc = Math.max(0, (this.attackArc || 0) - dt * 4); // anim do golpe (~0.25s)
+    this.shootT = Math.max(0, (this.shootT || 0) - dt);           // tiro recente (anim agachado-atirando)
     this.swordMode = Math.max(0, (this.swordMode || 0) - dt);
     this.powered = Math.max(0, (this.powered || 0) - dt); // magic-potion buff timer
     this.gainSpecial(dt * 6); // passive charge
@@ -564,6 +567,7 @@ class Player extends Entity {
       const w = WEAPONS[this.weaponKey] || WEAPONS.scatter;
       if (this.powered > 0 && w.poweredFire) w.poweredFire(this, game);
       else w.fire(this, game);
+      this.shootT = 0.18;   // marca tiro recente (anim "agachado atirando")
     }
     if (c.special && this.specCool <= 0) {
       if (this.hero.special && this.hero.special.metamorph && !this.morph) {
@@ -583,7 +587,7 @@ class Player extends Entity {
 
     // ---- melee: golpe em VOLTA do jogador (C), disponível a todo herói ----
     if (c.meleePressed() && this.meleeCd <= 0) {
-      this.meleeCd = 0.4; this.swordMode = 0.3; this.attackT = 1;   // swordMode makes the sprite draw a blade
+      this.meleeCd = 0.4; this.attackT = 1; this.attackArc = 1;   // attackArc → anim de golpe (arco de 270°)
       game.meleeRadial(this, { range: 54, dmg: 28, tileDmg: 22, knock: 250, color: 'rgba(230,238,255,0.95)', shake: 4 });
       Sound.slash();
     }

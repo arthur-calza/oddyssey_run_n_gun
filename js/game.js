@@ -261,6 +261,7 @@ class Game {
       e.hurt(dmg, sign(dx) || p.face, this);
       e.vx += (sign(dx) || p.face) * kn; e.vy -= 70;
       this.fx.blood(e.cx, e.cy, sign(dx) || p.face, 6);
+      this.fx.spark(e.cx, e.cy, '#fff2b0', 6);          // faíscas ao acertar
     }
     // tiles ao redor: lados + acima, até a linha dos pés (nunca abaixo)
     const feetRow = Math.floor((feetY - 1) / T);
@@ -270,11 +271,10 @@ class Game {
       if (Math.hypot(tcx - cx, tcy - cy) > range) continue;
       this.world.damage(c, r, td, { power: 80 });
     }
-    // efeito visual: golpe para os dois lados e para cima
+    // efeito visual: UM corte contínuo (arco de ~270° ao redor) + faíscas
     const col = o.color || 'rgba(255,255,255,0.92)';
-    this.fx.slash(cx + range * 0.42, cy, 0, range * 0.7, col);
-    this.fx.slash(cx - range * 0.42, cy, Math.PI, range * 0.7, col);
-    this.fx.slash(cx, cy - range * 0.4, -Math.PI / 2, range * 0.6, col);
+    this.fx.swirl(cx, cy - 4, range * 0.86, col, p.face);
+    this.fx.spark(cx + p.face * range * 0.4, cy - range * 0.3, '#fff2b0', 12);   // faíscas do golpe
     this.cam.addShake(o.shake || 3);
   }
 

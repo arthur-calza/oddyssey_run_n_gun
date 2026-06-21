@@ -9,7 +9,7 @@
 const SPR = {
   ready: false, sheets: {}, defs: {},
   images: {}, whites: {}, imgLoading: false,
-  ANIMS: { idle: 6, run: 8, jump: 4, fall: 4, crouch: 4, hurt: 2, death: 6 },
+  ANIMS: { idle: 6, run: 8, jump: 8, fall: 8, crouch: 4, crouchwalk: 8, crouchshoot: 4, attack: 8, hurt: 2, death: 6 },
   PXF: 5,          // fator de pixelização: a arte é assada em ~1/PXF da resolução e ampliada (look retrô, ~20px de altura)
   _pwBuf: null,    // buffer reaproveitado para pixelizar o braço/arma
   _pwCache: {},    // cache de quadros da arma por (def, modo, ângulo) — evita re-pixelizar todo frame
@@ -139,19 +139,35 @@ const SPR = {
     } else if (anim === 'idle') {
       p.legF = 0.12; p.legB = -0.12; p.bob = Math.sin(ph) * 1.2; p.arm = Math.sin(ph) * 0.08;
     } else if (anim === 'jump') {
-      // 4 quadros: impulso agachado → estica subindo → ápice
+      // 8 quadros: DOBRA OS JOELHOS (impulso) → estica subindo → ápice
       p.air = true; const t = n > 1 ? f / (n - 1) : 0;
-      p.crouch = lerp(9, -3, t); p.legF = lerp(0.75, 0.32, t); p.legB = lerp(-0.55, -0.08, t);
-      p.arm = lerp(-0.05, -0.6, t); p.lean = 3; p.bob = -t * 2;
+      const imp = Math.max(0, 1 - t / 0.26);                       // agachamento de impulso (2 primeiros quadros)
+      const ext = t < 0.26 ? 0 : Math.sin(((t - 0.26) / 0.74) * Math.PI * 0.85);  // estica no meio da subida
+      p.crouch = imp * 12 - ext * 5;
+      p.legF = imp * 0.85 + (1 - imp) * 0.28; p.legB = imp * 0.45 + (1 - imp) * -0.28;
+      p.arm = imp * 0.35 + (1 - imp) * lerp(-0.2, -0.7, clamp((t - 0.26) / 0.74, 0, 1));
+      p.lean = 2 + ext * 1.5; p.bob = -t * 1.6;
     } else if (anim === 'fall') {
-      // 4 quadros: logo após o ápice → queda acentuada (pernas para trás, braços p/ cima)
+      // 8 quadros: ápice → queda acentuada (pernas p/ trás, braços p/ cima, capa esvoaça)
       p.air = true; const t = n > 1 ? f / (n - 1) : 0;
-      p.legF = lerp(-0.1, -0.5, t); p.legB = lerp(0.2, 0.58, t);
-      p.arm = lerp(-0.45, -0.95, t); p.lean = lerp(-1, -4, t); p.crouch = lerp(-2, 2, t); p.bob = t * 1.5;
+      p.legF = lerp(-0.05, -0.55, t); p.legB = lerp(0.12, 0.62, t);
+      p.arm = lerp(-0.4, -1.0, t); p.lean = lerp(-1, -5, t); p.crouch = lerp(-3, 3, t); p.bob = t * 1.5;
     } else if (anim === 'crouch') {
-      // agachado: corpo bem baixo, pernas dobradas (tratadas em _leg), leve respiração
+      // agachado PARADO: pés no chão, joelhos dobrados (IK em _leg), leve respiração
       const s2 = Math.sin(ph);
-      p.crouch = 17 + s2 * 1.0; p.legF = 0.5; p.legB = -0.5; p.arm = 0.16 + s2 * 0.05; p.lean = 1; p.bob = s2 * 0.6;
+      p.crouch = 14 + s2 * 0.8; p.legF = 0.5; p.legB = -0.5; p.arm = 0.18 + s2 * 0.05; p.lean = 1; p.bob = s2 * 0.5;
+    } else if (anim === 'crouchwalk') {
+      // andar agachado (8): passada agachada, pés alternando no chão
+      p.crouch = 14; p.legF = ph; p.legB = ph + Math.PI; p.arm = Math.sin(ph) * 0.35; p.lean = 2; p.bob = -Math.abs(Math.sin(ph)) * 1.1;
+    } else if (anim === 'crouchshoot') {
+      // atirar agachado (4): coice — recua e volta, joelhos firmes
+      const kick = Math.sin((f / (n - 1 || 1)) * Math.PI);
+      p.crouch = 14; p.legF = 0.5; p.legB = -0.5; p.lean = 1 - kick * 4; p.arm = 0.1; p.bob = kick * 0.9;
+    } else if (anim === 'attack') {
+      // ATAQUE CURTO (8): espada faz arco de 270° (cima→frente→baixo→trás)
+      const t = n > 1 ? f / (n - 1) : 0;
+      p.swing = lerp(-Math.PI / 2, Math.PI, t);
+      p.crouch = Math.sin(t * Math.PI) * 5; p.lean = lerp(-2, 5, t); p.legF = 0.28; p.legB = -0.28; p.arm = 0.25; p.bob = 0;
     } else if (anim === 'hurt') {
       p.lean = -6 - f * 2; p.legF = -0.4; p.legB = 0.3; p.arm = -0.9;
     } else if (anim === 'death') {
@@ -181,6 +197,22 @@ const SPR = {
     this._arm(g, P, s, lean - 9 * s * bulk, shY + 5 * s, p.arm, true);
     // head
     this._head(g, d, lean * 1.05, headCy, headR);
+    // ATAQUE CURTO: braço + espada varrendo o arco de 270° (assado no quadro)
+    if (p.anim === 'attack') this._attackSword(g, P, s, lean, shY, p.swing || 0);
+  },
+
+  // braço estendido segurando a espada, girado para `ang` (arco do golpe)
+  _attackSword(g, P, s, lean, shY, ang) {
+    g.save(); g.translate(lean + 2 * s, shY + 6 * s); g.rotate(ang);
+    g.strokeStyle = P.arm || P.armor || '#6a6a7a'; g.lineWidth = 5 * s; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(11 * s, 0); g.stroke();
+    g.fillStyle = P.glove || P.skin || '#43321e'; g.beginPath(); g.arc(11 * s, 0, 3 * s, 0, TAU); g.fill();
+    g.fillStyle = '#5a4326'; g.fillRect(10 * s, -1.6 * s, 4 * s, 3.2 * s);              // cabo
+    g.fillStyle = P.buckle || '#caa33a'; g.fillRect(13.5 * s, -3.6 * s, 2.2 * s, 7.2 * s); // guarda
+    g.fillStyle = '#e8eef5'; g.fillRect(15.5 * s, -2 * s, 22 * s, 4 * s);               // lâmina
+    g.beginPath(); g.moveTo(37.5 * s, -2 * s); g.lineTo(43 * s, 0); g.lineTo(37.5 * s, 2 * s); g.fill(); // ponta
+    g.fillStyle = '#aeb8c2'; g.fillRect(15.5 * s, -2 * s, 22 * s, 1.4 * s);             // fio
+    g.restore();
   },
 
   _round(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.fill(); },
@@ -227,14 +259,27 @@ const SPR = {
   _leg(g, P, s, hx, hy, phase, back, p, digi) {
     const thighLen = 16 * s, shinLen = 15 * s;
     const wTop = 7.5 * s, wKnee = 6 * s, wAnk = 5 * s;
-    let thighA, bend;
-    if (p.air) { thighA = (back ? -1 : 1) * 0.35 + Math.sin(phase) * 0.1; bend = 0.55 + (back ? 0.25 : 0); }
-    else if (p.anim === 'run') { thighA = Math.sin(phase) * 0.5; bend = 0.2 + Math.max(0, Math.cos(phase)) * 0.7; }
-    else if (p.anim === 'crouch') { thighA = phase; bend = 1.05; }   // agachado: joelhos bem dobrados
-    else { thighA = phase; bend = 0.1; }
-    const kx = hx + Math.sin(thighA) * thighLen, ky = hy + Math.cos(thighA) * thighLen;
-    const shinA = thighA + (digi ? bend : -bend);    // digitigrade knee bends backward
-    const ax = kx + Math.sin(shinA) * shinLen, ay = ky + Math.cos(shinA) * shinLen;
+    const crouchFam = p.anim === 'crouch' || p.anim === 'crouchwalk' || p.anim === 'crouchshoot';
+    let kx, ky, ax, ay;
+    if (crouchFam) {
+      // AGACHADO: pés PLANTADOS no chão (footY≈0) e joelhos dobrados p/ FRENTE.
+      // posicionamento direto (IK) — o quadril desce, o pé fica no chão.
+      const footY = -3 * s;
+      const stride = (p.anim === 'crouchwalk') ? Math.sin(phase) : phase * 0.5;   // passada (andar) / leve abertura (parado)
+      const lift = (p.anim === 'crouchwalk') ? Math.max(0, Math.cos(phase)) * 4 * s : 0;
+      ax = hx + (back ? -3 : 6) * s + stride * 6 * s;
+      ay = footY - lift;
+      kx = hx + (back ? 4 : 8) * s + stride * 3 * s;     // joelho à frente
+      ky = (hy + ay) * 0.5 - 4 * s;                       // joelho um pouco acima do meio
+    } else {
+      let thighA, bend;
+      if (p.air) { thighA = (back ? -1 : 1) * 0.35 + Math.sin(phase) * 0.1; bend = 0.55 + (back ? 0.25 : 0); }
+      else if (p.anim === 'run') { thighA = Math.sin(phase) * 0.5; bend = 0.2 + Math.max(0, Math.cos(phase)) * 0.7; }
+      else { thighA = phase; bend = 0.1; }
+      kx = hx + Math.sin(thighA) * thighLen; ky = hy + Math.cos(thighA) * thighLen;
+      const shinA = thighA + (digi ? bend : -bend);    // digitigrade knee bends backward
+      ax = kx + Math.sin(shinA) * shinLen; ay = ky + Math.cos(shinA) * shinLen;
+    }
     const col = back ? (P.legSh || P.armorSh) : (P.leg || P.armor);
     this._segLimb(g, hx, hy, kx, ky, wTop, wKnee, col, back ? null : P.armorHi);
     this._segLimb(g, kx, ky, ax, ay, wKnee, wAnk, col, back ? null : P.armorHi);
@@ -265,13 +310,14 @@ const SPR = {
   // visual: sai pelas laterais e por baixo do corpo e ondula na barra inferior.
   _cape(g, P, s, shY, hipY, lean, p) {
     const run = p.anim === 'run', jump = p.anim === 'jump', fall = p.anim === 'fall', air = !!p.air;
-    const t = p.ph || 0;
-    // deslocamento p/ TRÁS (-x), comprimento extra e ondulação da barra
-    const back = (run ? 6 + Math.sin(t) * 3.5 : air ? 12 : 2.5 + Math.sin(t * 0.6) * 1.4) * s;
-    const lift = (jump ? -7 : fall ? -3 : 0) * s;
-    const topHW = 11 * s, botHW = (run ? 18 : air ? 21 : 14.5) * s;
+    const t = p.ph || 0, fr = (t / TAU);   // fração do quadro (0..1) p/ a capa "abrir" ao longo da ação
+    // No AR a capa abre MUITO mais (área maior) e ondula bastante — sobe no pulo, infla na queda
+    const airOpen = air ? (jump ? 0.5 + fr * 0.8 : 0.8 + fr * 0.5) : 0;   // cresce ao longo do pulo/queda
+    const back = (run ? 6 + Math.sin(t) * 3.5 : air ? 14 + airOpen * 8 : 2.5 + Math.sin(t * 0.6) * 1.4) * s;
+    const lift = (jump ? -8 - airOpen * 6 : fall ? -4 - airOpen * 4 : 0) * s;
+    const topHW = (air ? 12.5 : 11) * s, botHW = (run ? 18 : air ? 22 + airOpen * 7 : 14.5) * s;
     const topY = shY - 2 * s, botY = hipY + 30 * s + lift;
-    const wob = (run ? Math.sin(t * 2) * 4.5 : air ? Math.sin(t) * 2.5 : Math.sin(t * 0.8) * 1.6) * s;
+    const wob = (run ? Math.sin(t * 2) * 4.5 : air ? Math.sin(t * 1.5) * 4 : Math.sin(t * 0.8) * 1.6) * s;
     // capa principal (pano)
     g.fillStyle = P.cape;
     g.beginPath();
@@ -506,14 +552,17 @@ const SPR = {
     let anim = 'idle';
     const dying = (e.dying != null && e.dying > 0) || e.dead;
     if (dying) anim = 'death';
+    else if (e.attackArc > 0) anim = 'attack';                              // ATAQUE CURTO (golpe de espada)
     else if (e.flash > 0.04 && e.onGround && Math.abs(e.vx) < 30) anim = 'hurt';
     else if (!e.onGround) anim = (e.vy < -40 ? 'jump' : 'fall');
-    else if (e.crouching) anim = 'crouch';
+    else if (e.crouching) anim = (e.shootT > 0 ? 'crouchshoot' : (Math.abs(e.vx) > 24 ? 'crouchwalk' : 'crouch'));
     else if (Math.abs(e.vx) > 24) anim = 'run';
     const frames = this.sheets[e.spr][anim] || this.sheets[e.spr].idle;
     let fi;
     if (anim === 'death') { const dt = e.dying != null ? (1 - clamp(e.dying / (e.dyingMax || 0.6), 0, 1)) : clamp((1 - (e.deathT || 0)), 0, 1); fi = Math.min(frames.length - 1, Math.floor(dt * frames.length)); }
-    else if (anim === 'run') { fi = Math.floor((e.runDist || 0) / (d.stride || 22)) % frames.length; }   // foot-locked: legs match ground speed
+    else if (anim === 'attack') { const t = clamp(1 - (e.attackArc || 0), 0, 1); fi = clamp(Math.round(t * (frames.length - 1)), 0, frames.length - 1); }   // arco conforme o golpe avança
+    else if (anim === 'run' || anim === 'crouchwalk') { fi = Math.floor((e.runDist || 0) / (d.stride || 22)) % frames.length; }   // foot-locked
+    else if (anim === 'crouchshoot') { const t = clamp(1 - (e.shootT || 0) / 0.18, 0, 1); fi = clamp(Math.round(t * (frames.length - 1)), 0, frames.length - 1); }
     else if (anim === 'jump') { const t = clamp(1 - (-(e.vy || 0)) / 1400, 0, 1); fi = clamp(Math.round(t * (frames.length - 1)), 0, frames.length - 1); }   // quadro pelo impulso vertical
     else if (anim === 'fall') { const t = clamp((e.vy || 0) / 1200, 0, 1); fi = clamp(Math.round(t * (frames.length - 1)), 0, frames.length - 1); }          // quadro pela velocidade de queda
     else { const fps = anim === 'idle' ? 3.5 : anim === 'crouch' ? 3 : 1; fi = Math.floor((e.anim || 0) * fps) % frames.length; }
@@ -525,8 +574,8 @@ const SPR = {
     ctx.drawImage(fr, 0, 0, fr.width, fr.height, -W / 2, -(H - 6), W, H);
     ctx.restore();
 
-    // live weapon arm at the chest/hands anchor (not while dying), pixelized to match
-    if (d.weapon && e.aimAng != null && anim !== 'death') {
+    // live weapon arm at the chest/hands anchor (not while dying nor during the sword swing)
+    if (d.weapon && e.aimAng != null && anim !== 'death' && anim !== 'attack') {
       const ga = this.gunAnchor(e);
       const recoil = (e.cool && e.coolMax) ? (e.cool / e.coolMax) * 4 : 0;
       const mode = (e.dashT > 0 || e.swordMode) ? 'sword' : null;
