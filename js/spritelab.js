@@ -21,6 +21,8 @@ const SpriteLab = {
   playing: false, playT: 0, grid: true, zoomK: 1, slowmo: false, _flip: false,
   editing: false, tool: 'pencil', color: '#e8b94a', brush: 1, recent: [],
   _view: null, _painting: false, _hover: null,
+  undoStack: [], redoStack: [], _clip: null,
+  _panelHidden: { list: false, info: false }, _cpOpen: false, _cp: { h: 0, s: 0, v: 0 }, _curSwatch: null,
   _sandbox: null, _sbHero: null, _sbT: 0,
   effectKey: null, _stageObj: null,
 
@@ -97,10 +99,29 @@ const SpriteLab = {
     if (typeof TEX !== 'undefined' && !TEX.ready) TEX.build();
     this._buildDOM();
     this.setMode(this.mode || 'sprite');
-    this._key = (e) => { if (e.key === 'Escape') { e.stopPropagation(); this._exit(); } };
+    this._key = (e) => {
+      const k = (e.key || '').toLowerCase();
+      if (e.ctrlKey || e.metaKey) {
+        const eat = () => { e.preventDefault(); e.stopPropagation(); };
+        if (k === 'b') { eat(); this._togglePanel('list'); return; }       // recolhe a lista (esquerda)
+        if (k === 'j') { eat(); this._togglePanel('info'); return; }       // recolhe o painel (direita)
+        if (this.mode === 'sprite') {
+          if (k === 'z') { eat(); e.shiftKey ? this._redo() : this._undo(); return; }
+          if (k === 'y') { eat(); this._redo(); return; }
+          if (this.EDITABLE[this.action]) {
+            if (k === 'c') { eat(); this._copyFrame(); return; }
+            if (k === 'x') { eat(); this._cutFrame(); return; }
+            if (k === 'v') { eat(); this._pasteFrame(); return; }
+          }
+        }
+        return;
+      }
+      if (k === 'tab') { e.preventDefault(); e.stopPropagation(); this._toggleAllPanels(); return; }
+      if (k === 'escape') { e.stopPropagation(); if (this._cpOpen) { e.preventDefault(); this._closeColorPopover(); return; } this._exit(); }
+    };
     addEventListener('keydown', this._key, true);
     // pintura no canvas
-    this._onDown = (e) => { if (!this._canPaint()) return; e.preventDefault(); this._painting = true; this._paintAt(e); };
+    this._onDown = (e) => { if (!this._canPaint()) return; e.preventDefault(); if (this.tool !== 'eyedropper') this._pushUndo(); this._painting = true; this._paintAt(e); };
     this._onMove = (e) => { if (this._painting) this._paintAt(e); else if (this._canPaint()) this._hover = this._pixelAt(e); };
     this._onUp = () => { this._painting = false; };
     canvas.addEventListener('mousedown', this._onDown);
@@ -111,11 +132,130 @@ const SpriteLab = {
   close() {
     this.active = false; this.playing = false;
     this._sandbox = null; this._sbHero = null; this._stageObj = null;
+    if (this._cpOpen) this._closeColorPopover();
     if (this.panel) this.panel.style.display = 'none';
     removeEventListener('keydown', this._key, true);
     this.canvas.removeEventListener('mousedown', this._onDown);
     this.canvas.removeEventListener('mousemove', this._onMove);
     removeEventListener('mouseup', this._onUp);
+  },
+
+  // ---------- painéis recolhíveis (Ctrl+B lista · Ctrl+J painel · Tab tudo) ----------
+  _togglePanel(which) { this._panelHidden[which] = !this._panelHidden[which]; this._applyPanels(); },
+  _toggleAllPanels() { const any = !this._panelHidden.list || !this._panelHidden.info; this._panelHidden.list = any; this._panelHidden.info = any; this._applyPanels(); },
+  _applyPanels() {
+    if (!this.panel) return;
+    const show = (sel, on) => { const el = this.panel.querySelector(sel); if (el) el.style.display = on ? '' : 'none'; };
+    const showF = (sel, on) => { const el = this.panel.querySelector(sel); if (el) el.style.display = on ? 'flex' : 'none'; };
+    show('#slList', !this._panelHidden.list); show('#slListChev', !this._panelHidden.list); showF('#slReList', this._panelHidden.list);
+    show('#slInfo', !this._panelHidden.info); show('#slInfoChev', !this._panelHidden.info); showF('#slReInfo', this._panelHidden.info);
+  },
+
+  // ---------- desfazer/refazer (por quadro) ----------
+  _copyCanvas(src) { const c = document.createElement('canvas'); c.width = src.width; c.height = src.height; c.getContext('2d').drawImage(src, 0, 0); return c; },
+  _snapFrame() { const cv = SPR.frameCanvas(this.charKey, this.action, this.frameIdx); if (!cv) return null; return { key: this.charKey, action: this.action, idx: this.frameIdx, cv: this._copyCanvas(cv) }; },
+  _clearStacks() { this.undoStack.length = 0; this.redoStack.length = 0; },
+  _pushUndo() { const s = this._snapFrame(); if (!s) return; this.undoStack.push(s); if (this.undoStack.length > 40) this.undoStack.shift(); this.redoStack.length = 0; },
+  _restoreSnap(s) {
+    const cv = SPR.frameCanvas(s.key, s.action, s.idx); if (!cv) return false;
+    const g = cv.getContext('2d'); g.clearRect(0, 0, cv.width, cv.height); g.drawImage(s.cv, 0, 0);
+    SPR.markDirty(s.key, s.action);
+    if (this.charKey === s.key && this.action === s.action) { const n = this._frames(this.action).length; this.frameIdx = clamp(s.idx, 0, Math.max(0, n - 1)); }
+    return true;
+  },
+  _undo() { const s = this.undoStack.pop(); if (!s) { this._flash('Nada para desfazer'); return; } const cur = this._snapFrame(); if (cur) this.redoStack.push(cur); this._restoreSnap(s); this._buildInfo(); this._flash('Desfeito'); },
+  _redo() { const s = this.redoStack.pop(); if (!s) { this._flash('Nada para refazer'); return; } const cur = this._snapFrame(); if (cur) this.undoStack.push(cur); this._restoreSnap(s); this._buildInfo(); this._flash('Refeito'); },
+
+  // ---------- copiar/recortar/colar quadro (Ctrl+C/X/V) ----------
+  _copyFrame() { const cv = SPR.frameCanvas(this.charKey, this.action, this.frameIdx); if (!cv) return; this._clip = this._copyCanvas(cv); this._flash('Quadro copiado'); },
+  _cutFrame() { const cv = SPR.frameCanvas(this.charKey, this.action, this.frameIdx); if (!cv) return; this._pushUndo(); this._clip = this._copyCanvas(cv); cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); SPR.markDirty(this.charKey, this.action); this._buildInfo(); this._flash('Quadro recortado'); },
+  _pasteFrame() { if (!this._clip) { this._flash('Nada para colar'); return; } const cv = SPR.frameCanvas(this.charKey, this.action, this.frameIdx); if (!cv) return; this._pushUndo(); const g = cv.getContext('2d'); g.clearRect(0, 0, cv.width, cv.height); g.drawImage(this._clip, 0, 0); SPR.markDirty(this.charKey, this.action); this._buildInfo(); this._flash('Quadro colado'); },
+
+  // ---------- conversões de cor ----------
+  _hex2rgb(hex) { return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)]; },
+  _rgb2hex(r, g, b) { return '#' + [r, g, b].map(n => clamp(Math.round(n), 0, 255).toString(16).padStart(2, '0')).join(''); },
+  _rgb2hsv(r, g, b) { r /= 255; g /= 255; b /= 255; const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn; let h = 0; if (d) { if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 60; if (h < 0) h += 360; } return { h, s: mx ? d / mx : 0, v: mx }; },
+  _hsv2rgb(h, s, v) { const c = v * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = v - c; let r = 0, g = 0, b = 0; if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; } else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; } return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)]; },
+
+  // ---------- seletor de cor (popover arrastável) ----------
+  _setColor(hex) {
+    if (!/^#([0-9a-f]{6})$/i.test(hex)) return;
+    this.color = hex; this.tool = 'pencil'; this._pushRecent(hex);
+    if (this._curSwatch) this._curSwatch.style.background = hex;
+    if (this._cpOpen) { this._cp = this._rgb2hsv(...this._hex2rgb(hex)); this._cpSync(); }
+    this._buildEditBar();
+  },
+  _cpSync(skip) {
+    if (!this.panel) return;
+    const { h, s, v } = this._cp;
+    const [r, g, b] = this._hsv2rgb(h, s, v), hex = this._rgb2hex(r, g, b);
+    this.color = hex;
+    if (this._curSwatch) this._curSwatch.style.background = hex;
+    const q = (id) => this.panel.querySelector(id);
+    const sv = q('#cpSV'); if (sv) sv.style.backgroundColor = 'hsl(' + h + ',100%,50%)';
+    const svh = q('#cpSVh'); if (svh) { svh.style.left = (s * 100) + '%'; svh.style.top = ((1 - v) * 100) + '%'; }
+    const hh = q('#cpHueh'); if (hh) hh.style.top = ((h / 360) * 100) + '%';
+    if (skip !== 'hex') { const el = q('#cpHex'); if (el) el.value = hex; }
+    if (skip !== 'rgb') { q('#cpR').value = r; q('#cpG').value = g; q('#cpB').value = b; }
+  },
+  _ensureColorPopover() {
+    const pop = this.panel.querySelector('#slColor'); if (!pop || pop._wired) return; pop._wired = true;
+    const sv = pop.querySelector('#cpSV'), hue = pop.querySelector('#cpHue');
+    const drag = (el, onMove) => {
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); el.setPointerCapture(e.pointerId); onMove(e);
+        const mv = (ev) => onMove(ev);
+        const up = () => { el.removeEventListener('pointermove', mv); try { el.releasePointerCapture(e.pointerId); } catch (_) {} this._pushRecent(this.color); };
+        el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up, { once: true });
+      });
+    };
+    drag(sv, (e) => { const r = sv.getBoundingClientRect(); this._cp.s = clamp((e.clientX - r.left) / r.width, 0, 1); this._cp.v = clamp(1 - (e.clientY - r.top) / r.height, 0, 1); this._cpSync(); });
+    drag(hue, (e) => { const r = hue.getBoundingClientRect(); this._cp.h = clamp((e.clientY - r.top) / r.height, 0, 1) * 360; this._cpSync(); });
+    const hex = pop.querySelector('#cpHex');
+    hex.oninput = () => { const m = /^#?([0-9a-f]{6})$/i.exec(hex.value.trim()); if (!m) return; this._cp = this._rgb2hsv(...this._hex2rgb('#' + m[1])); this._cpSync('hex'); };
+    const R = pop.querySelector('#cpR'), G = pop.querySelector('#cpG'), B = pop.querySelector('#cpB');
+    const onrgb = () => { const cb = (x) => clamp(parseInt(x, 10) || 0, 0, 255); this._cp = this._rgb2hsv(cb(R.value), cb(G.value), cb(B.value)); this._cpSync('rgb'); };
+    R.oninput = G.oninput = B.oninput = onrgb;
+  },
+  _openColorPopover() {
+    const pop = this.panel.querySelector('#slColor'); if (!pop) return;
+    this._ensureColorPopover();
+    this._cp = this._rgb2hsv(...this._hex2rgb(/^#([0-9a-f]{6})$/i.test(this.color) ? this.color : '#e8b94a'));
+    pop.classList.add('on'); this._cpOpen = true; this._cpSync();
+    if (this._curSwatch) { const r = this._curSwatch.getBoundingClientRect(); pop.style.left = Math.max(8, Math.min(r.left, innerWidth - 220)) + 'px'; pop.style.top = (r.bottom + 6) + 'px'; }
+    this._cpOutside = (e) => { if (pop.contains(e.target) || e.target === this._curSwatch) return; this._closeColorPopover(); };
+    setTimeout(() => addEventListener('pointerdown', this._cpOutside, true), 0);
+  },
+  _closeColorPopover() {
+    const pop = this.panel && this.panel.querySelector('#slColor'); if (pop) pop.classList.remove('on');
+    this._cpOpen = false; if (this._cpOutside) removeEventListener('pointerdown', this._cpOutside, true);
+    this._pushRecent(this.color); this._buildEditBar();
+  },
+
+  // ---------- exportar como .js (pacote do personagem, auto-aplicável) ----------
+  _exportJs() {
+    const key = this.charKey, sheets = SPR.sheets[key]; if (!sheets) return;
+    const data = {};
+    for (const anim in sheets) { const arr = sheets[anim]; if (arr && arr.length) data[key + '/' + anim] = arr.map(c => c.toDataURL()); }
+    const body =
+      '/* SpriteLab export — ' + this.charName + ' (' + key + ') — ' + new Date().toISOString().slice(0, 10) + '\n' +
+      '   Inclua APÓS js/sprites.js no index.html:  <script src="js/sprite_' + key + '.js"><\\/script>\n' +
+      '   Aplica os quadros editados de ' + this.charName + ' sobre os assados (procedurais). */\n' +
+      '(function () {\n' +
+      '  if (typeof SPR === "undefined") return;\n' +
+      '  var DATA = ' + JSON.stringify(data) + ';\n' +
+      '  function apply() {\n' +
+      '    for (var id in DATA) { var p = id.split("/"), k = p[0], a = p[1]; if (!SPR.sheets[k]) continue;\n' +
+      '      var urls = DATA[id], frames = new Array(urls.length); SPR.sheets[k][a] = frames; SPR.markDirty && SPR.markDirty(k, a);\n' +
+      '      urls.forEach(function (u, i) { var img = new Image(); img.onload = function () { var c = document.createElement("canvas"); c.width = img.width; c.height = img.height; c.getContext("2d").drawImage(img, 0, 0); frames[i] = c; }; img.src = u; var ph = document.createElement("canvas"); ph.width = ph.height = 1; frames[i] = ph; });\n' +
+      '    }\n' +
+      '  }\n' +
+      '  if (SPR.ready) apply(); else { var n = 0, t = setInterval(function () { if (SPR.ready || n++ > 200) { clearInterval(t); if (SPR.ready) apply(); } }, 50); }\n' +
+      '})();\n';
+    const a = document.createElement('a'); a.download = 'sprite_' + key + '.js';
+    a.href = URL.createObjectURL(new Blob([body], { type: 'text/javascript' })); a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    this._flash('Exportado sprite_' + key + '.js');
   },
 
   // ---------- helpers ----------
@@ -183,6 +323,24 @@ const SpriteLab = {
         #spritelab .sw.on{outline:2px solid #e8b94a;}
         #spritelab .gedit input[type=color]{width:28px;height:24px;border:2px solid #5a4326;border-radius:5px;background:#241a10;cursor:pointer;padding:0;}
         #spritelab .ghint{position:absolute;bottom:56px;right:16px;color:#9a8f7d;font-size:12px;pointer-events:none;max-width:230px;text-align:right;}
+        /* recolher painéis */
+        #spritelab .slchev{position:absolute;pointer-events:auto;width:22px;height:22px;border:1px solid #5a4326;border-radius:5px;background:#241a10;color:#caa86a;font:inherit;font-size:12px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:51;}
+        #spritelab .slchev:hover{background:#3a2c1c;border-color:#e8b94a;}
+        #spritelab .slreopen{position:absolute;pointer-events:auto;display:none;align-items:center;justify-content:center;background:#241a10;border:2px solid #5a4326;color:#caa86a;font:inherit;font-size:13px;font-weight:bold;cursor:pointer;box-shadow:0 4px 14px #000;z-index:51;}
+        #spritelab .slreopen:hover{background:#3a2c1c;border-color:#e8b94a;}
+        #spritelab .slreopen.list{top:58px;left:0;width:18px;height:64px;border-radius:0 7px 7px 0;}
+        #spritelab .slreopen.info{top:58px;right:0;width:18px;height:64px;border-radius:7px 0 0 7px;}
+        /* seletor de cor (popover arrastável) */
+        #spritelab .cpop{position:absolute;display:none;flex-direction:column;gap:8px;padding:10px;width:200px;z-index:60;}
+        #spritelab .cpop.on{display:flex;}
+        #spritelab .cprow{display:flex;gap:8px;}
+        #spritelab .cpsv{position:relative;flex:1;height:120px;border-radius:6px;border:1px solid #000;cursor:crosshair;touch-action:none;background-image:linear-gradient(to top,#000,rgba(0,0,0,0)),linear-gradient(to right,#fff,rgba(255,255,255,0));}
+        #spritelab .cpsvh{position:absolute;width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #000,0 0 3px #000;transform:translate(-50%,-50%);pointer-events:none;}
+        #spritelab .cphue{position:relative;width:18px;height:120px;border-radius:5px;border:1px solid #000;cursor:pointer;touch-action:none;background:linear-gradient(to bottom,#f00 0%,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%,#f0f 83%,#f00 100%);}
+        #spritelab .cphueh{position:absolute;left:-2px;right:-2px;height:6px;border:2px solid #fff;border-radius:3px;box-shadow:0 0 0 1px #000;transform:translateY(-50%);pointer-events:none;}
+        #spritelab .cpfields{display:flex;gap:5px;align-items:center;}
+        #spritelab .cpop input{background:#15110e;border:1px solid #5a4326;border-radius:4px;color:#e8e0cf;font:inherit;font-size:12px;padding:3px 5px;width:100%;}
+        #spritelab .cpop input::-webkit-outer-spin-button,#spritelab .cpop input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
       `;
       document.head.appendChild(st);
     }
@@ -195,9 +353,21 @@ const SpriteLab = {
         <button class="gtab" data-mode="effects">✨ Efeitos</button>
       </div>
       <div class="gpanel glist" id="slList"></div>
+      <button class="slchev" id="slListChev" title="Recolher lista (Ctrl+B)" style="left:194px;top:62px">‹</button>
+      <button class="slreopen list" id="slReList" title="Mostrar lista (Ctrl+B)">›</button>
       <div class="gpanel ginfo" id="slInfo"></div>
+      <button class="slchev" id="slInfoChev" title="Recolher painel (Ctrl+J)" style="right:218px;top:62px">›</button>
+      <button class="slreopen info" id="slReInfo" title="Mostrar painel (Ctrl+J)">‹</button>
       <div class="gpanel gctrl" id="slCtrl"></div>
       <div class="gpanel gedit" id="slEdit"></div>
+      <div class="gpanel cpop" id="slColor">
+        <div class="cprow">
+          <div class="cpsv" id="cpSV"><div class="cpsvh" id="cpSVh"></div></div>
+          <div class="cphue" id="cpHue"><div class="cphueh" id="cpHueh"></div></div>
+        </div>
+        <div class="cpfields"><input id="cpHex" maxlength="7" spellcheck="false" title="Código hex"></div>
+        <div class="cpfields"><input id="cpR" type="number" min="0" max="255" title="R"><input id="cpG" type="number" min="0" max="255" title="G"><input id="cpB" type="number" min="0" max="255" title="B"></div>
+      </div>
       <div class="ghint" id="slHint"></div>`;
     document.body.appendChild(g);
     this.panel = g;
@@ -209,16 +379,23 @@ const SpriteLab = {
     this.hintEl = g.querySelector('#slHint');
     g.querySelector('[data-back]').onclick = () => this._exit();
     g.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => this.setMode(b.dataset.mode));
+    g.querySelector('#slListChev').onclick = () => this._togglePanel('list');
+    g.querySelector('#slInfoChev').onclick = () => this._togglePanel('info');
+    g.querySelector('#slReList').onclick = () => this._togglePanel('list');
+    g.querySelector('#slReInfo').onclick = () => this._togglePanel('info');
+    this._ensureColorPopover();
+    this._applyPanels();
   },
 
   setMode(m) {
     this.mode = m; this.editing = false;
+    if (this._cpOpen) this._closeColorPopover();
     this.tabsEl.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
     this.editEl.classList.remove('on');
     if (m === 'sprite') {
       if (!this.charKey) { this.charKey = HEROES[0].spr; this.charName = HEROES[0].name; }
       if (!this._actionAvailable(this.action)) this.action = 'idle';
-      this.hintEl.textContent = 'Selecione “✏ Editar” para pintar pixels. Edições aplicam no jogo e são salvas no navegador.';
+      this.hintEl.innerHTML = 'Clique “✏ Editar” para pintar. <b>Ctrl+Z/Y</b> desfaz/refaz · <b>Ctrl+C/X/V</b> copia/recorta/cola o quadro · <b>Ctrl+B/J</b> recolhe painéis · <b>Tab</b> oculta tudo.';
     } else {
       if (!this.effectKey) this.effectKey = this.EFFECTS[0].id;
       this.hintEl.textContent = 'Efeitos dinâmicos (não-pixels) tocados em loop — inclusive os ainda não usados no jogo.';
@@ -248,13 +425,13 @@ const SpriteLab = {
 
   selectChar(key, name) {
     this.charKey = key; this.charName = name;
-    this._sandbox = null; this._sbHero = null;
+    this._sandbox = null; this._sbHero = null; this._clearStacks();
     if (!this._actionAvailable(this.action)) this.action = 'idle';
     this.frameIdx = 0; this.playT = 0;
     this._buildList(); this._buildCtrl(); this._buildInfo();
   },
   selectEffect(id) { this.effectKey = id; if (this._stageObj) this._stageObj.t = 999; this._buildList(); this._buildInfo(); },
-  setAction(id) { this.action = id; this.frameIdx = 0; this.playT = 0; if (!this.EDITABLE[id]) { this.editing = false; this.editEl.classList.remove('on'); } this._buildCtrl(); this._buildInfo(); },
+  setAction(id) { this.action = id; this.frameIdx = 0; this.playT = 0; this._clearStacks(); if (!this.EDITABLE[id]) { this.editing = false; this.editEl.classList.remove('on'); } this._buildCtrl(); this._buildInfo(); },
   setFrame(i) { const n = this._frames(this.action).length; if (!n) return; this.frameIdx = ((i % n) + n) % n; this._highlightFilm(); this._buildInfo(); },
 
   // ---------- controles (rodapé) ----------
@@ -300,22 +477,25 @@ const SpriteLab = {
     sep();
     [1, 2, 3].forEach(b => btn('●' + b, () => { this.brush = b; this._buildEditBar(); }, this.brush === b));
     sep();
-    // cor atual + seletor + paleta
-    const cur = document.createElement('button'); cur.className = 'sw on'; cur.style.background = this.color; cur.style.width = '24px'; cur.style.height = '22px'; e.appendChild(cur);
-    const inp = document.createElement('input'); inp.type = 'color'; inp.value = /^#([0-9a-f]{6})$/i.test(this.color) ? this.color : '#e8b94a';
-    inp.oninput = () => { this.color = inp.value; this.tool = 'pencil'; cur.style.background = this.color; this._buildEditBar(); };
-    e.appendChild(inp);
-    const pal = this._palette();
-    pal.forEach(col => { const sw = document.createElement('button'); sw.className = 'sw' + (col === this.color ? ' on' : ''); sw.style.background = col; sw.title = col; sw.onclick = () => { this.color = col; this.tool = 'pencil'; this._buildEditBar(); }; e.appendChild(sw); });
+    btn('↶', () => this._undo(), false).title = 'Desfazer (Ctrl+Z)';
+    btn('↷', () => this._redo(), false).title = 'Refazer (Ctrl+Y)';
     sep();
-    btn('⧉ Duplicar', () => { const i = SPR.addFrame(this.charKey, this.action, false); if (i >= 0) { this.frameIdx = i; this._buildCtrl(); this._buildInfo(); } });
-    btn('▢ Vazio', () => { const i = SPR.addFrame(this.charKey, this.action, true); if (i >= 0) { this.frameIdx = i; this._buildCtrl(); this._buildInfo(); } });
-    btn('↺ Limpar', () => { SPR.revertFrame(this.charKey, this.action, this.frameIdx); this._buildInfo(); });
-    btn('🗑 Remover', () => { if (SPR.removeFrame(this.charKey, this.action, this.frameIdx)) { this.frameIdx = Math.max(0, this.frameIdx - 1); this._buildCtrl(); this._buildInfo(); } }, false, 'warn');
+    // cor atual (clique p/ abrir o seletor arrastável) + paleta
+    const cur = document.createElement('button'); cur.className = 'sw on'; cur.style.background = this.color; cur.style.width = '26px'; cur.style.height = '22px';
+    cur.title = 'Escolher cor — arraste no seletor'; cur.onclick = () => this._cpOpen ? this._closeColorPopover() : this._openColorPopover();
+    e.appendChild(cur); this._curSwatch = cur;
+    const pal = this._palette();
+    pal.forEach(col => { const sw = document.createElement('button'); sw.className = 'sw' + (col === this.color ? ' on' : ''); sw.style.background = col; sw.title = col; sw.onclick = () => this._setColor(col); e.appendChild(sw); });
+    sep();
+    btn('⧉ Duplicar', () => { const i = SPR.addFrame(this.charKey, this.action, false); if (i >= 0) { this._clearStacks(); this.frameIdx = i; this._buildCtrl(); this._buildInfo(); } });
+    btn('▢ Vazio', () => { const i = SPR.addFrame(this.charKey, this.action, true); if (i >= 0) { this._clearStacks(); this.frameIdx = i; this._buildCtrl(); this._buildInfo(); } });
+    btn('↺ Limpar', () => { this._pushUndo(); SPR.revertFrame(this.charKey, this.action, this.frameIdx); this._buildInfo(); });
+    btn('🗑 Remover', () => { if (SPR.removeFrame(this.charKey, this.action, this.frameIdx)) { this._clearStacks(); this.frameIdx = Math.max(0, this.frameIdx - 1); this._buildCtrl(); this._buildInfo(); } }, false, 'warn');
     sep();
     btn('💾 Salvar', () => { SPR.saveEdits(); this._flash('Salvo no navegador'); });
     btn('⬇ PNG', () => this._exportPng());
-    btn('♻ Restaurar tudo', () => { if (confirm('Descartar TODAS as edições de sprite e voltar ao original?')) { SPR.clearAllEdits(); this.frameIdx = 0; this._buildCtrl(); this._buildInfo(); } }, false, 'warn');
+    btn('⬇ .js', () => this._exportJs()).title = 'Exportar pacote do personagem (.js) para integrar ao projeto';
+    btn('♻ Restaurar tudo', () => { if (confirm('Descartar TODAS as edições de sprite e voltar ao original?')) { SPR.clearAllEdits(); this._clearStacks(); this.frameIdx = 0; this._buildCtrl(); this._buildInfo(); } }, false, 'warn');
   },
   _palette() {
     const set = new Set(['#000000', '#ffffff', '#e8e0cf', '#9a8f7d', '#caa33a', '#b1322c', '#7be08a', '#6fd0ff', '#b07bff', '#ff8a3c']);
@@ -345,7 +525,7 @@ const SpriteLab = {
     const g = cv.getContext('2d'), b = this.brush, off = (b / 2) | 0;
     if (this.tool === 'eyedropper') {
       const d = g.getImageData(pix.px, pix.py, 1, 1).data;
-      if (d[3] > 8) { this.color = '#' + [d[0], d[1], d[2]].map(n => n.toString(16).padStart(2, '0')).join(''); this._pushRecent(this.color); this.tool = 'pencil'; this._buildEditBar(); }
+      if (d[3] > 8) this._setColor('#' + [d[0], d[1], d[2]].map(n => n.toString(16).padStart(2, '0')).join(''));
       return;
     }
     if (this.tool === 'bucket') { this._fill(g, cv.width, cv.height, pix.px, pix.py, this.color); SPR.markDirty(this.charKey, this.action); return; }
@@ -526,7 +706,7 @@ const SpriteLab = {
     const fit = Math.max(1, Math.floor(Math.min((W * 0.4) / fw, (H * 0.54) / fh)));
     const Z = Math.max(1, Math.round(fit * this.zoomK));
     const dw = fw * Z, dh = fh * Z;
-    const cx0 = 240, cx1 = W - 250, centerX = (cx0 + cx1) / 2;
+    const cx0 = this._panelHidden.list ? 40 : 240, cx1 = W - (this._panelHidden.info ? 40 : 250), centerX = (cx0 + cx1) / 2;
     const ox = Math.round(centerX - dw / 2), oy = Math.round((this.editing ? H * 0.58 : H * 0.52) - dh / 2);
     this._view = this.editing ? { ox, oy, Z, fw, fh } : null;
 
