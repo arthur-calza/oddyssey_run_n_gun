@@ -260,7 +260,10 @@
     appState = 'playing';
     resumeGame();                     // garante que o micromenu de pausa não fique aberto
     game.testMode = (i === LEVELS.length - 1);   // fase de testes: troca de arma por teclas
-    game.roster = [0, 1, 2, 3, 4, 5]; game.currentHero = 0; game.score = 0;   // os 4 heróis disponíveis (troca com S/D)
+    game.roster = [0, 1, 2, 3, 4, 5];            // todos os heróis disponíveis (troca com S/D)
+    // na FASE DE TESTES começa como EDWARD (o mago) para testar o Grimório de feitiços já de cara
+    game.currentHero = game.testMode ? (typeof heroIndexByKey === 'function' ? heroIndexByKey('edward') : 0) : 0;
+    game.score = 0;
     game.oregano = 0; game.tokens = 0; game.nextLifeAt = 50;
     game.lives = 3 + (Save.hasPerk('extralife') ? 1 : 0);
     game.onEnd = onGameEnd;

@@ -349,14 +349,15 @@ const HEROES = [
   },
   {
     key: 'edward', name: 'EDWARD MAGNUS', icon: '✦', spr: 'edward',
-    desc: 'Mago humano. Bola de fogo arcana e o Poder da Constituição (campo elétrico).',
+    desc: 'Mago humano. Bola de fogo arcana e o GRIMÓRIO de feitiços (tecla G) — congelar, invocar, voar e muito mais.',
     hp: 100, speed: 240, jumpV: 1350, jumps: 2, w: 26, h: 48,
     fallMult: 0.5, terminalVy: 540,   // queda BEM mais suave — sensação de levitar
+    specialRegen: 16,                 // mago regenera MANA bem mais rápido (especial = mana dos feitiços)
     weaponKey: 'fireball',
+    // O ESPECIAL do Edward conjura o FEITIÇO ATIVO do Grimório (ver spells.js / Grimoire).
+    // Este objeto é um FALLBACK (usado só se o módulo de feitiços não carregar).
     special: {
-      cost: 55, cd: 0.8,
-      // Poder da Constituição: campo elétrico de 6 tiles em TODAS as direções
-      // (atinge inimigos ao redor, mas NÃO destrói blocos)
+      cost: 40, cd: 0.8,
       use(p, game) {
         game.electricBurst(p, { radius: 6 * CONFIG.TILE, dmg: 50, knock: 200 });
         game.fx.text(p.cx, p.y, 'PODER DA CONSTITUIÇÃO!', '#7fd8ff');

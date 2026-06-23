@@ -21,7 +21,9 @@ Basta **abrir `index.html` no navegador** (duplo-clique). Não precisa de Node, 
 | Pular (duplo p/ alguns heróis) | `W` / `Espaço` |
 | Mira | **Mouse** |
 | Atirar | Botão esquerdo / `J` |
-| Especial | Botão direito / `K` |
+| Especial / **conjurar feitiço** (Edward) | `X` |
+| **Grimório** de Edward (abrir/fechar) | `G` |
+| Trocar de feitiço (Edward) | `[` / `]` |
 | Subir/descer ESCADAS · escalar PAREDES | `W` / `S` (segure) |
 | Wall-jump | Pular encostado na parede |
 | Trocar de herói | `Q` / `E` |
@@ -30,6 +32,16 @@ Basta **abrir `index.html` no navegador** (duplo-clique). Não precisa de Node, 
 ## Heróis (ambos disponíveis em todas as fases — troque com `Q`/`E`)
 - **RAGNAROK** — cavaleiro de placas. Base: **espingarda** de dispersão. Especial: **Tiro Explosivo**. Resistente.
 - **ZRACKS** — lagarto caçador. Base: **arco** perfurante (salto duplo). Especial: **Investida** com lâmina (avanço veloz).
+
+## A Arcana de Edward (feitiços mágicos)
+Edward — o único **mago** da campanha — não tem um único especial: ele tem um **GRIMÓRIO** com **27 feitiços** em **5 tradições de feitiçaria** (árvores de habilidade). O botão **Especial** (`X`) conjura o **feitiço ativo**; a barra azul vira a **MANA**. Abra o Grimório com **`G`** e clique para preparar um feitiço, ou troque rápido em combate com **`[` / `]`**.
+- **☄ Elementos** — Chama Voraz, Sopro Glacial (**congela**), Tempestade de Raios (**raio que salta**), Estilhaços de Gelo, **Meteoro** e o Campo da Constituição.
+- **⛰ Transmutação** — **Erguer Muralha** e **Ponte Arcana** (criação de blocos), Terratremor, **Pele de Pedra** (escudo) e Toque de Midas (**vira ouro**).
+- **☠ Invocação** — **Golem**, Matilha Espectral, Esqueleto arqueiro, Totem Vital (cura) e **Dominação** (vira um inimigo em aliado).
+- **✷ Mente** — **Sono**, **Pavor**, Distorção Temporal (lentidão), **Implosão Mental** e Grito Psíquico.
+- **✦ Arcana & Mobilidade** — **Voo**, Piscar (teleporte), **Forma Etérea** (atravessa paredes), **Manto Etéreo** (invisível), Celeridade e Mísseis Arcanos (teleguiados).
+
+Por enquanto **todos os feitiços ficam liberados** (campo de testes). A ideia é o jogador **liberar e evoluir** as tradições à sua escolha conforme avança — basta filtrar `Grimoire.unlockedList()` pelo save. Para testar tudo de cara: menu **MODO CRIAÇÃO → 🛠 FASE DE TESTES** (já começa como Edward).
 
 ## Mecânicas
 - Cenário **destrutível em tempo real** com **materiais texturizados**: terra (com grama), pedra, tijolo de castelo, madeira, cobblestone de masmorra, arenito de vila, pedra com musgo, rocha-base e os **blocos com gravidade** areia e cascalho.
@@ -64,7 +76,8 @@ Basta **abrir `index.html` no navegador** (duplo-clique). Não precisa de Node, 
 | `particles.js` | partículas, detritos, **decals persistentes** (sangue/ossos/queimadura), golpes, magia, raios |
 | `entities.js` | `Entity`, `Bullet`, **`Player`**, `Pickup` |
 | `enemies.js` | bestiário monstruoso + IA + **morte com gore e rastro** |
-| `heroes.js` | os dois heróis (Ragnarok, Zracks): ataque-base, especial, movimento |
+| `heroes.js` | os heróis (Ragnarok, Zracks, Nicolau, Silvyr, Edward, Vex): arma-base, especial, movimento |
+| `spells.js` | **A Arcana de Edward**: 27 feitiços em 5 tradições (árvores de habilidade), o **Grimório** in-game e a classe `Minion` (invocações aliadas) |
 | `levels.js` | gerador de **fases grandes e verticais** (terraços/torres/escaladas) + bioma |
 | `game.js` | máquina de estados, parser de fase, colisões, **meleeArc**, HUD |
 | `main.js` | bootstrap, menus, seleção de fase, loop principal |

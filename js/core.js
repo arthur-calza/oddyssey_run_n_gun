@@ -99,6 +99,9 @@ const Keys = {
     { id: 'melee',    label: 'Corpo a corpo' },
     { id: 'swapPrev', label: 'Herói anterior' },
     { id: 'swapNext', label: 'Próximo herói' },
+    { id: 'grimoire', label: 'Grimório (Edward)' },
+    { id: 'spellPrev', label: 'Feitiço anterior' },
+    { id: 'spellNext', label: 'Próximo feitiço' },
     { id: 'pause',    label: 'Pausar' },
   ],
   DEFAULT: {
@@ -106,7 +109,9 @@ const Keys = {
     up:    ['arrowup'],   down:  ['arrowdown'],
     jump:  ['arrowup', ' '],
     fire:  ['z'], special: ['x'], melee: ['c'],
-    swapPrev: ['s'], swapNext: ['d'], pause: ['p', 'escape'],
+    swapPrev: ['s'], swapNext: ['d'],
+    grimoire: ['g'], spellPrev: ['['], spellNext: [']'],
+    pause: ['p', 'escape'],
   },
   map: {},
 

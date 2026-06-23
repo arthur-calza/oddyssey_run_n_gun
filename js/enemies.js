@@ -47,12 +47,25 @@ class Enemy extends Entity {
     this.patrolDir = pick([-1, 0, 1]);
     this.patrolT = rand(0.6, 2.2);
     this.react = 0;                 // pequeno atraso de reação antes de atirar ao avistar
+    // --- status mágicos (feitiços do Edward) ---
+    this.freezeT = 0; this.sleepT = 0; this.fearT = 0;       // controle: congelado / dormindo / apavorado
+    this.slowT = 0; this.slowK = 1;                          // lentidão (mente)
+    this.burnT = 0; this.burnDps = 0; this.poisonT = 0; this.poisonDps = 0; this._dotAcc = 0;  // dano-por-tempo
   }
+  // --- aplicar status (chamados pelos feitiços / balas mágicas) ---
+  freeze(t)        { if (this.boss) t *= 0.4; this.freezeT = Math.max(this.freezeT, t); this.sleepT = 0; }
+  sleep(t)         { if (this.boss) return; this.sleepT = Math.max(this.sleepT, t); }
+  frighten(t)      { if (this.boss) return; this.fearT = Math.max(this.fearT, t); this.sleepT = 0; }
+  slow(t, k)       { this.slowT = Math.max(this.slowT, t); this.slowK = k; }
+  ignite(t, dps)   { this.burnT = Math.max(this.burnT, t); this.burnDps = Math.max(this.burnDps, dps); }
+  envenom(t, dps)  { this.poisonT = Math.max(this.poisonT, t); this.poisonDps = Math.max(this.poisonDps, dps); }
   // ouvir: DESATIVADO — os inimigos percebem o jogador apenas pelo campo de visão.
   // (mantido como no-op pois game.alertEnemies ainda o chama ao disparar)
   hear() {}
   hurt(dmg, dir, game) {
     if (this.dying != null) return;
+    if (this.freezeT > 0) { dmg = Math.round(dmg * 1.6); game.fx.spark(this.cx, this.cy, '#bfe8ff', 6); this.freezeT = 0; }  // estilhaça o gelo (dano extra)
+    if (this.sleepT > 0) { dmg = Math.round(dmg * 1.4); this.sleepT = 0; }                                                  // golpe furtivo desperta o inimigo
     this.hp -= dmg; this.flash = 0.1; this.stagger = 0.06;
     this.alert = Math.max(this.alert, 4);   // levar um tiro alerta na hora
     this.vx += dir * (this.boss ? 6 : (this.mini ? 22 : 70));
@@ -93,10 +106,36 @@ class Enemy extends Entity {
     }
     this.stagger = Math.max(0, this.stagger - dt);
     this.attackT = Math.max(0, this.attackT - dt * 5);
-    this.fireT -= dt; this.touchCd = Math.max(0, this.touchCd - dt);
+    this.touchCd = Math.max(0, this.touchCd - dt);
     this.alert = Math.max(0, this.alert - dt);
     this.react = Math.max(0, this.react - dt);
-    const p = game.player, target = (p && !p.dead) ? p : null;
+
+    // ---- STATUS MÁGICOS ----------------------------------------------------
+    // dano-por-tempo (queimadura / veneno): aplica em "ticks" de ~0,25s
+    if (this.burnT > 0 || this.poisonT > 0) {
+      this.burnT = Math.max(0, this.burnT - dt); this.poisonT = Math.max(0, this.poisonT - dt);
+      this._dotAcc += dt;
+      if (this._dotAcc >= 0.25) {
+        const tick = (this.burnT > 0 ? this.burnDps : 0) + (this.poisonT > 0 ? this.poisonDps : 0);
+        if (tick > 0) { this.hurt(Math.max(1, Math.round(tick * 0.25)), 0, game); game.fx.spark(this.cx, this.cy + rand(-6, 6), this.burnT > 0 ? '#ff8a3c' : '#8ef06a', 1); }
+        this._dotAcc = 0; if (this.dying != null) return;
+      }
+    }
+    this.slowT = Math.max(0, this.slowT - dt);
+    this.fearT = Math.max(0, this.fearT - dt);
+    const tscale = this.slowT > 0 ? this.slowK : 1;   // fator de lentidão (mente)
+    this.fireT -= dt * tscale;
+
+    // CONGELADO ou DORMINDO: imóvel, sem IA (a gravidade ainda atua para não flutuar)
+    if (this.freezeT > 0 || this.sleepT > 0) {
+      this.freezeT = Math.max(0, this.freezeT - dt); this.sleepT = Math.max(0, this.sleepT - dt);
+      this.vx = approach(this.vx, 0, 1200 * dt);
+      if (this.def.fly) this.vy = approach(this.vy, 0, 700 * dt); else this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, CONFIG.TERMINAL_VY);
+      game.world.moveAndCollide(this, dt);
+      this.anim += dt; return;
+    }
+
+    const p = game.player, target = (p && !p.dead && !(p.invisT > 0)) ? p : null;
     const dx = target ? target.cx - this.cx : 0, dy = target ? target.cy - this.cy : 0, adx = Math.abs(dx);
     const def = this.def;
 
@@ -114,14 +153,20 @@ class Enemy extends Entity {
     }
     const aware = this.boss || (target && this.alert > 0);
 
-    if (this.stagger <= 0 && aware) {
+    if (this.stagger <= 0 && this.fearT > 0) {
+      // APAVORADO (feitiço Pavor): foge do jogador e não ataca
+      const away = (target ? -(sign(target.cx - this.cx)) : 0) || pick([-1, 1]);
+      this.face = away; this.aimAng = this.face > 0 ? 0 : Math.PI;
+      this.vx = approach(this.vx, away * this.speed * 1.15 * tscale, 1600 * dt);
+      if (this.hitWall === sign(this.vx) && this.onGround && this.vx !== 0) this.vy = -560;
+    } else if (this.stagger <= 0 && aware) {
       // CIENTE: caça o jogador e atira quando tiver linha de visão
       this.face = dx >= 0 ? 1 : -1;
       this.aimAng = this.face > 0 ? 0 : Math.PI;   // mira 1D: dispara para o lado em que está virado
       let want = sign(dx);
       if (def.kite && adx < def.range * 0.5) want = -sign(dx);
       if (this.boss) want = adx > 150 ? sign(dx) : 0;
-      this.vx = approach(this.vx, want * this.speed, 1500 * dt);
+      this.vx = approach(this.vx, want * this.speed * tscale, 1500 * dt);
       if (this.hitWall === sign(this.vx) && this.onGround && this.vx !== 0) this.vy = -640;
       if (def.leaper && this.onGround && adx < 220 && Math.random() < 0.035) { this.vy = -460; this.vx = sign(dx) * this.speed * 1.3; }
       const inSight = def.range > 0 && adx < def.range && lineClear(game.world, this.cx, this.cy, target.cx, target.cy);
@@ -145,6 +190,10 @@ class Enemy extends Entity {
     if (target && this.touchCd <= 0 && aabb(this, target)) {
       this.attackT = 1; target.hurt(def.touch, sign(dx) || 1, game);
       this.touchCd = 0.7; this.vx -= sign(dx) * 60;
+    }
+    // contato com INVOCAÇÕES aliadas: o inimigo também as fere ao encostar
+    if (this.touchCd <= 0 && game.summons && game.summons.length) {
+      for (const s of game.summons) if (s.alive && aabb(this, s)) { this.attackT = 1; s.hurt(def.touch + 4, sign(s.cx - this.cx) || 1, game); this.touchCd = 0.7; this.vx -= sign(s.cx - this.cx) * 40; break; }
     }
     this.anim += dt;
     if (this.onGround) this.runDist = (this.runDist || 0) + Math.abs(this.vx) * dt;
@@ -218,10 +267,32 @@ class Enemy extends Entity {
 
   draw(ctx, cam) {
     drawFighter(ctx, this, cam, true);
+    this._drawStatus(ctx, cam);
     if (this.mini && !this.boss) {
       const x = this.x + cam.ox, y = this.y + cam.oy - 8;
       ctx.fillStyle = '#000'; ctx.fillRect(x, y, this.w, 4);
       ctx.fillStyle = '#b1322c'; ctx.fillRect(x, y, this.w * clamp(this.hp / this.maxhp, 0, 1), 4);
+    }
+  }
+
+  // sobrepõe os efeitos de status mágicos (congelado/dormindo/apavorado/lento)
+  _drawStatus(ctx, cam) {
+    if (this.dying != null) return;
+    const x = this.x + cam.ox, y = this.y + cam.oy, cx = x + this.w / 2;
+    if (this.freezeT > 0) {                                // bloco de gelo translúcido + estilhaços
+      ctx.fillStyle = 'rgba(150,210,255,0.34)'; ctx.fillRect(x - 2, y - 2, this.w + 4, this.h + 4);
+      ctx.strokeStyle = 'rgba(230,248,255,0.8)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x, y + 6); ctx.lineTo(x + 6, y); ctx.moveTo(x + this.w, y + this.h - 6); ctx.lineTo(x + this.w - 6, y + this.h); ctx.stroke();
+    } else if (this.slowT > 0) {                           // halo de lentidão (roxo)
+      ctx.fillStyle = 'rgba(155,123,255,0.18)'; ctx.fillRect(x - 1, y - 1, this.w + 2, this.h + 2);
+    }
+    if (this.sleepT > 0) {                                 // "Zzz" flutuante
+      ctx.fillStyle = '#cfe8ff'; ctx.font = 'bold 13px "Trebuchet MS"'; ctx.textAlign = 'center';
+      const f = Math.sin(this.anim * 3) * 3;
+      ctx.fillText('z', cx + 6 + f, y - 4); ctx.fillText('Z', cx + 12 + f, y - 12); ctx.textAlign = 'left';
+    } else if (this.fearT > 0) {                           // "!" de pânico
+      ctx.fillStyle = '#ffe27a'; ctx.font = 'bold 15px "Trebuchet MS"'; ctx.textAlign = 'center';
+      ctx.fillText('!', cx, y - 6); ctx.textAlign = 'left';
     }
   }
 }

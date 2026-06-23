@@ -36,6 +36,10 @@ class Bullet {
     this.alive = true;
     this.w = this.r * 2; this.h = this.r * 2;
     this.spin = opts.spin || 0; this.rot = ang;
+    // status mágicos aplicados ao acertar um inimigo (balas de feitiço)
+    this.freezeT = opts.freezeT || 0; this.slowT = opts.slowT || 0; this.slowK = opts.slowK || 0.5;
+    this.burnT = opts.burnT || 0; this.burnDps = opts.burnDps || 0;
+    this.homing = opts.homing || false;   // míssil teleguiado (procura o inimigo mais próximo)
   }
   detonate(game) {
     if (this.explosive > 0) game.world.explode(this.x, this.y, this.explosive, this.dmg);
@@ -46,6 +50,16 @@ class Bullet {
     this.life -= dt;
     if (this.life <= 0) { this.detonate(game); return; }
     if (this.kind === 'fireball' && Math.random() < 0.7) game.fx.spark(this.x, this.y, pick(['#ff8a3c', '#ffd86b', '#ff5b2c']), 1); // rastro flamejante
+    if (this.homing && this.faction === 'player') {                       // míssil arcano teleguiado
+      const e = game.nearestEnemy ? game.nearestEnemy(this.x, this.y, 460) : null;
+      if (e) {
+        const ta = Math.atan2(e.cy - this.y, e.cx - this.x), ca = Math.atan2(this.vy, this.vx);
+        let d = ta - ca; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU;
+        const na = ca + clamp(d, -4 * dt, 4 * dt), sp = Math.hypot(this.vx, this.vy);
+        this.vx = Math.cos(na) * sp; this.vy = Math.sin(na) * sp; this.ang = na;
+        game.fx.spark(this.x, this.y, '#ff7be0', 1);
+      }
+    }
     if (this.grav) this.vy += this.grav * dt;
     this.rot += this.spin * dt;
     // step movement so fast bullets don't tunnel through terrain
@@ -345,6 +359,8 @@ class Player extends Entity {
     this.morph = null; this.morphT = 0;   // VEX: forma emprestada (herói) + tempo restante
     this.crouching = false;               // agachado (seta p/ baixo no chão): abaixa o cano
     this.shootT = 0; this.attackArc = 0;  // timers de animação: tiro recente / golpe de espada
+    // ---- buffs mágicos do Edward (feitiços da tradição Arcana / Transmutação) ----
+    this.flyT = 0; this.phaseT = 0; this.invisT = 0; this.hasteT = 0; this.wardHp = 0;
   }
   setHero(i) {
     this.heroIndex = i;
@@ -412,7 +428,12 @@ class Player extends Entity {
     this.ammo = this.clip; this.reloading = 0;
   }
   hurt(dmg, dir, game) {
-    if (this.invuln > 0 || this.dead || (game && game.testMode)) return;   // FASE DE TESTES: vida infinita
+    if (this.invuln > 0 || this.dead || this.phaseT > 0 || (game && game.testMode)) return;   // FASE DE TESTES: vida infinita · etéreo = imune
+    if (this.wardHp > 0) {                                  // PELE DE PEDRA: escudo absorve antes da vida
+      const a = Math.min(this.wardHp, dmg); this.wardHp -= a; dmg -= a;
+      game.fx.spark(this.cx, this.cy, '#caa33a', 6); Sound.hit();
+      if (dmg <= 0) { this.flash = 0.1; this.invuln = 0.3; return; }
+    }
     this.hp -= dmg; this.flash = 0.12; this.invuln = 0.6;
     this.vx += dir * 80; this.vy -= 80;
     game.fx.blood(this.cx, this.cy, dir); game.cam.addShake(6); Sound.hurt();
@@ -432,7 +453,7 @@ class Player extends Entity {
     const c = game.controller;
     this.invuln = Math.max(0, this.invuln - dt);
     this.flash = Math.max(0, this.flash - dt);
-    this.cool = Math.max(0, this.cool - dt);
+    this.cool = Math.max(0, this.cool - dt * (this.hasteT > 0 ? 1.7 : 1));   // CELERIDADE: cadência acelerada
     this.specCool = Math.max(0, this.specCool - dt);
     this.dashCd = Math.max(0, this.dashCd - dt);
     this.meleeCd = Math.max(0, this.meleeCd - dt);
@@ -441,7 +462,9 @@ class Player extends Entity {
     this.shootT = Math.max(0, (this.shootT || 0) - dt);           // tiro recente (anim agachado-atirando)
     this.swordMode = Math.max(0, (this.swordMode || 0) - dt);
     this.powered = Math.max(0, (this.powered || 0) - dt); // magic-potion buff timer
-    this.gainSpecial(dt * 6); // passive charge
+    this.invisT = Math.max(0, this.invisT - dt); this.hasteT = Math.max(0, this.hasteT - dt);   // buffs de feitiço
+    const _ah = this.morph || this.hero;
+    this.gainSpecial(dt * (_ah.specialRegen || 6)); // passive charge (Edward regenera mana mais rápido)
     if (this.morph) { this.morphT -= dt; if (this.morphT <= 0) this.unmorph(game); }   // VEX: fim da forma
 
     // ---- mira 1D: vira na direção do movimento e atira sempre para a frente ----
@@ -476,7 +499,7 @@ class Player extends Entity {
         game.fx.muzzle(this.cx, this.cy, this.face > 0 ? 0 : Math.PI);
       }
     } else {
-      const tgt = this.crouching ? this.speed * 0.45 : this.speed;   // agachado anda mais devagar
+      const tgt = (this.crouching ? this.speed * 0.45 : this.speed) * (this.hasteT > 0 ? 1.45 : 1);   // agachado devagar · CELERIDADE acelera
       if (move !== 0) this.vx = approach(this.vx, move * tgt, accel * dt);
       else this.vx = approach(this.vx, 0, (this.onGround ? 3400 : 1200) * dt);
     }
@@ -537,7 +560,14 @@ class Player extends Entity {
     // gravity (off while climbing a ladder). Queda "pesada": ao cair aplica FALL_MULT
     // (pulo alto + queda acentuada). Ao agarrar a parede usa gravidade normal — o cap
     // do deslize (WALL_*) controla a descida, então não acelera demais.
-    if (!onLadder) {
+    // ---- VOO (feitiço Arcana): levita; ▲/▼ sobem/descem; sem gravidade ----
+    if (this.flyT > 0) {
+      this.flyT -= dt;
+      const vm = (c.down ? 1 : 0) - (c.up ? 1 : 0);
+      this.vy = vm !== 0 ? vm * 300 : Math.sin(this.anim * 5) * 16;
+      this.clinging = false; this.onLadder = false;
+      if (Math.random() < 0.5) game.fx.spark(this.cx + rand(-6, 6), this.y + this.h, '#6fd0ff', 1);
+    } else if (!onLadder) {
       // queda "pesada" padrão; heróis podem definir fallMult/terminalVy próprios
       // (ex.: Edward, o mago, cai bem devagar → sensação de levitar)
       const falling = this.vy > 0 && !this.clinging;
@@ -545,7 +575,18 @@ class Player extends Entity {
       const term = this.terminalVy || CONFIG.TERMINAL_VY;
       this.vy = Math.min(this.vy + CONFIG.GRAVITY * fm * dt, term);
     }
-    game.world.moveAndCollide(this, dt);
+
+    // ---- FORMA ETÉREA (feitiço Arcana): noclip — atravessa paredes e tiros ----
+    if (this.phaseT > 0) {
+      this.phaseT -= dt;
+      this.x = clamp(this.x + this.vx * dt, 0, game.world.pixelW - this.w);
+      this.y = clamp(this.y + this.vy * dt, -200, game.world.pixelH - this.h);
+      this.onGround = false; this.hitWall = 0; this.hitCeil = false;
+      if (this.phaseT <= 0) { for (let t = 0; t < 8 && game.world.solidPx(this.cx, this.cy); t++) this.y -= game.world.T; }   // não termina preso na pedra
+      if (Math.random() < 0.6) game.fx.spark(this.cx + rand(-8, 8), this.cy + rand(-12, 12), '#9fd0e0', 1);
+    } else {
+      game.world.moveAndCollide(this, dt);
+    }
 
     // one-way landing on a ladder's top rung: rest on it like solid ground (descend only via DOWN)
     if (!this.onLadder && this.vy >= 0 && !c.down) {
@@ -575,12 +616,18 @@ class Player extends Entity {
         if (this._tryMetamorph(game)) this.specCool = 0.4;
         else this.specCool = 0.3;
       } else {
-        // demais heróis — e o Vex transformado usa o especial EMPRESTADO (barra azul)
-        const sp = this.morph ? this.morph.special : this.hero.special;
-        if (sp && (game.testMode || this.special >= sp.cost)) {
-          sp.use(this, game);
-          if (!game.testMode) this.special -= sp.cost;   // FASE DE TESTES: não gasta especial
-          this.specCool = sp.cd;
+        const ah = this.morph || this.hero;
+        if (ah.key === 'edward' && typeof Grimoire !== 'undefined') {
+          // EDWARD: o botão especial conjura o FEITIÇO ativo do Grimório
+          Grimoire.tryCast(this, game);
+        } else {
+          // demais heróis — e o Vex transformado usa o especial EMPRESTADO (barra azul)
+          const sp = ah.special;
+          if (sp && (game.testMode || this.special >= sp.cost)) {
+            sp.use(this, game);
+            if (!game.testMode) this.special -= sp.cost;   // FASE DE TESTES: não gasta especial
+            this.specCool = sp.cd;
+          }
         }
       }
     }
@@ -632,9 +679,134 @@ class Player extends Entity {
       gr.addColorStop(0, 'rgba(110,180,255,0.35)'); gr.addColorStop(1, 'rgba(110,180,255,0)');
       ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(gx, gy, pr, 0, TAU); ctx.fill();
     }
+    this._drawBuffAura(ctx, cam);
     if (this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0) ctx.globalAlpha = 0.5;
+    if (this.invisT > 0) ctx.globalAlpha = Math.min(ctx.globalAlpha, 0.32);             // MANTO ETÉREO: quase invisível
+    else if (this.phaseT > 0) ctx.globalAlpha = Math.min(ctx.globalAlpha, 0.55);        // FORMA ETÉREA: translúcido
     drawFighter(ctx, this, cam, true);
     ctx.globalAlpha = 1;
+  }
+
+  // auras dos buffs de feitiço (escudo de pedra, voo, pressa)
+  _drawBuffAura(ctx, cam) {
+    const gx = this.cx + cam.ox, gy = this.cy + cam.oy;
+    if (this.wardHp > 0) {                                  // PELE DE PEDRA: casca rochosa
+      ctx.save(); ctx.globalAlpha = 0.5; ctx.strokeStyle = '#caa33a'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(gx, gy, this.w * 0.85 + Math.sin(this.anim * 6) * 1.5, 0, TAU); ctx.stroke(); ctx.restore();
+    }
+    if (this.hasteT > 0 && Math.abs(this.vx) > 30) {        // CELERIDADE: rastro de velocidade
+      ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = '#6fd0ff';
+      ctx.fillRect(gx - this.face * this.w * 0.9, this.y + cam.oy + 4, this.face * this.w * 0.6, this.h - 8); ctx.restore();
+    }
+    if (this.flyT > 0) {                                    // VOO: brilho sob os pés
+      const fy = this.y + this.h + cam.oy;
+      ctx.save(); ctx.globalAlpha = 0.4; ctx.fillStyle = '#6fd0ff';
+      ctx.beginPath(); ctx.ellipse(gx, fy, this.w * 0.6, 4, 0, 0, TAU); ctx.fill(); ctx.restore();
+    }
+  }
+}
+
+/* ---------------- Minion: invocações aliadas (feitiços de Invocação) ----
+   Criatura aliada (golem, lobos, esqueleto, totem, servo dominado) que caça
+   inimigos e luta por Edward. Some após `life` segundos ou ao morrer. Os
+   inimigos podem feri-la (ver Game._bulletCollisions e Enemy contato).      */
+const MINION_DEFS = {
+  golem:    { w: 40, h: 54, hp: 220, speed: 90,  dmg: 34, range: 0,   life: 16, spr: 'ogre',     aura: '#9fe0a0', knock: 260 },
+  wolf:     { w: 30, h: 32, hp: 50,  speed: 300, dmg: 16, range: 0,   life: 12, spr: 'wolf',     aura: '#bff0ff', knock: 120, leap: true },
+  skeleton: { w: 28, h: 48, hp: 60,  speed: 120, dmg: 14, range: 520, life: 16, spr: 'skeleton', aura: '#cfe8a0', knock: 80 },
+  totem:    { w: 22, h: 36, hp: 130, speed: 0,   dmg: 0,  range: 0,   life: 14, spr: null,       aura: '#7be08a', knock: 0, totem: true },
+  thrall:   { w: 30, h: 46, hp: 120, speed: 150, dmg: 18, range: 0,   life: 18, spr: 'cultist',  aura: '#7be08a', knock: 140 },
+};
+
+class Minion extends Entity {
+  constructor(x, y, kind, opts = {}) {
+    const D = MINION_DEFS[kind] || MINION_DEFS.wolf;
+    const w = opts.w || D.w, h = opts.h || D.h;
+    super(x - w / 2, y - h, w, h);
+    this.kind = kind; this.def = D; this.faction = 'ally';
+    this.spr = opts.spr || D.spr; this.skin = { tone: '#9fb0a0', outfit: '#3a4a3a', weapon: 'none' };
+    this.hp = this.maxhp = opts.hp || D.hp;
+    this.speed = opts.speed != null ? opts.speed : D.speed;
+    this.dmg = opts.dmg || D.dmg; this.knock = D.knock;
+    this.ranged = opts.ranged != null ? opts.ranged : D.range > 0;
+    this.range = D.range || 480; this.aura = D.aura;
+    this.lifeT = D.life; this.atkCd = 0; this.pulseT = 0; this.aimAng = 0; this.gunLen = 16;
+  }
+  hurt(dmg, dir, game) {
+    if (!this.alive) return;
+    this.hp -= dmg; this.flash = 0.1; this.vx += dir * 30;
+    game.fx.blood(this.cx, this.cy, dir, 4, this.aura);
+    if (this.hp <= 0) this.die(game);
+  }
+  die(game) { this.alive = false; game.fx.magic(this.cx, this.cy, this.aura, 14); game.fx.smoke(this.cx, this.cy, 4); }
+
+  update(dt, game) {
+    this.flash = Math.max(0, this.flash - dt);
+    this.atkCd = Math.max(0, this.atkCd - dt);
+    this.lifeT -= dt;
+    if (this.lifeT <= 0) { this.die(game); return; }
+
+    if (this.def.totem) { this._updateTotem(dt, game); return; }
+
+    const target = game.nearestEnemy ? game.nearestEnemy(this.cx, this.cy, 900) : null;
+    if (target) {
+      const dx = target.cx - this.cx, dy = target.cy - this.cy, ad = Math.abs(dx);
+      this.face = dx >= 0 ? 1 : -1; this.aimAng = this.face > 0 ? 0 : Math.PI;
+      if (this.ranged && ad < this.range && Math.abs(dy) < 150 && lineClear(game.world, this.cx, this.cy, target.cx, target.cy)) {
+        this.vx = approach(this.vx, 0, 1500 * dt);
+        if (this.atkCd <= 0) {
+          game.bullets.push(new Bullet(this.cx + this.face * 14, this.cy - 4, this.aimAng, 760, { faction: 'player', kind: 'arrow', dmg: this.dmg, tileDmg: 4, r: 3, life: 1.2 }));
+          game.fx.muzzle(this.cx + this.face * 14, this.cy - 4, this.aimAng); Sound.bow(); this.atkCd = 1.1;
+        }
+      } else {
+        this.vx = approach(this.vx, sign(dx) * this.speed, 1600 * dt);
+        if (this.onGround && this.def.leap && ad < 240 && Math.random() < 0.03) { this.vy = -420; this.vx = sign(dx) * this.speed * 1.2; }
+        if (this.hitWall === sign(this.vx) && this.onGround && this.vx !== 0) this.vy = -560;
+        if (this.atkCd <= 0 && aabb({ x: this.x - 4, y: this.y, w: this.w + 8, h: this.h }, target)) {
+          target.hurt(this.dmg, this.face, game); target.vx += this.face * this.knock; target.vy -= 60;
+          this.atkCd = 0.55; this.attackT = 1; game.fx.spark(target.cx, target.cy, this.aura, 6);
+        }
+      }
+    } else this.vx = approach(this.vx, 0, 1200 * dt);
+
+    this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, CONFIG.TERMINAL_VY);
+    game.world.moveAndCollide(this, dt);
+    if (this.y > game.world.pixelH + 80) this.alive = false;
+    this.anim += dt;
+    if (this.onGround) this.runDist = (this.runDist || 0) + Math.abs(this.vx) * dt;
+  }
+  _updateTotem(dt, game) {
+    this.vy = Math.min(this.vy + CONFIG.GRAVITY * dt, CONFIG.TERMINAL_VY);
+    this.vx = 0; game.world.moveAndCollide(this, dt); this.anim += dt;
+    this.pulseT -= dt;
+    if (this.pulseT <= 0) {                                 // pulso de cura + dano a inimigos colados
+      this.pulseT = 1.0;
+      const p = game.player;
+      if (p && !p.dead && Math.hypot(p.cx - this.cx, p.cy - this.cy) < 7 * CONFIG.TILE) {
+        p.hp = clamp(p.hp + 10, 0, p.maxhp); game.fx.text(p.cx, p.y - 6, '+10', '#7be08a');
+      }
+      for (const e of (game.enemiesInRadius ? game.enemiesInRadius(this.cx, this.cy, 2 * CONFIG.TILE) : [])) e.hurt(8, sign(e.cx - this.cx) || 1, game);
+      game.fx.shock(this.cx, this.cy, 2 * CONFIG.TILE, '#7be08a');
+    }
+  }
+  draw(ctx, cam) {
+    const gx = this.cx + cam.ox, fy = this.y + this.h + cam.oy;
+    // anel aliado (distingue dos inimigos)
+    ctx.save(); ctx.globalAlpha = 0.5; ctx.strokeStyle = this.aura; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(gx, fy - 2, this.w * 0.6, 4, 0, 0, TAU); ctx.stroke(); ctx.restore();
+    if (this.def.totem) { this._drawTotem(ctx, cam); return; }
+    if (this.flash > 0 && Math.floor(this.flash * 50) % 2 === 0) { /* drawFighter já trata flash em inimigos, aqui só sprite */ }
+    drawFighter(ctx, this, cam, true);
+    // leve tonalidade aliada por cima
+    ctx.save(); ctx.globalAlpha = 0.18; ctx.fillStyle = this.aura;
+    ctx.fillRect(this.x + cam.ox, this.y + cam.oy, this.w, this.h); ctx.restore();
+  }
+  _drawTotem(ctx, cam) {
+    const x = this.x + cam.ox, y = this.y + cam.oy, w = this.w, h = this.h, gl = 0.6 + 0.4 * Math.sin(this.anim * 4);
+    ctx.fillStyle = '#5a4326'; ctx.fillRect(x + w * 0.35, y + h * 0.4, w * 0.3, h * 0.6);   // poste
+    ctx.fillStyle = '#3a5a2a'; ctx.beginPath(); ctx.arc(x + w / 2, y + h * 0.35, w * 0.5, 0, TAU); ctx.fill();  // cabeça
+    ctx.fillStyle = `rgba(123,224,138,${gl})`; ctx.beginPath(); ctx.arc(x + w / 2, y + h * 0.35, w * 0.28, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#15110e'; ctx.fillRect(x + w * 0.32, y + h * 0.3, 3, 3); ctx.fillRect(x + w * 0.55, y + h * 0.3, 3, 3);
   }
 }
 

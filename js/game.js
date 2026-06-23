@@ -36,7 +36,7 @@ class Game {
     const world = new World(cols, rows.length);
     world.game = this;
     this.world = world; this.cam.world = world;
-    this.bullets = []; this.enemies = []; this.allies = []; this.pickups = [];
+    this.bullets = []; this.enemies = []; this.allies = []; this.pickups = []; this.summons = [];
     this.fx = new FX(this);   // fresh particles/decals per level
     this.explosionQ = []; this.exits = []; this.boss = null; this.decor = [];
     this.prisonersTotal = 0; this.prisonersRescued = 0;
@@ -176,6 +176,25 @@ class Game {
       }
     }
     this.fx.beam(m.x, m.y, m.x + Math.cos(ang) * range, m.y + Math.sin(ang) * range, o.color, width);
+  }
+
+  // ---- ajudantes da ARCANA DE EDWARD (usados pelos feitiços / invocações) ----
+  nearestEnemy(x, y, maxD = 1e9, exclude) {
+    let best = null, bd = maxD;
+    for (const e of this.enemies) { if (!e.alive || e === exclude || e.dying != null) continue; const d = Math.hypot(e.cx - x, e.cy - y); if (d < bd) { bd = d; best = e; } }
+    return best;
+  }
+  enemiesInRadius(x, y, r) {
+    const out = [];
+    for (const e of this.enemies) { if (!e.alive || e.dying != null) continue; if (Math.hypot(e.cx - x, e.cy - y) <= r + e.w * 0.5) out.push(e); }
+    return out;
+  }
+  summon(kind, x, y, opts) {
+    if (!this.summons) this.summons = [];
+    if (this.summons.length >= 16) { const old = this.summons.shift(); if (old) old.alive = false; }   // limite de invocações vivas
+    const m = new Minion(x, y, kind, opts || {});
+    this.summons.push(m); this.fx.magic(m.cx, m.cy, m.aura, 14); this.fx.smoke(m.cx, m.cy, 3);
+    return m;
   }
 
   // campo elétrico radial (Poder da Constituição, do Edward): atinge TODOS os
@@ -359,6 +378,8 @@ class Game {
   // ---- update ----------------------------------------------
   update(dt) {
     if (this.paused || this.state !== 'playing') return;
+    this._handleGrimoire();
+    if (this.grimoireOpen) return;   // GRIMÓRIO aberto: congela a ação enquanto Edward escolhe o feitiço
     this.time += dt;
     // VEX: cada VIDA EXTRA concede +1 carga de metamorfose
     if (this.lives > (this._prevLives != null ? this._prevLives : this.lives)) this.vexCharges = (this.vexCharges || 0) + (this.lives - this._prevLives);
@@ -390,6 +411,7 @@ class Game {
     for (const e of this.enemies) e.update(dt, this);
     for (const b of this.bullets) b.update(dt, this);
     for (const a of this.allies) a.update(dt, this);
+    for (const s of this.summons) s.update(dt, this);
     for (const k of this.pickups) k.update(dt, this);
 
     this._bulletCollisions();
@@ -411,6 +433,7 @@ class Game {
     this.enemies = this.enemies.filter(e => e.alive);
     this.bullets = this.bullets.filter(b => b.alive);
     this.allies = this.allies.filter(a => !a.rescued);
+    this.summons = this.summons.filter(s => s.alive);
     this.pickups = this.pickups.filter(k => k.alive);
 
     // camera
@@ -424,6 +447,18 @@ class Game {
     // fell out of world while no lives handled by death; safety
   }
 
+  // GRIMÓRIO de Edward: G abre/fecha a árvore de feitiços; [ ] trocam o feitiço
+  // ativo rápido sem abrir. Só disponível quando Edward (ou Vex metamorfoseado nele) joga.
+  _handleGrimoire() {
+    if (typeof Grimoire === 'undefined') return;
+    const p = this.player, isEd = p && !p.dead && ((p.morph ? p.morph.key : p.hero.key) === 'edward');
+    if (!isEd) { this.grimoireOpen = false; return; }
+    if (Keys.once('grimoire')) { this.grimoireOpen = !this.grimoireOpen; Sound.swap(); }
+    if (this.grimoireOpen) { Grimoire.tickInput(this); return; }
+    if (Keys.once('spellPrev')) Grimoire.cycle(-1, p, this);
+    if (Keys.once('spellNext')) Grimoire.cycle(1, p, this);
+  }
+
   _bulletCollisions() {
     for (const b of this.bullets) {
       if (!b.alive) continue;
@@ -435,12 +470,26 @@ class Game {
             if (b.hitSet.has(e)) continue;
             b.hitSet.add(e);
             e.hurt(b.dmg, sign(b.vx) || 1, this);
+            if (b.freezeT) e.freeze(b.freezeT);                       // balas mágicas aplicam status
+            if (b.slowT) e.slow(b.slowT, b.slowK);
+            if (b.burnT) e.ignite(b.burnT, b.burnDps);
             e.vx += sign(b.vx) * (b.knock * 0.5); Sound.hit();
             if (b.explosive) { b.detonate(this); break; }
             if (b.hitSet.size > b.pierce) { b.alive = false; break; }
           }
         }
       } else {
+        // bala inimiga: pode atingir uma INVOCAÇÃO aliada antes do jogador
+        let hitMinion = false;
+        for (const s of this.summons) {
+          if (!s.alive) continue;
+          if (b.x > s.x - b.r && b.x < s.x + s.w + b.r && b.y > s.y - b.r && b.y < s.y + s.h + b.r) {
+            s.hurt(b.dmg, sign(b.vx) || 1, this); Sound.hit();
+            if (b.explosive) b.detonate(this); else b.alive = false;
+            hitMinion = true; break;
+          }
+        }
+        if (hitMinion) continue;
         const p = this.player;
         if (p && !p.dead && p.invuln <= 0 &&
             b.x > p.x - b.r && b.x < p.x + p.w + b.r && b.y > p.y - b.r && b.y < p.y + p.h + b.r) {
@@ -501,6 +550,7 @@ class Game {
     this.fx.drawCrumbs(ctx, this.cam);   // settled mini-block debris & gore on the ground
     for (const k of this.pickups) k.draw(ctx, this.cam);
     for (const a of this.allies) a.draw(ctx, this.cam);
+    for (const s of this.summons) if (this.cam.visible(s.x, s.y, s.w, s.h)) s.draw(ctx, this.cam);
     for (const e of this.enemies) if (this.cam.visible(e.x, e.y, e.w, e.h)) e.draw(ctx, this.cam);
     if (this.player) this.player.draw(ctx, this.cam);
     for (const b of this.bullets) if (this.cam.visible(b.x, b.y, 8, 8)) b.draw(ctx, this.cam);
@@ -512,6 +562,7 @@ class Game {
     if (this.boss && this.boss.alive) this._drawBossBar(ctx);
     if (this.testMode) this._drawTestBar(ctx);
     if (this.paused) this._drawPaused(ctx);
+    if (this.grimoireOpen && typeof Grimoire !== 'undefined') Grimoire.draw(ctx, this);
   }
 
   // ---- FASE DE TESTES: troca de arma e invocação de inimigos ----
@@ -562,7 +613,10 @@ class Game {
     }
     ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center';
     ctx.fillStyle = '#9a8f7d'; ctx.font = '12px "Trebuchet MS"';
-    ctx.fillText('1–9 armas · , . ciclam todas · B invoca inimigo · M limpa · S/D herói', CONFIG.W / 2, CONFIG.H - 9);
+    const isEd = this.player && ((this.player.morph ? this.player.morph.key : this.player.hero.key) === 'edward');
+    const tip = isEd ? '✦ EDWARD: G abre o GRIMÓRIO · [ ] trocam o feitiço · X conjura · S/D trocam de herói'
+                     : '1–9 armas · , . ciclam todas · B invoca inimigo · M limpa · S/D herói (Edward tem feitiços!)';
+    ctx.fillText(tip, CONFIG.W / 2, CONFIG.H - 9);
     ctx.restore(); ctx.textAlign = 'left';
   }
 
@@ -633,6 +687,13 @@ class Game {
       h.sp.style.background = 'linear-gradient(#f0d36a,#caa33a)';   // dourado p/ diferenciar da azul
       h.sp.style.width = clamp(cur / Math.max(base, cur) * 100, 0, 100) + '%';
       h.spTxt.textContent = cur > 0 ? ('METAMORFOSE ×' + cur) : 'SEM METAMORFOSE';
+    } else if ((p.morph ? p.morph.key : p.hero.key) === 'edward' && typeof Grimoire !== 'undefined') {
+      // EDWARD: a barra azul é a MANA; o texto mostra o feitiço ativo do Grimório
+      const sp = Grimoire.current();
+      h.sp.style.background = '';
+      h.sp.style.width = clamp(p.special / p.maxSpecial * 100, 0, 100) + '%';
+      const ready = this.testMode || p.special >= (sp.cost || 0);
+      h.spTxt.textContent = sp.icon + ' ' + sp.name + (ready ? '  ▸ G' : ' · falta ' + Math.ceil((sp.cost || 0) - p.special));
     } else {
       const sp = p.morph ? p.morph.special : p.hero.special;
       h.sp.style.background = '';   // volta ao azul padrão (CSS)
