@@ -287,9 +287,12 @@ const WEAPON_ORDER = ['scatter', 'repeater', 'flamethrower', 'bolt', 'fireball',
 const HEROES = [
   {
     key: 'ragnarok', name: 'RAGNAROK', icon: '⚔', spr: 'ragnarok',
-    desc: 'Cavaleiro de placas. Espingarda de dispersão e o Tiro Explosivo.',
+    desc: 'Guerreiro veterano. Espingarda + o CÓDICE DE GUERRA (tecla G): fúria bárbara, martelos, fogo, paladino e a lâmina transcendental.',
     hp: 150, speed: 235, jumpV: 1400, jumps: 1, w: 28, h: 48,
+    specialRegen: 8,                  // acumula FÚRIA mais rápido (e ganha +5 por golpe corpo-a-corpo)
     weaponKey: 'scatter',
+    // O ESPECIAL do Ragnarok usa a TÉCNICA ATIVA do Códice (ver spells.js / Grimoire).
+    // Este objeto é só FALLBACK (caso o módulo de habilidades não carregue).
     special: {
       cost: 45, cd: 0.5,
       use(p, game) {

@@ -141,6 +141,15 @@ class Bullet {
       ctx.fillStyle = this.color || '#ffd86b'; ctx.shadowColor = this.color || '#ffd86b'; ctx.shadowBlur = 8;
       ctx.beginPath(); ctx.arc(x, y, this.r, 0, TAU); ctx.fill();
       ctx.fillRect(x + this.r - 1, y - this.r - 4, 1.6, 6);
+    } else if (this.kind === 'crescent' || this.kind === 'slashwave') {   // lâmina de energia / onda de corte
+      ctx.translate(x, y); ctx.rotate(this.ang);
+      const r = this.r, col = this.color || '#cfd8e6';
+      ctx.globalAlpha = clamp(this.life * 2.4, 0.35, 1);
+      ctx.shadowColor = col; ctx.shadowBlur = 14; ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(0, 0, r, -1.15, 1.15); ctx.arc(r * 0.62, 0, r, 1.15, -1.15, true); ctx.closePath(); ctx.fill();
+      if (this.kind === 'crescent') { ctx.fillStyle = 'rgba(26,12,48,0.55)'; ctx.beginPath(); ctx.arc(0, 0, r * 0.78, -0.95, 0.95); ctx.arc(r * 0.5, 0, r * 0.78, 0.95, -0.95, true); ctx.closePath(); ctx.fill(); }
+      ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.globalAlpha = clamp(this.life * 2, 0.3, 0.9);
+      ctx.beginPath(); ctx.arc(0, 0, r, -1.1, -0.55); ctx.lineWidth = 2.2; ctx.strokeStyle = '#fff'; ctx.stroke();
     } else {
       // glowing pellet/ball
       ctx.fillStyle = this.color; ctx.shadowColor = this.color; ctx.shadowBlur = 8;
@@ -361,6 +370,8 @@ class Player extends Entity {
     this.shootT = 0; this.attackArc = 0;  // timers de animação: tiro recente / golpe de espada
     // ---- buffs mágicos do Edward (feitiços da tradição Arcana / Transmutação) ----
     this.flyT = 0; this.phaseT = 0; this.invisT = 0; this.hasteT = 0; this.wardHp = 0;
+    // ---- técnicas do Ragnarok: postura de arma branca (golpe C) + frenesi/roubo de vida ----
+    this.meleeStance = null; this.meleeStanceT = 0; this.berserkT = 0; this.lifestealT = 0;
   }
   setHero(i) {
     this.heroIndex = i;
@@ -463,6 +474,8 @@ class Player extends Entity {
     this.swordMode = Math.max(0, (this.swordMode || 0) - dt);
     this.powered = Math.max(0, (this.powered || 0) - dt); // magic-potion buff timer
     this.invisT = Math.max(0, this.invisT - dt); this.hasteT = Math.max(0, this.hasteT - dt);   // buffs de feitiço
+    this.berserkT = Math.max(0, this.berserkT - dt); this.lifestealT = Math.max(0, this.lifestealT - dt);   // frenesi/roubo de vida
+    if (this.meleeStanceT > 0) { this.meleeStanceT -= dt; if (this.meleeStanceT <= 0) { this.meleeStance = null; game.fx.smoke(this.cx, this.cy, 3); } }   // a postura de arma expira
     const _ah = this.morph || this.hero;
     this.gainSpecial(dt * (_ah.specialRegen || 6)); // passive charge (Edward regenera mana mais rápido)
     if (this.morph) { this.morphT -= dt; if (this.morphT <= 0) this.unmorph(game); }   // VEX: fim da forma
@@ -497,9 +510,10 @@ class Player extends Entity {
         }
       } else {
         game.fx.muzzle(this.cx, this.cy, this.face > 0 ? 0 : Math.PI);
+        if (this.dashT <= 0) { this.dashSpeedK = 0; this.dashRadius = 0; this.dashDmg = 0; }   // limpa parâmetros do arranque ao terminar
       }
     } else {
-      const tgt = (this.crouching ? this.speed * 0.45 : this.speed) * (this.hasteT > 0 ? 1.45 : 1);   // agachado devagar · CELERIDADE acelera
+      const tgt = (this.crouching ? this.speed * 0.45 : this.speed) * (this.hasteT > 0 ? 1.45 : 1) * (this.berserkT > 0 ? 1.2 : 1);   // agachado devagar · CELERIDADE/FRENESI aceleram
       if (move !== 0) this.vx = approach(this.vx, move * tgt, accel * dt);
       else this.vx = approach(this.vx, 0, (this.onGround ? 3400 : 1200) * dt);
     }
@@ -617,8 +631,8 @@ class Player extends Entity {
         else this.specCool = 0.3;
       } else {
         const ah = this.morph || this.hero;
-        if (ah.key === 'edward' && typeof Grimoire !== 'undefined') {
-          // EDWARD: o botão especial conjura o FEITIÇO ativo do Grimório
+        if (typeof Grimoire !== 'undefined' && Grimoire.heroHasBook(ah.key)) {
+          // HERÓIS COM LIVRO (Edward/Ragnarok): o botão especial usa a HABILIDADE ATIVA da árvore
           Grimoire.tryCast(this, game);
         } else {
           // demais heróis — e o Vex transformado usa o especial EMPRESTADO (barra azul)
@@ -633,15 +647,31 @@ class Player extends Entity {
     }
 
     // ---- melee: golpe em VOLTA do jogador (C), disponível a todo herói ----
+    // A "postura" do Ragnarok (martelo/punhos/lâmina ígnea/transcendente) muda este golpe.
     if (c.meleePressed() && this.meleeCd <= 0) {
-      this.meleeCd = 0.4; this.attackT = 1; this.attackArc = 1;   // attackArc → anim de golpe (arco de 270°)
-      game.meleeRadial(this, { range: 54, dmg: 28, tileDmg: 22, knock: 250, color: 'rgba(230,238,255,0.95)', shake: 4 });
+      const prof = this.meleeProfile();
+      this.meleeCd = prof.cd || 0.4; this.attackT = 1; this.attackArc = 1;   // attackArc → anim de golpe (arco de 270°)
+      game.meleeRadial(this, prof);
       Sound.slash();
     }
 
     // anim clocks: anim = seconds (idle), runDist = foot-locked distance (run cycle)
     this.anim += dt;
     if (this.onGround) this.runDist = (this.runDist || 0) + Math.abs(this.vx) * dt;
+  }
+
+  // perfil do golpe corpo-a-corpo (C): padrão = espada. O Ragnarok troca por
+  // POSTURAS (martelo/punhos de fogo/lâmina ígnea/lâmina transcendente), cada
+  // uma com alcance, dano, recuo, efeito (atordoar/incendiar) e visual próprios.
+  meleeProfile() {
+    const mult = this.berserkT > 0 ? 1.5 : 1;
+    switch (this.meleeStance) {
+      case 'hammer':       return { range: 60, dmg: 40 * mult, tileDmg: 60, knock: 520, color: 'rgba(255,210,120,0.95)', shake: 7, stun: 0.8, cd: 0.5 };
+      case 'fists':        return { range: 46, dmg: 18 * mult, tileDmg: 14, knock: 160, color: 'rgba(255,150,70,0.95)', shake: 3, ignite: [3, 8], cd: 0.28 };
+      case 'flamesword':   return { range: 58, dmg: 32 * mult, tileDmg: 26, knock: 240, color: 'rgba(255,140,60,0.95)', shake: 4, ignite: [3, 7], cd: 0.4 };
+      case 'transcendent': return { range: 72, dmg: 38 * mult, tileDmg: 30, knock: 300, color: 'rgba(155,107,255,0.95)', shake: 5, ranged: true, cd: 0.42 };
+      default:             return { range: 54, dmg: 28 * mult, tileDmg: 22, knock: 250, color: 'rgba(230,238,255,0.95)', shake: 4, cd: 0.4 };
+    }
   }
 
   // helper used by hero weapon definitions
@@ -702,6 +732,15 @@ class Player extends Entity {
       const fy = this.y + this.h + cam.oy;
       ctx.save(); ctx.globalAlpha = 0.4; ctx.fillStyle = '#6fd0ff';
       ctx.beginPath(); ctx.ellipse(gx, fy, this.w * 0.6, 4, 0, 0, TAU); ctx.fill(); ctx.restore();
+    }
+    if (this.berserkT > 0) {                                // FRENESI (Ragnarok): aura vermelha pulsante
+      ctx.save(); ctx.globalAlpha = 0.35 + 0.18 * Math.sin(this.anim * 12); ctx.strokeStyle = '#d34a3a'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(gx, gy, this.w * 0.92 + Math.sin(this.anim * 10) * 2, 0, TAU); ctx.stroke(); ctx.restore();
+    }
+    if (this.meleeStanceT > 0 && this.meleeStance) {        // brilho da arma branca equipada (postura)
+      const sc = { hammer: '#ffd86b', fists: '#ff8a3c', flamesword: '#ff8a3c', transcendent: '#9b6bff' }[this.meleeStance] || '#fff';
+      ctx.save(); ctx.globalAlpha = 0.32; ctx.fillStyle = sc; ctx.shadowColor = sc; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.arc(gx + this.face * this.w * 0.55, gy - 2, 5 + Math.sin(this.anim * 8) * 1.5, 0, TAU); ctx.fill(); ctx.restore();
     }
   }
 }

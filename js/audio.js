@@ -92,6 +92,10 @@ const Sound = {
    soar épica, tensa e única.  start(levelIndex) escolhe a faixa.
    ============================================================ */
 Sound.music = {
+  // DESLIGADA a pedido: a trilha procedural não combina com o clima do jogo.
+  // (As faixas/sequenciador ficam aqui para uma futura trilha própria; basta
+  //  pôr `enabled: true` para reativar o sequenciador antigo.)
+  enabled: false,
   playing: false, _timer: null, step: 0, gain: null, stepDur: 0.22, cur: 0,
 
   // frequência (Hz) a partir do nome da nota, ex.: 'A2', 'C#3'
@@ -157,6 +161,7 @@ Sound.music = {
   ],
 
   start(idx = 0) {
+    if (!this.enabled) return;   // trilha desligada (ver acima)
     Sound.ensure(); Sound.resume();
     if (!Sound.ctx || this.playing) return;
     this.cur = ((idx % this.tracks.length) + this.tracks.length) % this.tracks.length;

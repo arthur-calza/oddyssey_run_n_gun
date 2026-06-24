@@ -208,7 +208,7 @@ class Game {
       const kd = sign(e.cx - cx) || 1;
       e.hurt(Math.round(dmg * (1 - d / (radius * 1.5))), kd, this);   // dano cai com a distância
       e.vx += kd * kn; e.vy -= 80;
-      this.fx.bolt(cx, cy, e.cx, e.cy, '#bfe8ff'); this.fx.spark(e.cx, e.cy, '#bfe8ff', 8);
+      this.fx.bolt(cx, cy, e.cx, e.cy, '#bfe8ff'); this.fx.spark(e.cx, e.cy, '#bfe8ff', 8); this.fx.miniShock(e.cx, e.cy, '#bff0ff', 4);
     }
     // campo visível: anéis de choque + raios radiais (sem tocar o terreno)
     this.fx.shock(cx, cy, radius, '#7fd8ff'); this.fx.shock(cx, cy, radius * 0.66, '#bfe8ff');
@@ -271,16 +271,22 @@ class Game {
   meleeRadial(p, o) {
     const range = o.range, kn = o.knock != null ? o.knock : 200, dmg = o.dmg, td = o.tileDmg != null ? o.tileDmg : dmg;
     const T = this.world.T, cx = p.cx, cy = p.cy, feetY = p.y + p.h;
+    let hits = 0;
     // inimigos ao redor (ignora os que estão claramente abaixo dos pés)
     for (const e of this.enemies) {
       if (!e.alive) continue;
       const dx = e.cx - cx, dy = e.cy - cy, d = Math.hypot(dx, dy);
       if (d > range + e.w * 0.5) continue;
       if (e.cy > feetY + 6) continue;                 // abaixo dos pés → não atinge
-      e.hurt(dmg, sign(dx) || p.face, this);
-      e.vx += (sign(dx) || p.face) * kn; e.vy -= 70;
-      this.fx.blood(e.cx, e.cy, sign(dx) || p.face, 6);
+      const kd = sign(dx) || p.face;
+      e.hurt(dmg, kd, this);
+      e.vx += kd * kn; e.vy -= 70; hits++;
+      this.fx.blood(e.cx, e.cy, kd, 6);
       this.fx.spark(e.cx, e.cy, '#fff2b0', 6);          // faíscas ao acertar
+      // ---- efeitos de POSTURA do Ragnarok (arma branca equipada) ----
+      if (o.ignite) { e.ignite(o.ignite[0], o.ignite[1]); this.fx.fire(e.cx, e.cy, 3); }
+      if (o.bleed) { e.envenom(3, 5); this.fx.blood(e.cx, e.cy, kd, 5); }
+      if (o.stun) { e.stagger = Math.max(e.stagger, o.stun); this.fx.spark(e.cx, e.cy - 6, '#ffd86b', 6); }
     }
     // tiles ao redor: lados + acima, até a linha dos pés (nunca abaixo)
     const feetRow = Math.floor((feetY - 1) / T);
@@ -290,6 +296,11 @@ class Game {
       if (Math.hypot(tcx - cx, tcy - cy) > range) continue;
       this.world.damage(c, r, td, { power: 80 });
     }
+    // postura TRANSCENDENTAL: cada golpe também projeta um crescente de energia à frente
+    if (o.ranged) { const m = p.muzzlePos(); this.bullets.push(new Bullet(m.x, m.y, p.aimAng, 760, { faction: 'player', kind: 'crescent', color: '#9b6bff', dmg: Math.round(dmg * 0.7), tileDmg: 14, r: 12, life: 0.7, pierce: 5, knock: 140 })); }
+    // RAGNAROK acumula FÚRIA ao golpear; e cura com roubo de vida quando em frenesi
+    if (hits && p.hero && p.hero.key === 'ragnarok') p.gainSpecial(5 * hits);
+    if (hits && (p.lifestealT > 0 || p.berserkT > 0)) { p.hp = clamp(p.hp + 4 * hits, 0, p.maxhp); this.fx.spark(p.cx, p.cy, '#d34a3a', 3); }
     // efeito visual: UM corte contínuo (arco de ~270° ao redor) + faíscas
     const col = o.color || 'rgba(255,255,255,0.92)';
     this.fx.swirl(cx, cy - 4, range * 0.86, col, p.face);
@@ -330,7 +341,7 @@ class Game {
   onEnemyKilled(e) {
     this.score += e.score || 0;
     if (this.player && !this.player.dead) this.player.gainSpecial(e.boss ? 60 : e.mini ? 30 : 12);
-    if (e === this.boss) { this.boss = null; this.bossDown = true; this.flashScreen(0.5); setTimeout(() => this.win(), 900); }
+    if (e === this.boss) { this.boss = null; this.bossDown = true; this.flashScreen(0.5); if (!this.testMode) setTimeout(() => this.win(), 900); }
   }
 
   onPlayerDeath() {
@@ -405,7 +416,8 @@ class Game {
       if (Input.once(',')) this._testEquip(((this._testWi || 0) - 1 + WEAPON_ORDER.length) % WEAPON_ORDER.length);
       if (Input.once('.')) this._testEquip(((this._testWi || 0) + 1) % WEAPON_ORDER.length);
       if (Input.once('b')) this._testSpawnEnemy();
-      if (Input.once('m')) { for (const e of this.enemies) if (!e.boss) e.alive = false; this.fx.text(p.cx, p.y - 12, 'INIMIGOS LIMPOS', '#9be0ff'); Sound.swap(); }
+      if (Input.once('n')) this._testSpawnMythos();
+      if (Input.once('m')) { for (const e of this.enemies) e.alive = false; this.boss = null; this.fx.text(p.cx, p.y - 12, 'INIMIGOS LIMPOS', '#9be0ff'); Sound.swap(); }
     }
 
     for (const e of this.enemies) e.update(dt, this);
@@ -451,8 +463,8 @@ class Game {
   // ativo rápido sem abrir. Só disponível quando Edward (ou Vex metamorfoseado nele) joga.
   _handleGrimoire() {
     if (typeof Grimoire === 'undefined') return;
-    const p = this.player, isEd = p && !p.dead && ((p.morph ? p.morph.key : p.hero.key) === 'edward');
-    if (!isEd) { this.grimoireOpen = false; return; }
+    const p = this.player, has = p && !p.dead && Grimoire.heroHasBook(p.morph ? p.morph.key : p.hero.key);
+    if (!has) { this.grimoireOpen = false; return; }
     if (Keys.once('grimoire')) { this.grimoireOpen = !this.grimoireOpen; Sound.swap(); }
     if (this.grimoireOpen) { Grimoire.tickInput(this); return; }
     if (Keys.once('spellPrev')) Grimoire.cycle(-1, p, this);
@@ -582,6 +594,17 @@ class Game {
     this.fx.spark(e.cx, e.cy, '#c479ff', 14); this.fx.smoke(e.cx, e.cy, 3);
     this.fx.text(e.cx, e.y - 8, (t.label || key), '#ff9b6b'); Sound.swap();
   }
+  // FASE DE TESTES: invoca um CHEFE MYTHOS (tecla N) — cicla pelos chefes colossais
+  _testSpawnMythos() {
+    const p = this.player; if (!p) return;
+    const keys = Object.keys(ENEMY_TYPES).filter(k => ENEMY_TYPES[k].mythos);
+    this._testMi = (this._testMi == null) ? 0 : (this._testMi + 1) % keys.length;
+    const key = keys[this._testMi], t = ENEMY_TYPES[key];
+    const e = new Enemy(p.cx + p.face * 240, p.y, key);
+    this.enemies.push(e); this.boss = e;   // mostra a barra de chefe (vitória não dispara em testes)
+    this.fx.magic(e.cx, e.cy, '#b07bff', 24); this.fx.smoke(e.cx, e.cy, 8);
+    this.fx.text(e.cx, e.y - 8, (t.name || key), '#ff9b6b'); Sound.cast();
+  }
 
   // legenda da FASE DE TESTES: lista as armas (quebra em linhas) e destaca a equipada
   _drawTestBar(ctx) {
@@ -613,9 +636,9 @@ class Game {
     }
     ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center';
     ctx.fillStyle = '#9a8f7d'; ctx.font = '12px "Trebuchet MS"';
-    const isEd = this.player && ((this.player.morph ? this.player.morph.key : this.player.hero.key) === 'edward');
-    const tip = isEd ? '✦ EDWARD: G abre o GRIMÓRIO · [ ] trocam o feitiço · X conjura · S/D trocam de herói'
-                     : '1–9 armas · , . ciclam todas · B invoca inimigo · M limpa · S/D herói (Edward tem feitiços!)';
+    const hasBook = this.player && typeof Grimoire !== 'undefined' && Grimoire.heroHasBook(this.player.morph ? this.player.morph.key : this.player.hero.key);
+    const tip = hasBook ? '✦ G árvore de habilidades · [ ] trocam · X usa · C golpe curto · B inimigo · N chefe MYTHOS · M limpa · S/D herói'
+                        : '1–9 armas · , . ciclam · B inimigo · N chefe MYTHOS · M limpa · S/D herói (Edward e Ragnarok têm árvores!)';
     ctx.fillText(tip, CONFIG.W / 2, CONFIG.H - 9);
     ctx.restore(); ctx.textAlign = 'left';
   }
@@ -687,13 +710,15 @@ class Game {
       h.sp.style.background = 'linear-gradient(#f0d36a,#caa33a)';   // dourado p/ diferenciar da azul
       h.sp.style.width = clamp(cur / Math.max(base, cur) * 100, 0, 100) + '%';
       h.spTxt.textContent = cur > 0 ? ('METAMORFOSE ×' + cur) : 'SEM METAMORFOSE';
-    } else if ((p.morph ? p.morph.key : p.hero.key) === 'edward' && typeof Grimoire !== 'undefined') {
-      // EDWARD: a barra azul é a MANA; o texto mostra o feitiço ativo do Grimório
-      const sp = Grimoire.current();
+    } else if (typeof Grimoire !== 'undefined' && Grimoire.heroHasBook(p.morph ? p.morph.key : p.hero.key)) {
+      // HERÓIS COM LIVRO (Edward/Ragnarok): a barra azul é o recurso (MANA/FÚRIA);
+      // o texto mostra a habilidade ATIVA da árvore + a postura de arma, se houver
+      const book = Grimoire.bookFor(p), sp = Grimoire.current(p);
       h.sp.style.background = '';
       h.sp.style.width = clamp(p.special / p.maxSpecial * 100, 0, 100) + '%';
       const ready = this.testMode || p.special >= (sp.cost || 0);
-      h.spTxt.textContent = sp.icon + ' ' + sp.name + (ready ? '  ▸ G' : ' · falta ' + Math.ceil((sp.cost || 0) - p.special));
+      const stance = (p.meleeStanceT > 0 && p.meleeStance) ? ' · ✊' + STANCE_LABEL[p.meleeStance] : '';
+      h.spTxt.textContent = sp.icon + ' ' + sp.name + (ready ? '  ▸ G' : ' · falta ' + Math.ceil((sp.cost || 0) - p.special)) + stance;
     } else {
       const sp = p.morph ? p.morph.special : p.hero.special;
       h.sp.style.background = '';   // volta ao azul padrão (CSS)

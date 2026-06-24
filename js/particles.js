@@ -139,6 +139,23 @@ class FX {
   magic(x, y, color = '#a86bff', n = 12) {
     for (let i = 0; i < n; i++) { const a = rand(0, TAU), sp = rand(40, 200); this._add({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 30, life: rand(0.3, 0.8), max: 0.8, r: rand(1.5, 3.5), c: color, g: -40, glow: true, shrink: true }); }
   }
+  // línguas de fogo subindo do corpo (inimigos pegando fogo / queimadura)
+  fire(x, y, n = 6) {
+    for (let i = 0; i < n; i++) this._add({ x: x + rand(-6, 6), y: y + rand(-4, 4), vx: rand(-30, 30), vy: -rand(40, 130), life: rand(0.25, 0.55), max: 0.55, r: rand(2.5, 5), c: pick(['#ffe27a', '#ffd86b', '#ff8a3c', '#ff5b2c']), g: -130, glow: true, shrink: true });
+  }
+  // estilhaços de gelo: cacos que voam e caem + um anel gelado (descongelar / quebrar o gelo)
+  iceShatter(x, y, n = 12) {
+    for (let i = 0; i < n; i++) { const a = rand(0, TAU), sp = rand(60, 260); this._add({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, life: rand(0.3, 0.6), max: 0.6, r: rand(1.5, 3.6), c: pick(['#bfe8ff', '#eaf8ff', '#9fd0e0', '#fff']), g: 1300, glow: true, shrink: true, land: true }); }
+    this.rings.push({ x, y, r: 4, max: 32, life: 0.3, t: 0.3, color: '#bfe8ff' });
+  }
+  // mini-choques: pequenos raios curtos brotando de um ponto (impacto elétrico no corpo)
+  miniShock(x, y, color = '#bff0ff', n = 3) {
+    for (let i = 0; i < n; i++) { const a = rand(0, TAU), len = rand(8, 22); this.bolts.push({ x1: x, y1: y, x2: x + Math.cos(a) * len, y2: y + Math.sin(a) * len, color, life: 0.12, max: 0.12, seed: Math.random() * 999 }); }
+  }
+  // notas musicais flutuando (Canção do Sono)
+  notes(x, y, n = 3, color = '#cfe8ff') {
+    for (let i = 0; i < n; i++) this._add({ x: x + rand(-8, 8), y: y + rand(-4, 4), vx: rand(-18, 18), vy: -rand(28, 70), life: rand(0.5, 1.0), max: 1.0, r: rand(2, 3.6), c: color, g: -28, glow: true });
+  }
   // jato de chamas (lança-chamas do Silvyr): cone que PERCORRE todo o `reach`
   // (mesma distância em que causa dano — ~3 tiles). A velocidade é calculada a
   // partir da vida para cada partícula atravessar o alcance inteiro; a gravidade

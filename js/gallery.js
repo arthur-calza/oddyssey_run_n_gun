@@ -279,6 +279,7 @@ const Gallery = {
       vx: 0, vy: 0, onGround: true, anim: 0, runDist: 0,
       flash: 0, aimAng: 0, cool: 0, coolMax: 0.18, dying: null, dead: false,
       dyingMax: t.boss ? 1.2 : 0.55, dashT: 0, _hold: 0, _spd: t.speed,
+      attackT: 0, customDraw: t.draw || null,   // MYTHOS: desenho procedural próprio
       get cx() { return this.x + this.w / 2; },
     };
     if (this.autoStates) this.autoT = 0; else this.setState(this.state);
@@ -474,7 +475,7 @@ const Gallery = {
         const feetY = vh * feetF;
         this._floor(ctx, vw, feetY);
         const cam = { ox: vw / 2 - m.cx, oy: feetY - (m.y + m.h) };
-        drawFighter(ctx, m, cam, true);
+        if (m.customDraw) m.customDraw(ctx, m, cam); else drawFighter(ctx, m, cam, true);
       }
     } else if (this.tab === 'mats') {
       this._drawMat(ctx, vw, vh);
