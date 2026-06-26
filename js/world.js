@@ -56,6 +56,65 @@ const MAT = [
   { name: 'nitro',      hp: 4,  solid: true,  c: '#3a8a5a', c2: '#123a24', edge: '#8effb0', boom: { r: 52,  dmg: 28 } },                    // 45 nitro (fraco, mas explode a qualquer toque — hp baixíssima)
   { name: 'mortarkeg',  hp: 14, solid: true,  c: '#5a6470', c2: '#22262c', edge: '#9aa6b4', boom: { r: 40,  dmg: 26, warhead: true } },    // 46 morteiro (dispara um míssil que corta a terra na direção do herói)
   { name: 'frostbrick', hp: 70, solid: true,  c: '#8fc0d8', c2: '#4f7a90', edge: '#d8f4ff', pattern: 'ice', glow: '#bff0ff' },             // 47 tijolo gelado (textura 'ice' nova)
+  // ===========================================================================
+  // === GRANDE EXPANSÃO DE BLOCOS (cores/texturas) — ids 48+ ===================
+  // Recebem caracteres de grid Unicode AUTOMATICAMENTE (ver bloco após CHAR2MAT),
+  // então não consomem o alfabeto ASCII. APENAS ANEXE no fim (ids estáveis).
+  // --- pedras coloridas (pattern flat) ---
+  { name: 'redstone',    hp: 70,  solid: true, c: '#7a3a32', c2: '#4a201c', edge: '#9a4e42', pattern: 'flat' },   // 48
+  { name: 'bluestone',   hp: 84,  solid: true, c: '#34465e', c2: '#20303f', edge: '#4e6a86', pattern: 'flat' },   // 49
+  { name: 'greenstone',  hp: 80,  solid: true, c: '#3a5a3e', c2: '#223a26', edge: '#567a5a', pattern: 'flat' },   // 50
+  { name: 'purpurite',   hp: 90,  solid: true, c: '#463a5e', c2: '#2a2440', edge: '#6a567e', pattern: 'flat' },   // 51
+  { name: 'blackstone',  hp: 110, solid: true, c: '#26282c', c2: '#16181a', edge: '#3a3e44', pattern: 'flat' },   // 52
+  { name: 'chalk',       hp: 60,  solid: true, c: '#cfd2cf', c2: '#a8aaa6', edge: '#eef0ec', pattern: 'flat', soft: true }, // 53
+  // --- tijolos coloridos (pattern brick) ---
+  { name: 'bluebrick',   hp: 80,  solid: true, c: '#3a5a8a', c2: '#22324e', edge: '#4e74aa', pattern: 'brick' },  // 54
+  { name: 'greenbrick',  hp: 80,  solid: true, c: '#3a6a3a', c2: '#214020', edge: '#4e8a4a', pattern: 'brick' },  // 55
+  { name: 'ivorybrick',  hp: 76,  solid: true, c: '#c2bca8', c2: '#94907e', edge: '#e2dcc8', pattern: 'brick' },  // 56
+  { name: 'goldbrick',   hp: 96,  solid: true, c: '#caa33a', c2: '#8a6a1c', edge: '#f4d35e', pattern: 'brick' },  // 57
+  { name: 'crimsonbrick',hp: 88,  solid: true, c: '#8a2230', c2: '#561620', edge: '#b0303e', pattern: 'brick' },  // 58
+  // --- metais (pattern plate) ---
+  { name: 'copper',      hp: 120, solid: true, c: '#b5712e', c2: '#7a481c', edge: '#e0934a', pattern: 'plate' },  // 59
+  { name: 'silver',      hp: 130, solid: true, c: '#b8bcc4', c2: '#888c94', edge: '#e2e6ee', pattern: 'plate' },  // 60
+  { name: 'steelblue',   hp: 140, solid: true, c: '#5a6e86', c2: '#3a4a5e', edge: '#7e96b2', pattern: 'plate' },  // 61
+  { name: 'brassplate',  hp: 124, solid: true, c: '#b5942e', c2: '#7a601c', edge: '#e0c24a', pattern: 'plate' },  // 62
+  // --- gemas/cristais (pattern crystal, com brilho) ---
+  { name: 'emerald',     hp: 60,  solid: true, c: '#2ea05a', c2: '#176038', edge: '#7bffb0', pattern: 'crystal', glow: '#7bffb0' }, // 63
+  { name: 'ruby',        hp: 60,  solid: true, c: '#c0304a', c2: '#7a1828', edge: '#ff7a90', pattern: 'crystal', glow: '#ff7a90' }, // 64
+  { name: 'sapphire',    hp: 60,  solid: true, c: '#3a6ad0', c2: '#1e3c80', edge: '#8ab0ff', pattern: 'crystal', glow: '#8ab0ff' }, // 65
+  { name: 'amethyst',    hp: 60,  solid: true, c: '#9a5ad0', c2: '#5e3080', edge: '#d0a8ff', pattern: 'crystal', glow: '#d0a8ff' }, // 66
+  { name: 'topaz',       hp: 60,  solid: true, c: '#d0a83a', c2: '#806020', edge: '#ffe89a', pattern: 'crystal', glow: '#ffe89a' }, // 67
+  { name: 'onyxgem',     hp: 120, solid: true, c: '#2a2630', c2: '#16131c', edge: '#5a5466', pattern: 'crystal', glow: '#7a6a9a' }, // 68
+  // --- fogo/gelo/orgânico ---
+  { name: 'magma',       hp: 90,  solid: true, c: '#3a1410', c2: '#1a0805', edge: '#ff7a2c', pattern: 'lava', glow: '#ff7a2c' },    // 69
+  { name: 'emberstone',  hp: 80,  solid: true, c: '#4a2418', c2: '#20100a', edge: '#ffb24a', pattern: 'lava', glow: '#ffae3c' },    // 70
+  { name: 'snow',        hp: 14,  solid: true, c: '#e8eef4', c2: '#c0c8d2', edge: '#ffffff', pattern: 'flat', soft: true, falls: true }, // 71
+  { name: 'glacier',     hp: 80,  solid: true, c: '#9fd8e8', c2: '#5f96a8', edge: '#d8f4ff', pattern: 'ice', glow: '#bff0ff' },     // 72
+  { name: 'permafrost',  hp: 110, solid: true, c: '#7fb0c8', c2: '#4a7088', edge: '#bfe8ff', pattern: 'ice' },                      // 73
+  { name: 'ashstone',    hp: 60,  solid: true, c: '#4a4642', c2: '#2e2c2a', edge: '#6a6660', pattern: 'flat', soft: true },         // 74
+  { name: 'swampmud',    hp: 18,  solid: true, c: '#3a4a2a', c2: '#243018', edge: '#56683a', pattern: 'dots', soft: true, noDebris: true }, // 75
+  { name: 'slimeblock',  hp: 24,  solid: true, c: '#3a8a4a', c2: '#1f5a2a', edge: '#8eff6a', pattern: 'dots', glow: '#8eff6a', soft: true }, // 76
+  { name: 'coral',       hp: 40,  solid: true, c: '#c0506a', c2: '#7a2c40', edge: '#ff90a0', pattern: 'scale', soft: true },        // 77
+  { name: 'scalestone',  hp: 90,  solid: true, c: '#5a6a4a', c2: '#3a4630', edge: '#7e9068', pattern: 'scale' },                    // 78
+  { name: 'dragonhide',  hp: 100, solid: true, c: '#6a2a2a', c2: '#401414', edge: '#a04040', pattern: 'scale' },                    // 79
+  // --- arcano/colmeia/tech ---
+  { name: 'honeycomb',   hp: 40,  solid: true, c: '#caa33a', c2: '#8a6a1c', edge: '#ffe27a', pattern: 'hex', glow: '#ffd86b' },     // 80
+  { name: 'hexsteel',    hp: 140, solid: true, c: '#5a626c', c2: '#3a4048', edge: '#8a929c', pattern: 'hex' },                      // 81
+  { name: 'voidstone',   hp: 130, solid: true, c: '#1a1426', c2: '#0c0812', edge: '#3a2c5a', pattern: 'flat', glow: '#6a3aaa' },    // 82
+  { name: 'runeplate',   hp: 120, solid: true, c: '#1e2a2a', c2: '#0e1414', edge: '#4effd0', pattern: 'circuit', glow: '#4effd0' }, // 83
+  { name: 'arcanetech',  hp: 110, solid: true, c: '#241a3c', c2: '#140e22', edge: '#b07bff', pattern: 'circuit', glow: '#b07bff' }, // 84
+  { name: 'bonebrick2',  hp: 70,  solid: true, c: '#cabfa0', c2: '#a89c7a', edge: '#e8e0cf', pattern: 'block' },                    // 85
+  { name: 'fleshwall',   hp: 50,  solid: true, c: '#8a3a3a', c2: '#561e1e', edge: '#c05a5a', pattern: 'dots', soft: true },         // 86
+  // --- pisos/tapetes/madeiras decorativas ---
+  { name: 'checkerfloor',hp: 60,  solid: true, c: '#e8e0cf', c2: '#2a2622', edge: '#f4eeda', pattern: 'tile' },                     // 87
+  { name: 'redcarpet',   hp: 24,  solid: true, c: '#8a2230', c2: '#5e1620', edge: '#b0303e', pattern: 'weave', soft: true },        // 88
+  { name: 'bluecarpet',  hp: 24,  solid: true, c: '#2a3a8a', c2: '#18224e', edge: '#4a5ab0', pattern: 'weave', soft: true },        // 89
+  { name: 'wovenmat',    hp: 22,  solid: true, c: '#8a6e3a', c2: '#5e4a24', edge: '#b09050', pattern: 'weave', soft: true },        // 90
+  { name: 'herringwood', hp: 24,  solid: true, c: '#8a6334', c2: '#5f4422', edge: '#a87c44', pattern: 'plank', soft: true },        // 91
+  { name: 'ebonywood',   hp: 40,  solid: true, c: '#2e2620', c2: '#1a1510', edge: '#4a3e34', pattern: 'plank', soft: true },        // 92
+  { name: 'roseglass',   hp: 10,  solid: true, c: '#c05a8a', c2: '#7a3050', edge: '#ff9ac0', pattern: 'glass', soft: true },        // 93
+  { name: 'greenglass',  hp: 10,  solid: true, c: '#4a9a6a', c2: '#2a6040', edge: '#8effb0', pattern: 'glass', soft: true },        // 94
+  { name: 'goldvein',    hp: 120, solid: true, c: '#6a5a2a', c2: '#3a3014', edge: '#caa33a', pattern: 'block', glow: '#caa33a' },   // 95
 ];
 // char -> material id (used by level loader)
 const CHAR2MAT = {
@@ -64,6 +123,25 @@ const CHAR2MAT = {
   '(': 42, ')': 43, '/': 44, '-': 45, '0': 46,   // novos explosivos: barril ígneo, cacho, paiol, nitro, morteiro
   ']': 47,                                        // tijolo gelado
 };
+// AUTO-ATRIBUIÇÃO de caracteres de grid p/ os materiais novos (ids 48+): o alfabeto
+// ASCII acabou, então usamos chars Unicode BMP de 1 unidade (Latin-1/Extended), que
+// o formato de grid (1 char/célula) suporta sem qualquer mudança estrutural — editor,
+// prefabs, masmorras, galeria e criações salvas passam a aceitá-los automaticamente.
+// É DETERMINÍSTICO e estável: só anexe materiais no fim de MAT (nunca insira no meio),
+// senão os ids/chars deslocam e quebram criações salvas antigas.
+(function () {
+  let pool = '';
+  for (let cp = 0x00C0; cp <= 0x024F; cp++) { if (cp === 0x00D7 || cp === 0x00F7) continue; pool += String.fromCharCode(cp); } // ~140 chars (evita × ÷)
+  const used = new Set(Object.keys(CHAR2MAT));
+  const hasChar = id => { for (const k in CHAR2MAT) if (CHAR2MAT[k] === id) return true; return false; };
+  let pi = 0;
+  for (let id = 1; id < MAT.length; id++) {
+    if (!MAT[id] || hasChar(id)) continue;                 // pula vazios e os que já têm char ASCII
+    while (pi < pool.length && used.has(pool[pi])) pi++;
+    const ch = pool[pi++]; if (!ch) break;
+    CHAR2MAT[ch] = id; used.add(ch);
+  }
+})();
 // decor char -> type (shared by the level loader, buildings and the gallery)
 const DECOR_CHARS = {
   't': 'torch', 'L': 'banner', 'N': 'window', 'I': 'pillar', 'V': 'vines', 'Y': 'web', 'G': 'grass', 'J': 'bars', 'U': 'rack', 'M': 'crate',

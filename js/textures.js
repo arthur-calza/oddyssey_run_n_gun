@@ -370,9 +370,66 @@ const TEX = {
         g.strokeStyle = '#3a4650'; g.lineWidth = 2; g.strokeRect(1.5, 1.5, T - 3, T - 3); g.beginPath(); g.moveTo(T / 2, 2); g.lineTo(T / 2, T - 2); g.moveTo(2, T / 2); g.lineTo(T - 2, T / 2); g.stroke();
         break;
       }
+      case 'scale': {   // escamas (peixe/dragão): semicírculos sobrepostos
+        g.fillStyle = dark; g.fillRect(0, 0, T, T);
+        const s = T / 4;
+        for (let ry = 0, i = 0; ry < T + s; ry += s * 0.68, i++) {
+          const off = (i % 2) ? s / 2 : 0;
+          for (let rx = -s; rx < T + s; rx += s) {
+            g.fillStyle = [base, lite, base][(rng() * 3) | 0];
+            g.beginPath(); g.arc(rx + off, ry, s * 0.62, 0, Math.PI); g.closePath(); g.fill();
+            g.strokeStyle = 'rgba(0,0,0,0.22)'; g.lineWidth = 1; g.beginPath(); g.arc(rx + off, ry, s * 0.62, 0, Math.PI); g.stroke();
+          }
+        }
+        break;
+      }
+      case 'hex': {     // favo de mel / placas hexagonais
+        g.fillStyle = dark; g.fillRect(0, 0, T, T); const s = T / 4;
+        for (let ry = 0, row = 0; ry < T + s; ry += s * 0.86, row++) {
+          const off = (row % 2) ? s * 0.75 : 0;
+          for (let rx = 0; rx < T + s; rx += s * 1.5) {
+            const cx = rx + off, cy = ry; g.fillStyle = [base, lite, base][(rng() * 3) | 0];
+            g.beginPath(); for (let k = 0; k < 6; k++) { const a = k / 6 * TAU + Math.PI / 6, px = cx + Math.cos(a) * s * 0.55, py = cy + Math.sin(a) * s * 0.55; k ? g.lineTo(px, py) : g.moveTo(px, py); } g.closePath(); g.fill();
+            g.strokeStyle = 'rgba(0,0,0,0.30)'; g.lineWidth = 1; g.stroke();
+          }
+        }
+        break;
+      }
+      case 'circuit': {  // traços arcanos brilhantes
+        g.fillStyle = dark; g.fillRect(0, 0, T, T);
+        g.strokeStyle = m.glow || lite; g.lineWidth = 1; g.shadowColor = m.glow || lite; g.shadowBlur = 4;
+        for (let i = 0; i < 4; i++) {
+          let x = (rng() * T) | 0, y = (rng() * T) | 0; g.beginPath(); g.moveTo(x, y);
+          for (let s = 0; s < 3; s++) { if (rng() < 0.5) x += (rng() < 0.5 ? -1 : 1) * (4 + (rng() * 8 | 0)); else y += (rng() < 0.5 ? -1 : 1) * (4 + (rng() * 8 | 0)); g.lineTo(x, y); } g.stroke();
+          g.fillStyle = m.glow || lite; g.fillRect(x - 1, y - 1, 2, 2);
+        }
+        g.shadowBlur = 0; break;
+      }
+      case 'lava': {     // crosta escura + veios de magma brilhantes
+        g.fillStyle = dark; g.fillRect(0, 0, T, T);
+        for (let i = 0; i < 6; i++) { g.fillStyle = ['#2a140e', '#3a1c12', '#1e0f0a'][(rng() * 3) | 0]; g.fillRect((rng() * T) | 0, (rng() * T) | 0, 4 + rng() * 8, 4 + rng() * 8); }
+        g.strokeStyle = m.glow || '#ff7a2c'; g.lineWidth = 1.5; g.shadowColor = m.glow || '#ff7a2c'; g.shadowBlur = 5;
+        for (let i = 0; i < 3; i++) { g.beginPath(); let x = (rng() * T) | 0; g.moveTo(x, 0); for (let y = 0; y < T; y += 4) { x += rng() * 6 - 3; g.lineTo(x, y); } g.stroke(); }
+        g.shadowBlur = 0; g.fillStyle = '#ffd86b'; for (let i = 0; i < 4; i++) g.fillRect((rng() * T) | 0, (rng() * T) | 0, 1, 1); break;
+      }
+      case 'dots': {     // pontilhado/manchado
+        g.fillStyle = base; g.fillRect(0, 0, T, T);
+        for (let i = 0; i < 11; i++) { g.fillStyle = rng() < 0.5 ? dark : lite; const r = 1.5 + rng() * 2.5; g.beginPath(); g.arc(rng() * T, rng() * T, r, 0, TAU); g.fill(); }
+        break;
+      }
+      case 'weave': {    // trama de cesto/tapete
+        g.fillStyle = dark; g.fillRect(0, 0, T, T); const s = T / 4;
+        for (let y = 0; y < T; y += s) for (let x = 0; x < T; x += s) {
+          const horiz = ((x / s + y / s) % 2) === 0; g.fillStyle = horiz ? base : lite;
+          if (horiz) g.fillRect(x + 1, y + s * 0.25, s - 2, s * 0.5); else g.fillRect(x + s * 0.25, y + 1, s * 0.5, s - 2);
+          g.fillStyle = 'rgba(0,0,0,0.16)';
+          if (horiz) g.fillRect(x + 1, y + s * 0.72, s - 2, 1); else g.fillRect(x + s * 0.72, y + 1, 1, s - 2);
+        }
+        break;
+      }
       default: speck(16);
     }
-    if (m.pattern !== 'glass' && m.pattern !== 'crystal' && m.pattern !== 'rune') speck(6);
+    if (['glass', 'crystal', 'rune', 'lava', 'circuit', 'scale'].indexOf(m.pattern) < 0) speck(6);
   },
 
   // ---- decorations (non-solid props placed on the map) ------

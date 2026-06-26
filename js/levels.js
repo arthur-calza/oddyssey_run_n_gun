@@ -284,6 +284,15 @@ const LEVELS = (function () {
     // DEMONSTRAÇÃO de novos EXPLOSIVOS (atire neles): ígneo, cacho, paiol, nitro, morteiro, gelo
     ['(', ')', '/', '-', '0', ']'].forEach((ch, i) => put(g, 134 + i * 2, gr - 1, ch));
     put(g, 254, gr - 1, 'z');   // operador p/ o canhão (c=252)
+    // === VITRINE DE BLOCOS NOVOS (ids 48+): prateleira flutuante perto do início ===
+    // (chars de grid Unicode são auto-atribuídos em world.js — aqui resolvemos id→char)
+    const ID2CHAR = {}; for (const k in CHAR2MAT) ID2CHAR[CHAR2MAT[k]] = k;
+    const palShelfR = 30, palCols = 12;
+    for (let id = 48; id < MAT.length; id++) {
+      const ch = ID2CHAR[id]; if (!ch) continue; const i = id - 48;
+      put(g, 9 + (i % palCols), palShelfR - 5 + ((i / palCols) | 0), ch);
+    }
+    hline(g, palShelfR, 8, 8 + palCols + 1, '='); // prateleira de apoio (blocos que caem descansam aqui)
     capLoot(g, 30, 1);
     put(g, 3, gr - 1, 'P'); put(g, W - 5, gr - 1, 'E');
     // === VITRINE DE OBJETOS DE CENA (props.js) — encoste/atire/pule p/ testar ===
