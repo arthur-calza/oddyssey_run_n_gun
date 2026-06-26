@@ -48,11 +48,21 @@ const MAT = [
   { name: 'glass',     hp: 8,   solid: true,  c: '#9fd0e0', c2: '#5f96a8', edge: '#d8f4ff', pattern: 'glass', soft: true }, // 39 vidro/vitral
   { name: 'bonewall',  hp: 60,  solid: true,  c: '#cabfa0', c2: '#a89c7a', edge: '#e8e0cf', pattern: 'block' },   // 40 parede de ossos
   { name: 'mud',       hp: 18,  solid: true,  c: '#5a4226', c2: '#3e2c16', edge: '#6e5230', pattern: 'flat', soft: true, noDebris: true }, // 41 lama de selva
+  // === EXPANSÃO: novos EXPLOSIVOS (cada um com um descritor `boom` próprio) ===
+  // boom: { r raio, dmg dano, fire? chamas, cluster? nº de mini-explosões, warhead? míssil que corta o solo, shake? }
+  { name: 'firebarrel', hp: 12, solid: true,  c: '#c2552a', c2: '#3a1a0e', edge: '#ff8a3c', boom: { r: 96,  dmg: 56, fire: true } },        // 42 barril incendiário (lança chamas)
+  { name: 'clusterkeg', hp: 14, solid: true,  c: '#b8a33a', c2: '#3a3214', edge: '#ffe27a', boom: { r: 64,  dmg: 36, cluster: 5 } },       // 43 barril cacho (mini-explosões em cadeia)
+  { name: 'powderkeg',  hp: 22, solid: true,  c: '#8a2a22', c2: '#2a0e0a', edge: '#e0843a', boom: { r: 158, dmg: 96, shake: 16 } },        // 44 paiol (explosão MUITO forte)
+  { name: 'nitro',      hp: 4,  solid: true,  c: '#3a8a5a', c2: '#123a24', edge: '#8effb0', boom: { r: 52,  dmg: 28 } },                    // 45 nitro (fraco, mas explode a qualquer toque — hp baixíssima)
+  { name: 'mortarkeg',  hp: 14, solid: true,  c: '#5a6470', c2: '#22262c', edge: '#9aa6b4', boom: { r: 40,  dmg: 26, warhead: true } },    // 46 morteiro (dispara um míssil que corta a terra na direção do herói)
+  { name: 'frostbrick', hp: 70, solid: true,  c: '#8fc0d8', c2: '#4f7a90', edge: '#d8f4ff', pattern: 'ice', glow: '#bff0ff' },             // 47 tijolo gelado (textura 'ice' nova)
 ];
 // char -> material id (used by level loader)
 const CHAR2MAT = {
   '#': 2, 'D': 1, 'B': 3, '=': 4, '~': 5, 'X': 6, '$': 7, 'C': 8, 'S': 9, 'm': 10, 'A': 11, 'R': 12, 'K': 13, 'h': 14, 'p': 15, 'l': 16, 'v': 17, 'j': 18, 'k': 19,
   'b': 20, 'g': 21, 'e': 22, '^': 23, ',': 24, 'c': 25, 'a': 26, 'i': 27, 'n': 28, 'q': 29, 'u': 30, 'x': 31, 'y': 32, '%': 33, '&': 34, '*': 35, '+': 36, '<': 37, '>': 38, '?': 39, '!': 40, '@': 41,
+  '(': 42, ')': 43, '/': 44, '-': 45, '0': 46,   // novos explosivos: barril ígneo, cacho, paiol, nitro, morteiro
+  ']': 47,                                        // tijolo gelado
 };
 // decor char -> type (shared by the level loader, buildings and the gallery)
 const DECOR_CHARS = {
@@ -209,6 +219,12 @@ class World {
         const dir = this.game.player ? sign(this.game.player.cx - px) || 1 : 1;
         this.game.spawnRocket(px, py, dir);
         this.game.queueExplosion(px, py, 44, 30);
+      }
+      // novos explosivos: descritor `boom` (ígneo, cacho, paiol, nitro, morteiro).
+      // É enfileirado (processado no próximo frame) → encadeia sem recursão profunda.
+      if (m.boom && this.game) {
+        const px = c * this.T + this.T / 2, py = r * this.T + this.T / 2;
+        this.game.explosionQ.push({ x: px, y: py, r: m.boom.r, dmg: m.boom.dmg, boom: m.boom });
       }
       this.maybeFall(c, r - 1);  // unsupported gravity blocks above collapse
       return true;

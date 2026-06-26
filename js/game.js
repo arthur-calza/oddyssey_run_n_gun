@@ -39,6 +39,7 @@ class Game {
     this.bullets = []; this.enemies = []; this.allies = []; this.pickups = []; this.summons = [];
     this.fx = new FX(this);   // fresh particles/decals per level
     this.explosionQ = []; this.exits = []; this.boss = null; this.decor = [];
+    this.hazards = []; this._portals = [];   // fogo persistente + pares de portais (props.js)
     this.prisonersTotal = 0; this.prisonersRescued = 0;
     const T = world.T;
     const DECOR = DECOR_CHARS;   // mapa global (world.js): inclui as novas decorações
@@ -69,10 +70,16 @@ class Game {
         }
       }
     }
+    // OBJETOS DE CENA interativos (props.js): baús, armadilhas, canhões, portais,
+    // elevadores, alarmes… vêm de uma lista rica L.props (sem char no grid).
+    if (L.props) for (const pr of L.props) {
+      this.decor.push({ type: pr.type, x: pr.c * T, y: pr.r * T, color: pr.color || L.bannerColor, opts: pr });
+    }
     if (!this.spawn) this.spawn = { x: T * 2, y: T * 2 };
     world.settle();             // instantly rest any unsupported gravity blocks on load
     world.markGrass();          // freeze grass onto the original surface only (no re-growth after digging)
     this._anchorDecor();        // tie each suspended decoration to the block it hangs on
+    if (typeof Props !== 'undefined') Props.init(this);   // inicializa o estado dos props interativos
     this.spawnPlayer(true);
     this.cam.x = clamp(this.player.x - CONFIG.W / 2, 0, Math.max(0, world.pixelW - CONFIG.W));
     this.cam.y = clamp(this.player.y - CONFIG.H / 2, 0, Math.max(0, world.pixelH - CONFIG.H));
@@ -338,6 +345,50 @@ class Game {
     this.fx.muzzle(x, y, ang + Math.PI); this.cam.addShake(3); Sound.shot('shotgun');
   }
 
+  // ---- novos explosivos: efeitos extras do descritor `boom` (world.js) ----
+  _boomExtras(x, y, b) {
+    if (b.shake) this.cam.addShake(b.shake);
+    if (b.fire) {                                       // barril ígneo: poça de chamas + incendeia inimigos
+      this.spawnFire(x, y, b.r * 0.7, 2.6);
+      for (const e of this.enemiesInRadius(x, y, b.r)) e.ignite && e.ignite(3, 10);
+    }
+    if (b.cluster) {                                    // barril cacho: mini-explosões em cadeia (próximo frame)
+      for (let i = 0; i < b.cluster; i++) { const a = rand(0, TAU), d = rand(b.r * 0.4, b.r * 0.95); this.explosionQ.push({ x: x + Math.cos(a) * d, y: y + Math.sin(a) * d, r: 42, dmg: 22 }); }
+    }
+    if (b.warhead) {                                    // morteiro: dispara um míssil e RASGA a terra na direção do herói
+      const dir = this.player ? (sign(this.player.cx - x) || 1) : 1;
+      this.spawnRocket(x, y, dir); this._carveTunnel(x, y, dir, 12);
+    }
+  }
+  // poça de FOGO persistente: dano contínuo + brilho + faíscas; ilumina (ver _drawLighting)
+  spawnFire(x, y, r, life) { this.hazards.push({ kind: 'fire', x, y, r, life, max: life, cd: 0 }); }
+  updateHazards(dt) {
+    if (!this.hazards || !this.hazards.length) return;
+    for (const h of this.hazards) {
+      h.life -= dt;
+      if (h.kind === 'fire') {
+        if (Math.random() < 0.6) this.fx.fire(h.x + rand(-h.r * 0.5, h.r * 0.5), h.y + rand(-4, 6), 2);
+        h.cd -= dt;
+        if (h.cd <= 0) {
+          h.cd = 0.3;
+          const p = this.player;
+          if (p && !p.dead && Math.hypot(p.cx - h.x, p.cy - h.y) < h.r) { p.hurt(6, sign(p.cx - h.x) || 1, this); }
+          for (const e of this.enemiesInRadius(h.x, h.y, h.r)) e.ignite && e.ignite(2, 8);
+        }
+      }
+    }
+    this.hazards = this.hazards.filter(h => h.life > 0);
+  }
+  // abre um túnel horizontal (≈3 tiles de altura) — o "corte na terra" do morteiro
+  _carveTunnel(x, y, dir, len) {
+    const T = this.world.T, r0 = Math.floor(y / T);
+    for (let i = 0; i < len; i++) {
+      const c = Math.floor((x + dir * i * T * 0.8) / T);
+      this.world.damage(c, r0 - 1, 80, { power: 120 }); this.world.damage(c, r0, 90, { power: 120 }); this.world.damage(c, r0 + 1, 80, { power: 120 });
+    }
+    this.fx.beam(x, y, x + dir * len * T * 0.8, y, '#ff8a3c', 12); this.cam.addShake(7);
+  }
+
   onEnemyKilled(e) {
     this.score += e.score || 0;
     if (this.player && !this.player.dead) this.player.gainSpecial(e.boss ? 60 : e.mini ? 30 : 12);
@@ -429,17 +480,20 @@ class Game {
     this._bulletCollisions();
     this.world.updateFallers(dt, this);
     this.updateDoors(dt);
+    if (typeof Props !== 'undefined') Props.update(this, dt);   // baús/armadilhas/canhões/portais/elevadores…
+    this.updateHazards(dt);                                     // fogo persistente dos explosivos ígneos
     this.fx.update(dt, this.world);
 
     // process queued explosions (barrels chain etc.)
     if (this.explosionQ.length) {
       const q = this.explosionQ; this.explosionQ = [];
-      for (const ex of q) this.world.explode(ex.x, ex.y, ex.r, ex.dmg);
+      for (const ex of q) { this.world.explode(ex.x, ex.y, ex.r, ex.dmg); if (ex.boom) this._boomExtras(ex.x, ex.y, ex.boom); }
       this.freeze = Math.max(this.freeze, 0.05);
     }
 
     // suspended decorations fall away once the block they were mounted on is destroyed
-    if (this.decor.length) this.decor = this.decor.filter(d => d.ac == null || this.world.solid(d.ac, d.ar));
+    // (props interativos têm ac=null e persistem; props consumidos marcam d.remove)
+    if (this.decor.length) this.decor = this.decor.filter(d => !d.remove && (d.ac == null || this.world.solid(d.ac, d.ar)));
 
     // cull dead
     this.enemies = this.enemies.filter(e => e.alive);
@@ -677,6 +731,19 @@ class Game {
       if (y1 > y0) { const g = L.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, clear); g.addColorStop(1, dark); L.fillStyle = g; L.fillRect(xL, y0, wL, y1 - y0); }
       if (y1 < LH) { L.fillStyle = dark; L.fillRect(xL, Math.max(0, y1), wL, LH - Math.max(0, y1)); }
     }
+    // ---- LUZES: tochas, fogueiras, cristais, portais e poças de fogo PERFURAM a escuridão ----
+    const lights = (typeof PROP_LIGHTS !== 'undefined') ? PROP_LIGHTS : null;
+    L.globalCompositeOperation = 'destination-out';
+    const punch = (wx, wy, rad) => {
+      const lx = bx(wx), ly = by(wy), lr = rad * z / S;
+      if (lx < -lr || lx > LW + lr || ly < -lr || ly > LH + lr) return;
+      const g2 = L.createRadialGradient(lx, ly, 1, lx, ly, lr);
+      g2.addColorStop(0, 'rgba(0,0,0,1)'); g2.addColorStop(0.6, 'rgba(0,0,0,0.66)'); g2.addColorStop(1, 'rgba(0,0,0,0)');
+      L.fillStyle = g2; L.fillRect(lx - lr, ly - lr, lr * 2, lr * 2);
+    };
+    if (lights && this.decor) for (const d of this.decor) { const li = lights[d.type]; if (li) punch(d.x + T / 2, d.y + T / 2, li.r); }
+    if (this.hazards) for (const h of this.hazards) if (h.kind === 'fire') punch(h.x, h.y, h.r + 22);
+    L.globalCompositeOperation = 'source-over';
     // desenha a escuridão sobre a cena com blur (suaviza qualquer degrau entre colunas)
     ctx.save(); ctx.imageSmoothingEnabled = true; ctx.filter = 'blur(8px)';
     ctx.drawImage(this._lcan, 0, 0, LW, LH, 0, 0, W, H);

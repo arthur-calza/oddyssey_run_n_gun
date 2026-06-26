@@ -429,10 +429,11 @@ const Editor = {
       }
     } else if (this.tab === 'decor') {
       (Gallery.DECOR || []).forEach(d => {
-        const ch = this.DECOR2CHAR[d.type]; if (!ch) return;
+        // decorações clássicas têm char no grid; props interativos (prop:true) são salvos via L.props (sem char)
+        const ch = this.DECOR2CHAR[d.type] || null;
         const eid = 'decor:' + d.type;
         item(this.curId === eid, () => this._selectPaint({ kind: 'decor', type: d.type, char: ch, name: d.name, eid }), b => {
-          b.innerHTML = `<span class="eem">🏛</span><span><div class="enm">${d.name}</div><div class="esub">${d.type}</div></span>`;
+          b.innerHTML = `<span class="eem">${d.prop ? '⚙' : '🏛'}</span><span><div class="enm">${d.name}</div><div class="esub">${d.prop ? 'objeto de cena' : d.type}</div></span>`;
         });
       });
     } else if (this.tab === 'enemies') {
@@ -659,7 +660,16 @@ const Editor = {
   },
 
   // ---------------- copiar / colar (seleção e carimbo) ----------------
-  _charAt(c, r) { const o = this.objs.get(this._key2(c, r)); if (o) return o.char; const id = this.world.at(c, r); return id ? (this.MAT2CHAR[id] || '.') : '.'; },
+  _charAt(c, r) { const o = this.objs.get(this._key2(c, r)); if (o) return o.char || '.'; const id = this.world.at(c, r); return id ? (this.MAT2CHAR[id] || '.') : '.'; },
+  // props interativos (decor sem char): serializados numa lista própria p/ a fase (L.props)
+  _serializeProps() {
+    const out = [];
+    for (const [key, o] of this.objs) {
+      if (o.kind !== 'decor' || o.char) continue;     // só os objetos de cena sem char no grid
+      const p = key.split(','); out.push({ type: o.type, c: +p[0], r: +p[1] });
+    }
+    return out;
+  },
   _bgCharAt(c, r) { const id = this.world.bgAt(c, r); return id ? (this.MAT2CHAR[id] || '.') : '.'; },
   // serializa uma região; `layers` controla quais camadas são copiadas (padrão: ambas)
   _serialize(c0, r0, w, h, layers) {
@@ -822,7 +832,7 @@ const Editor = {
     const def = {
       name: 'CRIAÇÃO', sub: 'Teste da sua criação', win: 'exit',
       biome: 'castle', sky: ['#1e2740', '#080a14'], bannerColor: '#6a1a1a',
-      rows: data.cells, bg: data.bg, surface,
+      rows: data.cells, bg: data.bg, surface, props: this._serializeProps(),
     };
     this.cb && this.cb.onPlay && this.cb.onPlay(def);
   },

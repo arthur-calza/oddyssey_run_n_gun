@@ -281,9 +281,29 @@ const LEVELS = (function () {
     put(g, 60, gr - 1, 'Q'); put(g, 110, gr - 1, 'T'); put(g, 100, gr - 1, 'X'); put(g, 115, gr - 1, 'K');
     put(g, 30, gr - 1, 'z'); put(g, 124, gr - 1, 'f'); put(g, 160, gr - 1, 'r'); put(g, 230, gr - 1, 'F');
     put(g, 50, gr - 2, 's'); put(g, 48, gr - 1, 't');   // porta (abre ao passar) + tocha (demo de iluminação)
+    // DEMONSTRAÇÃO de novos EXPLOSIVOS (atire neles): ígneo, cacho, paiol, nitro, morteiro, gelo
+    ['(', ')', '/', '-', '0', ']'].forEach((ch, i) => put(g, 134 + i * 2, gr - 1, ch));
+    put(g, 254, gr - 1, 'z');   // operador p/ o canhão (c=252)
     capLoot(g, 30, 1);
     put(g, 3, gr - 1, 'P'); put(g, W - 5, gr - 1, 'E');
-    return { name: 'FASE DE TESTES', sub: 'Teclas 1–9 trocam de arma · S/D trocam de herói · escada, parede, poções e barris.', win: 'exit', biome: 'castle', sky: ['#1e2740', '#080a14'], seed: 99, bannerColor: '#6a1a1a', rows: toRows(g), bg: toRows(bg), surface: new Array(W).fill(gr) };
+    // === VITRINE DE OBJETOS DE CENA (props.js) — encoste/atire/pule p/ testar ===
+    const showProps = [
+      { type: 'chest', c: 18, r: gr - 1 }, { type: 'trapchest', c: 22, r: gr - 1 }, { type: 'mimic', c: 26, r: gr - 1 },
+      { type: 'campfire', c: 34, r: gr - 1 },
+      { type: 'mine', c: 64, r: gr - 1 }, { type: 'spikes', c: 68, r: gr - 1 }, { type: 'saw', c: 72, r: gr - 1, range: 3 },
+      { type: 'flamevent', c: 80, r: gr - 1 }, { type: 'gasvent', c: 84, r: gr - 1 }, { type: 'darttrap', c: 88, r: gr - 3 },
+      { type: 'bell', c: 105, r: gr - 6 }, { type: 'tripwire', c: 108, r: gr - 1, len: 4 }, { type: 'pendulum', c: 118, r: gr - 7, len: 2.4 },
+      { type: 'lockeddoor', c: 152, r: gr - 1 }, { type: 'lockeddoor', c: 152, r: gr - 2 }, { type: 'secretdoor', c: 156, r: gr - 1 },
+      { type: 'stalagmite', c: 200, r: gr - 9 }, { type: 'crystalcluster', c: 215, r: gr - 9 }, { type: 'mushroom', c: 235, r: gr - 9 },
+      { type: 'cannon', c: 252, r: gr - 1 }, { type: 'ballista', c: 258, r: gr - 1 }, { type: 'catapult', c: 264, r: gr - 1 },
+      { type: 'portal', c: 270, r: gr - 2 }, { type: 'portal', c: 285, r: gr - 2 },
+      { type: 'springpad', c: 292, r: gr - 1 }, { type: 'updraft', c: 296, r: gr - 1, h: 6 }, { type: 'arcaneorb', c: 300, r: gr - 2 },
+      { type: 'shrine', c: 304, r: gr - 1 }, { type: 'summon', c: 308, r: gr - 1, enemy: 'zombie', count: 2 },
+      { type: 'elevator', c: 313, r: gr - 1, axis: 'y', range: 4, w: 2 },
+      { type: 'brazier', c: 318, r: gr - 1 }, { type: 'magicfire', c: 320, r: gr - 1 }, { type: 'chandelier', c: 322, r: gr - 7 },
+      { type: 'fountain', c: 326, r: gr - 1 }, { type: 'statue', c: 328, r: gr - 1 }, { type: 'grave', c: 330, r: gr - 1 }, { type: 'anvil', c: 332, r: gr - 1 },
+    ];
+    return { name: 'FASE DE TESTES', sub: 'Armas 1–9 · S/D herói · NOVO: baús, armadilhas, canhões, portais, elevador, alarmes e explosivos pela fase.', win: 'exit', biome: 'castle', sky: ['#1e2740', '#080a14'], seed: 99, bannerColor: '#6a1a1a', rows: toRows(g), bg: toRows(bg), surface: new Array(W).fill(gr), props: showProps };
   }
 
   return [...CAMPAIGN, lvlTest()];
