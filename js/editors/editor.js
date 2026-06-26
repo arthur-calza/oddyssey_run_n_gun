@@ -780,7 +780,7 @@ const Editor = {
    Construção exportada do Editor: "${cr.name}"
    Gerada em ${new Date().toISOString()}.
    Como usar: inclua este arquivo no index.html DEPOIS de
-   js/world.js e js/buildings.js — a construção fica disponível
+   js/world/world.js e js/world/buildings.js — a construção fica disponível
    em BUILDINGS/BUILD (galeria, editor e fases) com a chave abaixo.
    ============================================================ */
 (function () {

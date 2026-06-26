@@ -239,7 +239,7 @@ const SpriteLab = {
     for (const anim in sheets) { const arr = sheets[anim]; if (arr && arr.length) data[key + '/' + anim] = arr.map(c => c.toDataURL()); }
     const body =
       '/* SpriteLab export — ' + this.charName + ' (' + key + ') — ' + new Date().toISOString().slice(0, 10) + '\n' +
-      '   Inclua APÓS js/sprites.js no index.html:  <script src="js/sprite_' + key + '.js"><\\/script>\n' +
+      '   Inclua APÓS js/render/sprites.js no index.html:  <script src="js/render/sprite_' + key + '.js"><\\/script>\n' +
       '   Aplica os quadros editados de ' + this.charName + ' sobre os assados (procedurais). */\n' +
       '(function () {\n' +
       '  if (typeof SPR === "undefined") return;\n' +
