@@ -4,14 +4,14 @@ consistently-sized character sprite assets the game loads directly.
 
 The concepts ship on an opaque light "transparency checkerboard" background
 (no real alpha), so we chroma-key it out with a border flood-fill, trim, and
-resize. Run:  py -3 tools/build_assets.py
+resize. Run:  py -3 tools/python/build_assets.py
 Reads ./concept/*.png  ->  writes ./assets/<key>.png  (+ assets/manifest.json)
 """
 import os, json
 from collections import deque
 from PIL import Image
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(ROOT, "concept")
 OUT = os.path.join(ROOT, "assets")
 os.makedirs(OUT, exist_ok=True)
