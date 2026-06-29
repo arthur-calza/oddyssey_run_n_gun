@@ -50,6 +50,7 @@ const SpriteLab = {
     wolf: 'Lobo', direwolf: 'Lobo-Gigante', flayer: 'Devorador (Chefe)',
     skeleton: 'Esqueleto', ghoul: 'Carniçal', imp: 'Diabrete', ogre: 'Ogro',
     musketeer: 'Mosqueteiro', cultist: 'Cultista', specter: 'Espectro', hellhound: 'Cão Infernal',
+    necromancer: 'Necromante (Chefe)', ratking: 'Rei-Rato (Chefe)', fenrir: 'Fenrahk (Chefe)', titan: 'Carrasco (Chefe)',
   },
 
   // ---------- catálogo de EFEITOS dinâmicos ----------

@@ -43,6 +43,10 @@ const Gallery = {
     specter:   { icon: '👻', name: 'Espectro',       note: 'Voa e paira; rajada espectral.' },
     hellhound: { icon: '🔥', name: 'Cão Infernal',   note: 'Fera flamejante velocíssima; saltadora.' },
     flayer:    { icon: '🧠', name: 'Devorador',      note: 'CHEFE. 3 fases: rajada, invocar, bombas.' },
+    necromancer: { icon: '☠', name: 'Necromante Ancião',  note: 'MYTHOS. Fogo-fátuo, ergue mortos-vivos, bola de praga.' },
+    ratking:     { icon: '🐀', name: 'Chittr, o Bicéfalo', note: 'MYTHOS. Taser, investida com guincho, descarga tesla.' },
+    fenrir:      { icon: '🐺', name: 'Fenrahk',            note: 'MYTHOS. Bote saltador, uivo (invoca matilha), pisão sísmico.' },
+    titan:       { icon: '😈', name: 'O Carrasco Infernal', note: 'MYTHOS. Cutelo sísmico, canhão e jato de brasas.' },
   },
   STATES: [
     { id: 'idle',   label: 'Parado' },
@@ -315,7 +319,7 @@ const Gallery = {
       vx: 0, vy: 0, onGround: true, anim: 0, runDist: 0,
       flash: 0, aimAng: 0, cool: 0, coolMax: 0.18, dying: null, dead: false,
       dyingMax: t.boss ? 1.2 : 0.55, dashT: 0, _hold: 0, _spd: t.speed,
-      attackT: 0, customDraw: t.draw || null,   // MYTHOS: desenho procedural próprio
+      attackT: 0, customDraw: t.draw || null,   // legado: desenho procedural próprio (atualmente nenhum usa)
       get cx() { return this.x + this.w / 2; },
     };
     if (this.autoStates) this.autoT = 0; else this.setState(this.state);

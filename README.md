@@ -52,9 +52,9 @@ Ragnarok também ganhou uma árvore própria — o **CÓDICE DE GUERRA** (`G`), 
 - **⚔ LÂMINA** — **Espada Transcendental** (postura: talhos à distância com a lâmina demoníaca), Lâmina Giratória, Corte à Distância, Postura de Lâmina, Decapitação (execução).
 
 ## Mythos — chefes colossais
-Uma categoria de **chefes** com **2x–4x** o tamanho dos personagens, com desenho procedural próprio e padrões de ataque em 3 fases:
+Uma categoria de **chefes** com **2x–4x** o tamanho dos personagens, em **pixel-art assada** (spritesheets) como o resto do elenco, com padrões de ataque em 3 fases:
 - **O Devorador de Mentes** (o chefe original, agora Mythos), **O Necromante Ancião** (ergue mortos-vivos + fogo-fátuo), **Chittr, o Bicéfalo** (homem-rato blindado de duas cabeças com taser/tesla), **Fenrahk** (lobisomem colossal que uiva e invoca matilhas) e **O Carrasco Infernal** (titã demoníaco com cutelo e canhão).
-- Marcados com `mythos: true` em `ENEMY_TYPES`; o desenho fica em `MYTHOS_DRAW` e o padrão de ataque em `Enemy._atk<Nome>`. Funcionam como chefe de fase (barra de chefe + vitória ao abatê-los). **Teste na Fase de Testes com a tecla `N`** (cicla pelos Mythos).
+- Marcados com `mythos: true` em `ENEMY_TYPES`; o visual é uma spritesheet via `SPR.define` (cabeças/armas próprias em `sprites.js`) e o padrão de ataque fica em `Enemy._atk<Nome>`. Funcionam como chefe de fase (barra de chefe + vitória ao abatê-los). **Teste na Fase de Testes com a tecla `N`** (cicla pelos Mythos).
 
 ## Efeitos & "game feel"
 Os status mágicos agora **marcam o corpo** dos inimigos: quem é atingido por fogo **pega fogo** (chamas subindo + dano contínuo); congelados **tremem** tentando se libertar, sofrem dano de frio e **estilhaçam o gelo** ao quebrar (com partículas); raios soltam **mini-choques** em cada alvo; o **terremoto** destrói o solo e arremessa inimigos ao alto; e Sono, Pavor, Lentidão, Implosão, Toque de Midas, Grito Psíquico etc. ganharam partículas próprias sobre cada inimigo. *(A trilha procedural antiga foi **desligada** — `Sound.music.enabled = false` — aguardando uma trilha própria.)*

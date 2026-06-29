@@ -195,8 +195,15 @@ const SPR = {
     this._torso(g, d, P, s, lean, shY, hipY, bulk);
     // back arm
     this._arm(g, P, s, lean - 9 * s * bulk, shY + 5 * s, p.arm, true);
-    // head
-    this._head(g, d, lean * 1.05, headCy, headR);
+    // head (MYTHOS bicéfalo: duas cabeças lado a lado em pescoços curtos)
+    if (d.twin) {
+      const off = (d.twinGap || 8) * s, dip = 2 * s;
+      g.fillStyle = P.skinSh || P.torsoSh; g.fillRect(lean - off - 3 * s, shY - 6 * s, 6 * s, 7 * s); g.fillRect(lean + off - 3 * s, shY - 6 * s, 6 * s, 7 * s);   // pescoços
+      this._head(g, d, lean * 1.05 - off, headCy + dip, headR * 0.82);
+      this._head(g, d, lean * 1.05 + off, headCy + dip, headR * 0.82);
+    } else {
+      this._head(g, d, lean * 1.05, headCy, headR);
+    }
     // ATAQUE CURTO: braço + espada varrendo o arco de 270° (assado no quadro)
     if (p.anim === 'attack') this._attackSword(g, P, s, lean, shY, p.swing || 0);
   },
@@ -408,6 +415,19 @@ const SPR = {
         g.fillStyle = P.eye || '#f0e050'; g.beginPath(); g.ellipse(hx + r * 0.3, cy - r * 0.1, 2 * s, 1.6 * s, 0, 0, TAU); g.fill();
         g.fillStyle = '#e8e0cf'; g.fillRect(hx + r * 0.5, cy + r * 0.55, r * 0.6, 1.2 * s); break;
       }
+      case 'rat': {   // MYTHOS Rei-Rato: orelhas redondas, focinho pontudo, incisivos, olho vermelho
+        g.fillStyle = P.skinSh;                                                            // orelhas grandes (atrás)
+        g.beginPath(); g.arc(hx - r * 0.55, cy - r * 0.82, r * 0.5, 0, TAU); g.arc(hx + r * 0.5, cy - r * 0.88, r * 0.5, 0, TAU); g.fill();
+        g.fillStyle = P.ear || '#c98a8a';
+        g.beginPath(); g.arc(hx - r * 0.55, cy - r * 0.82, r * 0.27, 0, TAU); g.arc(hx + r * 0.5, cy - r * 0.88, r * 0.27, 0, TAU); g.fill();
+        oval(hx, cy, r * 0.84, r * 0.9, P.skin); oval(hx - r * 0.4, cy + r * 0.12, r * 0.44, r * 0.68, P.skinSh);   // crânio + maxilar
+        g.fillStyle = P.skin; g.beginPath(); g.moveTo(hx + r * 0.15, cy - r * 0.28); g.lineTo(hx + r * 1.3, cy + r * 0.16); g.lineTo(hx + r * 0.15, cy + r * 0.6); g.closePath(); g.fill();   // focinho
+        oval(hx + r * 0.05, cy - r * 0.38, r * 0.36, r * 0.26, P.skinHi || P.skin);
+        g.fillStyle = P.nose || '#e07a8a'; g.beginPath(); g.arc(hx + r * 1.24, cy + r * 0.14, 1.8 * s, 0, TAU); g.fill();   // nariz
+        g.fillStyle = P.eye || '#ff4a4a'; if (P.eye) { g.shadowColor = P.eye; g.shadowBlur = 4; }
+        g.beginPath(); g.arc(hx + r * 0.36, cy - r * 0.06, 1.8 * s, 0, TAU); g.fill(); g.shadowBlur = 0;   // olho
+        g.fillStyle = '#f0e8cc'; g.fillRect(hx + r * 0.92, cy + r * 0.32, 1.7 * s, 3.4 * s); g.fillRect(hx + r * 1.1, cy + r * 0.32, 1.7 * s, 3.4 * s); break;   // incisivos
+      }
       case 'zombie': {
         if (P.hood) { g.fillStyle = P.hood; g.beginPath(); g.ellipse(hx, cy - r * 0.2, r * 1.15, r * 1.1, 0, Math.PI * 0.95, TAU * 1.05); g.fill(); }
         oval(hx, cy, r * 0.86, r, P.skin); oval(hx - r * 0.4, cy + r * 0.15, r * 0.5, r * 0.8, P.skinSh);
@@ -422,7 +442,8 @@ const SPR = {
         g.fillStyle = '#e8e0f0'; g.beginPath(); g.arc(hx - r * 0.3, cy - r * 0.1, 1.6 * s, 0, TAU); g.arc(hx + r * 0.4, cy - r * 0.1, 1.6 * s, 0, TAU); g.fill();
         g.fillStyle = P.tentacle || P.skinSh; for (let i = -2; i <= 2; i++) { const tx = hx + i * 3.2 * s; g.beginPath(); g.moveTo(tx, cy + r * 0.3); g.quadraticCurveTo(tx + i * 1.5, cy + r * 1.0, tx + i * 3, cy + r * 1.6); g.quadraticCurveTo(tx + i, cy + r * 0.9, tx + 1.5 * s, cy + r * 0.4); g.fill(); } break;
       }
-      case 'skull': {   // crânio (esqueleto): órbitas vazias + dentes (+ brasas se P.eye)
+      case 'skull': {   // crânio (esqueleto): órbitas vazias + dentes (+ brasas se P.eye); capuz opcional (P.hood)
+        if (P.hood) { g.fillStyle = P.hood; g.beginPath(); g.ellipse(hx, cy - r * 0.18, r * 1.24, r * 1.18, 0, Math.PI * 0.92, TAU * 1.06); g.fill(); }
         oval(hx, cy, r * 0.92, r * 1.0, P.skin); oval(hx - r * 0.4, cy + r * 0.12, r * 0.46, r * 0.72, P.skinSh);
         g.fillStyle = '#15110e'; g.beginPath(); g.arc(hx - r * 0.32, cy - r * 0.05, r * 0.26, 0, TAU); g.arc(hx + r * 0.34, cy - r * 0.05, r * 0.26, 0, TAU); g.fill();  // órbitas
         if (P.eye) { g.fillStyle = P.eye; g.shadowColor = P.eye; g.shadowBlur = 5; g.beginPath(); g.arc(hx - r * 0.32, cy - r * 0.05, r * 0.12, 0, TAU); g.arc(hx + r * 0.34, cy - r * 0.05, r * 0.12, 0, TAU); g.fill(); g.shadowBlur = 0; }
@@ -528,6 +549,18 @@ const SPR = {
         ctx.fillStyle = '#5a4326'; ctx.fillRect(0, -2 * s, 5 * s, 4 * s); ctx.fillStyle = '#caa33a'; ctx.fillRect(5 * s, -4 * s, 2.5 * s, 8 * s);
         ctx.fillStyle = '#dfe3e8'; ctx.fillRect(7 * s, -2 * s, 22 * s, 4 * s); ctx.beginPath(); ctx.moveTo(29 * s, -2 * s); ctx.lineTo(34 * s, 0); ctx.lineTo(29 * s, 2 * s); ctx.fill();
         ctx.fillStyle = '#9aa6b2'; ctx.fillRect(7 * s, -2 * s, 22 * s, 1.5 * s); break;
+      case 'taser':   // bastão-choque do Rei-Rato: cabo + cabeça metálica + eletrodos com arco
+        ctx.fillStyle = Wd; ctx.fillRect(-1 * s, -1.8 * s, 10 * s, 3.6 * s);
+        ctx.fillStyle = M; ctx.fillRect(9 * s, -2.4 * s, 13 * s, 4.8 * s); ctx.fillStyle = Md; ctx.fillRect(9 * s, 1 * s, 13 * s, 1.4 * s);
+        ctx.fillStyle = '#caa33a'; ctx.fillRect(20 * s, -3 * s, 2.6 * s, 6 * s);
+        ctx.fillStyle = '#cfe8ff'; ctx.fillRect(22 * s, -3.4 * s, 2.2 * s, 2.4 * s); ctx.fillRect(22 * s, 1 * s, 2.2 * s, 2.4 * s);
+        ctx.strokeStyle = '#bff0ff'; ctx.lineWidth = 1.3 * s; ctx.beginPath(); ctx.moveTo(24 * s, -2 * s); ctx.lineTo(28 * s, 0); ctx.lineTo(24 * s, 2 * s); ctx.stroke(); break;
+      case 'cleaver':   // cutelo de carrasco: cabo curto + lâmina larga
+        ctx.fillStyle = '#3a2a1a'; ctx.fillRect(0, -1.8 * s, 9 * s, 3.6 * s);
+        ctx.fillStyle = '#caa33a'; ctx.fillRect(8 * s, -3 * s, 2.4 * s, 6 * s);
+        ctx.fillStyle = P.metal || '#8a929d'; ctx.beginPath(); ctx.moveTo(10 * s, -3.5 * s); ctx.lineTo(30 * s, -8 * s); ctx.lineTo(35 * s, 3 * s); ctx.lineTo(10 * s, 4.5 * s); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = P.metalSh || '#5a626c'; ctx.beginPath(); ctx.moveTo(10 * s, 1 * s); ctx.lineTo(35 * s, 3 * s); ctx.lineTo(10 * s, 4.5 * s); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#dfe7ef'; ctx.beginPath(); ctx.moveTo(10 * s, -3.5 * s); ctx.lineTo(30 * s, -8 * s); ctx.lineTo(28 * s, -5.5 * s); ctx.lineTo(10 * s, -2 * s); ctx.closePath(); ctx.fill(); break;
     }
   },
 
@@ -782,4 +815,38 @@ SPR.define('hellhound', {
   pal: { skin: '#7a241a', skinSh: '#4a120e', skinHi: '#a8402c', eye: '#ffd84a',
     torso: '#3a1a14', torsoHi: '#4e2620', torsoSh: '#200d0a', armor: '#3a1a14', armorHi: '#4e2620', armorSh: '#200d0a',
     leg: '#5a1c14', legSh: '#340f0c', arm: '#7a241a', foot: '#1a0a08', claw: '#e8d0a0' },
+});
+
+/* ===== MYTHOS — CHEFES COLOSSAIS (pixel-art assada, como o resto do elenco) =====
+   Fisionomias monstruosas próprias, mas pelo MESMO pipeline (spritesheets idle/
+   run/jump/fall/hurt/death + braço-arma ao vivo). Padrões de ataque ficam em
+   Enemy._atk<Nome> (enemies.js). */
+SPR.define('necromancer', {   // O NECROMANTE ANCIÃO — caveira encapuzada, olhos verdes, cajado-orbe
+  head: 'skull', weapon: 'staff', scale: 1.5, bulk: 1.04, cw: 180, ch: 196, artK: 1.55,
+  pal: { skin: '#dad3bf', skinSh: '#a59c82', eye: '#9bf06a', hood: '#1b1430',
+    torso: '#241a3a', torsoHi: '#372a54', torsoSh: '#130c22', armor: '#241a3a', armorHi: '#372a54', armorSh: '#130c22',
+    leg: '#2a1f4a', legSh: '#160e2a', arm: '#241a3a', boot: '#160c22', belt: '#6a3aa0', buckle: '#caa33a',
+    cape: '#1a1030', capeSh: '#0d0720', pendant: '#9bf06a', orb: '#8ef06a',
+    metal: '#5a5066', metalSh: '#2e2838', wood: '#3a2a1a' },
+});
+SPR.define('ratking', {   // CHITTR, O BICÉFALO — homem-rato blindado de duas cabeças com taser
+  head: 'rat', weapon: 'taser', twin: true, twinGap: 9, digi: true, tail: true, scale: 1.46, bulk: 1.24, cw: 212, ch: 196, artK: 1.5,
+  pal: { skin: '#5a5048', skinSh: '#3a342c', skinHi: '#736857', eye: '#ff5b5b', ear: '#c98a8a', nose: '#d98a96',
+    torso: '#7a828c', torsoHi: '#9aa2ac', torsoSh: '#565c64', armor: '#5a5048', armorHi: '#736857', armorSh: '#33302a', pauldron: '#7a828c', plate: '#8a929d',
+    leg: '#463f38', legSh: '#2a2620', arm: '#5a5048', foot: '#241f1a', claw: '#d8cfba', belt: '#33302a', buckle: '#caa33a',
+    metal: '#9aa2ac', metalSh: '#565c64', wood: '#463f38' },
+});
+SPR.define('fenrir', {   // FENRAHK — lobo colossal de juba escura e olhos âmbar (corpo a corpo)
+  head: 'wolf', digi: true, tail: true, scale: 1.5, bulk: 1.34, cw: 240, ch: 200, artK: 1.78,
+  pal: { skin: '#2f261e', skinSh: '#1a130d', skinHi: '#4a3c30', eye: '#ffd23a',
+    torso: '#2a221c', torsoHi: '#3c2f26', torsoSh: '#160f0a', armor: '#2a221c', armorHi: '#3c2f26', armorSh: '#160f0a',
+    leg: '#2a221c', legSh: '#150f0a', arm: '#2f261e', foot: '#100b08', claw: '#e8e0cf' },
+});
+SPR.define('titan', {   // O CARRASCO INFERNAL — titã demoníaco blindado, fornalha no peito e cutelo
+  head: 'demon', weapon: 'cleaver', scale: 1.95, bulk: 1.32, cw: 240, ch: 290, artK: 1.5,
+  pal: { skin: '#8a2a1e', skinSh: '#4e1410', skinHi: '#b23a28', horn: '#e8e0cf',
+    torso: '#2c2a28', torsoHi: '#454240', torsoSh: '#161413', armor: '#2c2a28', armorHi: '#454240', armorSh: '#161413',
+    plate: '#ff5b2c', pauldron: '#3a3735',
+    leg: '#26221f', legSh: '#141210', arm: '#2c2a28', boot: '#161413', belt: '#1a1614', buckle: '#caa33a',
+    metal: '#8a929d', metalSh: '#5a626c', wood: '#3a2a1a' },
 });

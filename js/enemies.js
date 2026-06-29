@@ -10,131 +10,6 @@ function lineClear(world, x0, y0, x1, y1) {
   return true;
 }
 
-/* ============================================================
-   MYTHOS — desenhos procedurais dos CHEFES colossais (2x–4x os
-   personagens). Estilo chunky/posterizado, casando com a pixel-art.
-   Cada função desenha a criatura escalada para e.w × e.h, virada por
-   e.face, com hit-flash (e.flash), balanço (e.anim) e pose (e.attackT).
-   ============================================================ */
-function _mythBase(e, cam) {
-  const W = e.w, H = e.h, f = e.face, x = e.x + cam.ox, y = e.y + cam.oy;
-  const hurt = e.flash > 0 && Math.floor(e.flash * 50) % 2 === 0;
-  const moving = Math.abs(e.vx) > 14 && e.onGround;
-  const bob = moving ? Math.abs(Math.sin(e.anim * 6)) * H * 0.02 : Math.sin(e.anim * 1.5) * H * 0.012;
-  return { W, H, f, x, y, cx: x + W / 2, baseY: y + H, bob, atk: e.attackT || 0, C: c => hurt ? '#ffffff' : c };
-}
-function _mythShadow(ctx, B) { ctx.fillStyle = 'rgba(0,0,0,0.32)'; ctx.beginPath(); ctx.ellipse(B.cx, B.baseY - 2, B.W * 0.52, 6, 0, 0, TAU); ctx.fill(); }
-
-const MYTHOS_DRAW = {
-  // NECROMANTE ANCIÃO — sorcerer encapuzado, caveira de olhos verdes, cajado-orbe
-  necromancer(ctx, e, cam) {
-    const B = _mythBase(e, cam), { y, W, H, f, cx, baseY, C, bob, atk } = B;
-    _mythShadow(ctx, B);
-    const robeTop = y + H * 0.30 - bob;
-    ctx.fillStyle = C('#241a3a');                                          // manto esvoaçante
-    ctx.beginPath(); ctx.moveTo(cx - W * 0.24, robeTop); ctx.lineTo(cx + W * 0.24, robeTop);
-    ctx.lineTo(cx + W * 0.5, baseY); ctx.lineTo(cx + W * 0.2, baseY - H * 0.05); ctx.lineTo(cx, baseY);
-    ctx.lineTo(cx - W * 0.2, baseY - H * 0.05); ctx.lineTo(cx - W * 0.5, baseY); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = C('#16102a'); ctx.beginPath(); ctx.moveTo(cx, robeTop); ctx.lineTo(cx + W * 0.5, baseY); ctx.lineTo(cx, baseY); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = C('#6a3aa0'); ctx.fillRect(cx - W * 0.5, baseY - 6, W, 6); ctx.fillRect(cx - W * 0.03, robeTop, W * 0.06, H * 0.6);
-    ctx.strokeStyle = C('#e8e0cf'); ctx.lineWidth = W * 0.05; ctx.lineCap = 'round';   // braços ósseos
-    ctx.beginPath(); ctx.moveTo(cx - W * 0.2, robeTop + H * 0.05); ctx.lineTo(cx - W * 0.42, robeTop + H * 0.02 - atk * 8);
-    ctx.moveTo(cx + W * 0.2, robeTop + H * 0.05); ctx.lineTo(cx + W * 0.42, robeTop - H * 0.06 - atk * 12); ctx.stroke(); ctx.lineCap = 'butt';
-    const hr = W * 0.22, hcy = robeTop - hr * 0.5 - bob;                    // capuz + caveira
-    ctx.fillStyle = C('#1a1430'); ctx.beginPath(); ctx.arc(cx, hcy, hr * 1.35, Math.PI * 0.8, Math.PI * 2.2); ctx.fill(); ctx.fillRect(cx - hr * 1.2, hcy, hr * 2.4, hr * 1.4);
-    ctx.fillStyle = C('#0c0a14'); ctx.beginPath(); ctx.arc(cx + f * 2, hcy + hr * 0.2, hr * 0.85, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#9bf06a'; ctx.shadowColor = '#8ef06a'; ctx.shadowBlur = 10;
-    ctx.beginPath(); ctx.arc(cx - hr * 0.32 + f * 2, hcy + hr * 0.15, 3, 0, TAU); ctx.arc(cx + hr * 0.32 + f * 2, hcy + hr * 0.15, 3, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
-    const sx = cx + f * W * 0.46;                                           // cajado com orbe-caveira
-    ctx.strokeStyle = C('#3a2a1a'); ctx.lineWidth = W * 0.06; ctx.beginPath(); ctx.moveTo(sx, baseY); ctx.lineTo(sx, y + H * 0.04); ctx.stroke();
-    ctx.fillStyle = '#8ef06a'; ctx.shadowColor = '#8ef06a'; ctx.shadowBlur = 14; ctx.beginPath(); ctx.arc(sx, y + H * 0.05, W * 0.13, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
-    ctx.fillStyle = C('#0c2a0c'); ctx.beginPath(); ctx.arc(sx - 2, y + H * 0.05, W * 0.05, 0, TAU); ctx.arc(sx + 4, y + H * 0.05, W * 0.04, 0, TAU); ctx.fill();
-  },
-  // CHITTR, O BICÉFALO — homem-rato blindado de DUAS cabeças com taser gigante
-  ratking(ctx, e, cam) {
-    const B = _mythBase(e, cam), { y, W, H, f, cx, baseY, C, bob } = B;
-    _mythShadow(ctx, B);
-    const torsoTop = y + H * 0.34 - bob;
-    ctx.strokeStyle = C('#463f38'); ctx.lineWidth = W * 0.05; ctx.lineCap = 'round';   // cauda
-    ctx.beginPath(); ctx.moveTo(cx - f * W * 0.3, baseY - H * 0.12); ctx.quadraticCurveTo(cx - f * W * 0.6, baseY, cx - f * W * 0.5, baseY - H * 0.22); ctx.stroke(); ctx.lineCap = 'butt';
-    ctx.fillStyle = C('#463f38'); ctx.fillRect(cx - W * 0.28, baseY - H * 0.26, W * 0.2, H * 0.26); ctx.fillRect(cx + W * 0.08, baseY - H * 0.26, W * 0.2, H * 0.26);
-    ctx.fillStyle = C('#5a5048'); ctx.fillRect(cx - W * 0.32, torsoTop, W * 0.64, H * 0.42);   // torso peludo
-    ctx.fillStyle = C('#7a828c'); ctx.fillRect(cx - W * 0.3, torsoTop + H * 0.02, W * 0.6, H * 0.26);   // peitoral
-    ctx.fillStyle = C('#565c64'); ctx.fillRect(cx - W * 0.3, torsoTop + H * 0.02, W * 0.6, H * 0.05);
-    ctx.fillStyle = C('#9aa2ac'); ctx.fillRect(cx - W * 0.04, torsoTop + H * 0.02, W * 0.08, H * 0.26);
-    ctx.fillStyle = C('#7a828c'); ctx.fillRect(cx - W * 0.4, torsoTop, W * 0.14, H * 0.1); ctx.fillRect(cx + W * 0.26, torsoTop, W * 0.14, H * 0.1);   // ombreiras
-    for (const hd of [-1, 1]) {                                             // duas cabeças
-      const hx = cx + hd * W * 0.17, hcy = torsoTop - H * 0.04 - bob;
-      ctx.fillStyle = C('#5a5048'); ctx.beginPath(); ctx.arc(hx, hcy, W * 0.15, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.arc(hx - W * 0.1, hcy - W * 0.12, W * 0.06, 0, TAU); ctx.arc(hx + W * 0.1, hcy - W * 0.12, W * 0.06, 0, TAU); ctx.fill();
-      ctx.fillStyle = C('#463f38'); ctx.beginPath(); ctx.moveTo(hx + f * W * 0.12, hcy); ctx.lineTo(hx + f * W * 0.26, hcy + W * 0.03); ctx.lineTo(hx + f * W * 0.12, hcy + W * 0.06); ctx.fill();
-      ctx.fillStyle = '#ff5b5b'; ctx.beginPath(); ctx.arc(hx + f * W * 0.04, hcy - W * 0.02, 2.2, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.fillRect(hx + f * W * 0.14, hcy + W * 0.04, W * 0.04, W * 0.04);
-    }
-    ctx.strokeStyle = C('#5a5048'); ctx.lineWidth = W * 0.08; ctx.lineCap = 'round';   // braço + taser
-    const gx = cx + f * W * 0.34, gy = torsoTop + H * 0.12;
-    ctx.beginPath(); ctx.moveTo(cx + f * W * 0.2, torsoTop + H * 0.08); ctx.lineTo(gx, gy); ctx.stroke(); ctx.lineCap = 'butt';
-    ctx.save(); ctx.translate(gx, gy); ctx.rotate(f > 0 ? -0.2 : Math.PI + 0.2);
-    ctx.fillStyle = C('#caa33a'); ctx.fillRect(0, -W * 0.04, W * 0.34, W * 0.08);
-    ctx.fillStyle = C('#9aa2ac'); ctx.fillRect(W * 0.32, -W * 0.12, W * 0.06, W * 0.24);
-    ctx.fillStyle = '#cfd8e6'; ctx.fillRect(W * 0.38, -W * 0.12, W * 0.04, W * 0.06); ctx.fillRect(W * 0.38, W * 0.06, W * 0.04, W * 0.06);
-    ctx.strokeStyle = '#bff0ff'; ctx.shadowColor = '#bff0ff'; ctx.shadowBlur = 10; ctx.lineWidth = 2;
-    const zz = Math.sin(e.anim * 30) * 3;
-    ctx.beginPath(); ctx.moveTo(W * 0.42, -W * 0.08); ctx.lineTo(W * 0.5 + zz, 0); ctx.lineTo(W * 0.42, W * 0.08); ctx.stroke(); ctx.shadowBlur = 0;
-    ctx.restore();
-  },
-  // FENRAHK — lobisomem colossal, baixo e largo, garras no chão e olhos âmbar
-  fenrir(ctx, e, cam) {
-    const B = _mythBase(e, cam), { y, W, H, f, cx, baseY, C, bob, atk } = B;
-    _mythShadow(ctx, B);
-    const backTop = y + H * 0.2 - bob;
-    ctx.fillStyle = C('#2a221c'); ctx.fillRect(cx - W * 0.42, baseY - H * 0.34, W * 0.18, H * 0.34); ctx.fillRect(cx + W * 0.24, baseY - H * 0.34, W * 0.18, H * 0.34);
-    ctx.fillStyle = C('#3a2e26'); ctx.beginPath();                         // tronco curvado
-    ctx.moveTo(cx - W * 0.4, baseY - H * 0.1); ctx.lineTo(cx - W * 0.34, backTop);
-    ctx.lineTo(cx + W * 0.34, backTop - H * 0.02); ctx.lineTo(cx + W * 0.42, baseY - H * 0.1);
-    ctx.lineTo(cx + W * 0.2, baseY); ctx.lineTo(cx - W * 0.2, baseY); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = C('#2a221c'); ctx.beginPath(); ctx.moveTo(cx - W * 0.3, backTop);   // juba eriçada
-    for (let i = 0; i <= 6; i++) ctx.lineTo(cx - W * 0.3 + i / 6 * W * 0.6, backTop - H * 0.06 + (i % 2) * H * 0.05);
-    ctx.lineTo(cx + W * 0.3, backTop + H * 0.04); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = C('#3a2e26'); ctx.fillRect(cx + f * W * 0.12, backTop + H * 0.12, W * 0.16, H * 0.5 - atk * 10);   // braço dianteiro
-    ctx.fillStyle = C('#e8e0cf');
-    for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(cx + f * (W * 0.16 + i * W * 0.05), baseY - 2); ctx.lineTo(cx + f * (W * 0.2 + i * W * 0.05), baseY + 6); ctx.lineTo(cx + f * (W * 0.12 + i * W * 0.05), baseY); ctx.fill(); }
-    const hx = cx + f * W * 0.28, hcy = backTop - bob;                      // cabeça lupina
-    ctx.fillStyle = C('#3a2e26'); ctx.beginPath(); ctx.arc(hx, hcy, W * 0.16, 0, TAU); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(hx - W * 0.1, hcy - W * 0.12); ctx.lineTo(hx - W * 0.04, hcy - W * 0.24); ctx.lineTo(hx + W * 0.02, hcy - W * 0.12); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(hx + W * 0.06, hcy - W * 0.12); ctx.lineTo(hx + W * 0.12, hcy - W * 0.24); ctx.lineTo(hx + W * 0.16, hcy - W * 0.1); ctx.fill();
-    ctx.fillStyle = C('#2a221c'); ctx.beginPath(); ctx.moveTo(hx + f * W * 0.1, hcy - W * 0.04); ctx.lineTo(hx + f * W * 0.32, hcy + W * 0.02); ctx.lineTo(hx + f * W * 0.1, hcy + W * 0.08); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.fillRect(hx + f * W * 0.2, hcy + W * 0.03, W * 0.03, W * 0.05); ctx.fillRect(hx + f * W * 0.27, hcy + W * 0.03, W * 0.03, W * 0.05);
-    ctx.fillStyle = '#ffd23a'; ctx.shadowColor = '#ffd23a'; ctx.shadowBlur = 8; ctx.beginPath(); ctx.arc(hx + f * W * 0.04, hcy - W * 0.03, 2.6, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
-  },
-  // O CARRASCO INFERNAL — titã demoníaco blindado, fornalha no peito e cutelo
-  titan(ctx, e, cam) {
-    const B = _mythBase(e, cam), { y, W, H, f, cx, baseY, C, bob, atk } = B;
-    _mythShadow(ctx, B);
-    const torsoTop = y + H * 0.3 - bob;
-    ctx.fillStyle = C('#1a1614'); ctx.fillRect(cx - W * 0.26, baseY - H * 0.3, W * 0.22, H * 0.3); ctx.fillRect(cx + W * 0.04, baseY - H * 0.3, W * 0.22, H * 0.3);
-    ctx.fillStyle = C('#2c2a28'); ctx.fillRect(cx - W * 0.28, baseY - H * 0.32, W * 0.24, H * 0.08); ctx.fillRect(cx + W * 0.04, baseY - H * 0.32, W * 0.24, H * 0.08);
-    ctx.fillStyle = C('#2c2a28'); ctx.fillRect(cx - W * 0.36, torsoTop, W * 0.72, H * 0.36);   // tronco
-    ctx.fillStyle = '#ff5b2c'; ctx.shadowColor = '#ff7a2c'; ctx.shadowBlur = 14;               // fornalha no peito
-    ctx.beginPath(); ctx.arc(cx, torsoTop + H * 0.18, W * 0.12 + Math.sin(e.anim * 6) * 2, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
-    ctx.fillStyle = '#ffd86b'; ctx.beginPath(); ctx.arc(cx, torsoTop + H * 0.18, W * 0.06, 0, TAU); ctx.fill();
-    ctx.fillStyle = C('#1a1614'); ctx.fillRect(cx - W * 0.46, torsoTop - H * 0.02, W * 0.18, H * 0.14); ctx.fillRect(cx + W * 0.28, torsoTop - H * 0.02, W * 0.18, H * 0.14);
-    ctx.fillStyle = C('#e8e0cf');
-    for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(cx + s * W * 0.37, torsoTop - H * 0.02); ctx.lineTo(cx + s * W * 0.4, torsoTop - H * 0.12); ctx.lineTo(cx + s * W * 0.44, torsoTop - H * 0.02); ctx.fill(); }
-    const hr = W * 0.18, hcy = torsoTop - hr - bob;                         // elmo de carrasco + chifres
-    ctx.fillStyle = C('#1a1614'); ctx.beginPath(); ctx.arc(cx, hcy, hr, Math.PI, 0); ctx.fill(); ctx.fillRect(cx - hr, hcy, hr * 2, hr * 1.1);
-    ctx.fillStyle = '#ff5b2c'; ctx.fillRect(cx - hr * 0.6, hcy + hr * 0.3, hr * 0.4, hr * 0.25); ctx.fillRect(cx + hr * 0.2, hcy + hr * 0.3, hr * 0.4, hr * 0.25);
-    ctx.fillStyle = C('#e8e0cf');
-    ctx.beginPath(); ctx.moveTo(cx - hr, hcy - hr * 0.2); ctx.quadraticCurveTo(cx - hr * 1.8, hcy - hr * 1.2, cx - hr * 0.8, hcy - hr * 1.6); ctx.lineTo(cx - hr * 0.5, hcy - hr * 0.5); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(cx + hr, hcy - hr * 0.2); ctx.quadraticCurveTo(cx + hr * 1.8, hcy - hr * 1.2, cx + hr * 0.8, hcy - hr * 1.6); ctx.lineTo(cx + hr * 0.5, hcy - hr * 0.5); ctx.fill();
-    ctx.save(); ctx.translate(cx + f * W * 0.4, torsoTop + H * 0.1); ctx.rotate(f > 0 ? -0.4 - atk * 0.8 : Math.PI + 0.4 + atk * 0.8);   // cutelo gigante
-    ctx.strokeStyle = C('#3a2a1a'); ctx.lineWidth = W * 0.06; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W * 0.1, -H * 0.04); ctx.stroke();
-    ctx.fillStyle = C('#8a929d'); ctx.beginPath(); ctx.moveTo(W * 0.08, -H * 0.16); ctx.lineTo(W * 0.42, -H * 0.1); ctx.lineTo(W * 0.42, H * 0.04); ctx.lineTo(W * 0.08, 0); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = C('#b8c0cc'); ctx.beginPath(); ctx.moveTo(W * 0.1, -H * 0.14); ctx.lineTo(W * 0.4, -H * 0.09); ctx.lineTo(W * 0.1, -H * 0.06); ctx.fill();
-    ctx.restore();
-  },
-};
-
 const ENEMY_TYPES = {
   zombie:    { spr: 'zombie',    label: 'Zumbi',        hp: 42,  w: 28, h: 46, speed: 66,  aggro: 520, range: 320, fireCd: 1.7, touch: 12, score: 120, atk: 'blast', gore: '#5a7a3a' },
   werewolf:  { spr: 'werewolf',  label: 'Lobisomem',    hp: 50,  w: 30, h: 44, speed: 235, aggro: 660, range: 360, fireCd: 0.7, touch: 16, score: 180, atk: 'smg', leaper: true, gore: '#7a2a2a' },
@@ -152,11 +27,11 @@ const ENEMY_TYPES = {
   specter:   { spr: 'specter',   label: 'Espectro',      hp: 54,  w: 30, h: 48, speed: 140, aggro: 900, range: 520, fireCd: 1.1, touch: 16, score: 300, atk: 'smg', fly: true, gore: '#7b3aff' },
   hellhound: { spr: 'hellhound', label: 'Cão Infernal',  hp: 60,  w: 32, h: 38, speed: 320, aggro: 780, range: 0,   fireCd: 99,  touch: 18, score: 260, leaper: true, gore: '#b23425' },
   flayer:    { spr: 'flayer',    label: 'O Devorador',  hp: 720, w: 64, h: 96, speed: 56,  aggro: 1300, range: 1000, fireCd: 1.3, touch: 30, score: 3200, boss: true, mythos: true, name: 'O DEVORADOR DE MENTES', gore: '#7b3aff' },
-  // ===== MYTHOS: chefes colossais (2x–4x os personagens) — desenho próprio + padrões de ataque =====
-  necromancer: { label: 'Necromante Ancião',  hp: 900,  w: 64,  h: 132, speed: 60,  aggro: 1100, range: 760, fireCd: 1.4, touch: 24, score: 2600, boss: true, mythos: true, name: 'O NECROMANTE ANCIÃO',         gore: '#6a3aa0', draw: MYTHOS_DRAW.necromancer },
-  ratking:     { label: 'Rei-Rato Bicéfalo',  hp: 820,  w: 76,  h: 120, speed: 120, aggro: 1000, range: 560, fireCd: 1.0, touch: 26, score: 2400, boss: true, mythos: true, leaper: true, name: 'CHITTR, O BICÉFALO', gore: '#7a2a2a', draw: MYTHOS_DRAW.ratking },
-  fenrir:      { label: 'Lobo Colossal',      hp: 880,  w: 120, h: 104, speed: 215, aggro: 1100, range: 300, fireCd: 1.3, touch: 30, score: 2800, boss: true, mythos: true, leaper: true, name: 'FENRAHK, DEVORADOR DE LUAS', gore: '#3a2e26', draw: MYTHOS_DRAW.fenrir },
-  titan:       { label: 'Titã Carrasco',      hp: 1300, w: 104, h: 188, speed: 64,  aggro: 1000, range: 620, fireCd: 1.5, touch: 34, score: 3400, boss: true, mythos: true, name: 'O CARRASCO INFERNAL',       gore: '#7a1a14', draw: MYTHOS_DRAW.titan },
+  // ===== MYTHOS: chefes colossais (2x–4x os personagens) — spritesheet pixel-art própria + padrões de ataque =====
+  necromancer: { spr: 'necromancer', label: 'Necromante Ancião',  hp: 900,  w: 64,  h: 132, speed: 60,  aggro: 1100, range: 760, fireCd: 1.4, touch: 24, score: 2600, boss: true, mythos: true, name: 'O NECROMANTE ANCIÃO',         gore: '#6a3aa0' },
+  ratking:     { spr: 'ratking',     label: 'Rei-Rato Bicéfalo',  hp: 820,  w: 76,  h: 120, speed: 120, aggro: 1000, range: 560, fireCd: 1.0, touch: 26, score: 2400, boss: true, mythos: true, leaper: true, name: 'CHITTR, O BICÉFALO', gore: '#7a2a2a' },
+  fenrir:      { spr: 'fenrir',      label: 'Lobo Colossal',      hp: 880,  w: 120, h: 104, speed: 215, aggro: 1100, range: 300, fireCd: 1.3, touch: 30, score: 2800, boss: true, mythos: true, leaper: true, name: 'FENRAHK, DEVORADOR DE LUAS', gore: '#3a2e26' },
+  titan:       { spr: 'titan',       label: 'Titã Carrasco',      hp: 1300, w: 104, h: 188, speed: 64,  aggro: 1000, range: 620, fireCd: 1.5, touch: 34, score: 3400, boss: true, mythos: true, name: 'O CARRASCO INFERNAL',       gore: '#7a1a14' },
 };
 
 const CHAR2ENEMY = { z: 'zombie', w: 'werewolf', r: 'dragonman', d: 'demon', O: 'flayer', f: 'wolf', F: 'direwolf' };
