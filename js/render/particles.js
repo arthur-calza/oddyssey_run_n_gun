@@ -15,6 +15,7 @@ class FX {
     this.bolts = [];   // lightning bolts
     this.beams = [];   // destructive rays (Nicolau's Master's Head)
     this.decals = [];  // PERSISTENT marks (blood, rubble, scorch) — the trail of destruction
+    this.corpses = []; // PERSISTENT whole bodies lying on the ground (mortes "de cadáver inteiro")
   }
 
   _pushDecal(o) { this.decals.push(o); const max = 1800; if (this.decals.length > max) this.decals.splice(0, this.decals.length - max); }
