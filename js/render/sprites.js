@@ -561,7 +561,170 @@ const SPR = {
         ctx.fillStyle = P.metal || '#8a929d'; ctx.beginPath(); ctx.moveTo(10 * s, -3.5 * s); ctx.lineTo(30 * s, -8 * s); ctx.lineTo(35 * s, 3 * s); ctx.lineTo(10 * s, 4.5 * s); ctx.closePath(); ctx.fill();
         ctx.fillStyle = P.metalSh || '#5a626c'; ctx.beginPath(); ctx.moveTo(10 * s, 1 * s); ctx.lineTo(35 * s, 3 * s); ctx.lineTo(10 * s, 4.5 * s); ctx.closePath(); ctx.fill();
         ctx.fillStyle = '#dfe7ef'; ctx.beginPath(); ctx.moveTo(10 * s, -3.5 * s); ctx.lineTo(30 * s, -8 * s); ctx.lineTo(28 * s, -5.5 * s); ctx.lineTo(10 * s, -2 * s); ctx.closePath(); ctx.fill(); break;
+
+      /* ===== ARMAS FUTURISTAS / DE ENERGIA ===== */
+      case 'plasma':   // fuzil de plasma: corpo escuro + bobina brilhante + emissor
+        ctx.fillStyle = Md; ctx.fillRect(-2 * s, -2.6 * s, 12 * s, 5.2 * s);
+        ctx.fillStyle = M; ctx.fillRect(9 * s, -2.2 * s, 18 * s, 4.4 * s);
+        ctx.fillStyle = '#12324a'; ctx.fillRect(9 * s, -0.6 * s, 18 * s, 1.4 * s);
+        ctx.fillStyle = '#37f0ff'; ctx.shadowColor = '#37f0ff'; ctx.shadowBlur = 9 * s;
+        ctx.fillRect(4 * s, -1.2 * s, 4 * s, 2.4 * s);                                   // célula de plasma
+        ctx.beginPath(); ctx.arc(28 * s, 0, 2.4 * s, 0, TAU); ctx.fill(); ctx.shadowBlur = 0; break;
+      case 'tesla':    // carabina Tesla: bobina de cobre + eletrodos com arco elétrico
+        ctx.fillStyle = Wd; ctx.fillRect(-1 * s, -2 * s, 8 * s, 4 * s);
+        ctx.fillStyle = M; ctx.fillRect(7 * s, -2 * s, 12 * s, 4 * s);
+        ctx.fillStyle = '#b5722a'; for (let i = 0; i < 4; i++) ctx.fillRect((8 + i * 2.4) * s, -3 * s, 1.4 * s, 6 * s);   // bobina
+        ctx.fillStyle = '#cfe8ff'; ctx.fillRect(19 * s, -3 * s, 2.6 * s, 6 * s);          // cabeça
+        ctx.strokeStyle = '#bff0ff'; ctx.shadowColor = '#bff0ff'; ctx.shadowBlur = 8 * s; ctx.lineWidth = 1.3 * s;
+        ctx.beginPath(); ctx.moveTo(22 * s, -2 * s); ctx.lineTo(26 * s, 0); ctx.lineTo(22 * s, 2 * s); ctx.stroke(); ctx.shadowBlur = 0; break;
+      case 'blaster':  // blaster estelar: corpo anguloso + cano com brilho
+        ctx.fillStyle = M; ctx.beginPath(); ctx.moveTo(-2 * s, -3 * s); ctx.lineTo(10 * s, -3.4 * s); ctx.lineTo(12 * s, 2.6 * s); ctx.lineTo(-2 * s, 3 * s); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = Md; ctx.fillRect(10 * s, -2 * s, 16 * s, 4 * s);
+        ctx.fillStyle = '#ff5bd0'; ctx.shadowColor = '#ff5bd0'; ctx.shadowBlur = 8 * s;
+        ctx.fillRect(24 * s, -1.6 * s, 3 * s, 3.2 * s); ctx.fillRect(2 * s, -1 * s, 3 * s, 2 * s); ctx.shadowBlur = 0; break;
+      case 'railgun':  // canhão de trilho: dois trilhos longos + linha de energia
+        ctx.fillStyle = Md; ctx.fillRect(-3 * s, -3 * s, 10 * s, 6 * s);
+        ctx.fillStyle = M; ctx.fillRect(6 * s, -3.4 * s, 26 * s, 2 * s); ctx.fillRect(6 * s, 1.4 * s, 26 * s, 2 * s);
+        ctx.fillStyle = '#8ad8ff'; ctx.shadowColor = '#8ad8ff'; ctx.shadowBlur = 7 * s; ctx.fillRect(6 * s, -0.7 * s, 26 * s, 1.4 * s); ctx.shadowBlur = 0;
+        ctx.fillStyle = '#caa33a'; ctx.fillRect(4 * s, -3.4 * s, 2 * s, 6.8 * s); break;
+      case 'pulse':    // canhão de pulso: emissor largo com anéis concêntricos
+        ctx.fillStyle = Md; ctx.fillRect(-3 * s, -3 * s, 12 * s, 6 * s);
+        ctx.fillStyle = M; ctx.fillRect(8 * s, -5 * s, 8 * s, 10 * s);
+        ctx.strokeStyle = '#7fe8ff'; ctx.shadowColor = '#7fe8ff'; ctx.shadowBlur = 8 * s; ctx.lineWidth = 1.6 * s;
+        for (let i = 1; i <= 3; i++) { ctx.beginPath(); ctx.arc(16 * s, 0, i * 1.9 * s, -1.1, 1.1); ctx.stroke(); } ctx.shadowBlur = 0; break;
+      case 'cryo':     // criojato: tanque gelado + bico com cristais
+        ctx.fillStyle = '#3a5a6a'; ctx.fillRect(-5 * s, -3.6 * s, 7 * s, 9 * s);
+        ctx.fillStyle = '#bfe8ff'; ctx.fillRect(-4 * s, -2.6 * s, 5 * s, 3 * s);
+        ctx.fillStyle = M; ctx.fillRect(2 * s, -2 * s, 18 * s, 4 * s);
+        ctx.fillStyle = '#eaf8ff'; ctx.shadowColor = '#bfe8ff'; ctx.shadowBlur = 7 * s;
+        ctx.beginPath(); ctx.moveTo(20 * s, -3 * s); ctx.lineTo(25 * s, 0); ctx.lineTo(20 * s, 3 * s); ctx.closePath(); ctx.fill(); ctx.shadowBlur = 0; break;
+      case 'gravgun':  // manipulador gravitacional: garra com núcleo púrpura
+        ctx.fillStyle = Md; ctx.fillRect(-2 * s, -2.4 * s, 12 * s, 4.8 * s);
+        ctx.fillStyle = M; ctx.fillRect(10 * s, -4 * s, 4 * s, 3 * s); ctx.fillRect(10 * s, 1 * s, 4 * s, 3 * s);   // garras
+        ctx.fillStyle = '#c479ff'; ctx.shadowColor = '#c479ff'; ctx.shadowBlur = 10 * s;
+        ctx.beginPath(); ctx.arc(15 * s, 0, 3.4 * s, 0, TAU); ctx.fill(); ctx.shadowBlur = 0; break;
+
+      /* ===== ARMAS A VAPOR / STEAMPUNK ===== */
+      case 'steamrifle': // rifle a vapor: caldeira de latão + cano + válvula
+        ctx.fillStyle = '#7a4a1a'; ctx.fillRect(-2 * s, -2.2 * s, 9 * s, 4.4 * s);
+        ctx.fillStyle = '#caa33a'; ctx.beginPath(); ctx.arc(2 * s, -3.6 * s, 2.6 * s, 0, TAU); ctx.fill();   // válvula
+        ctx.fillStyle = M; ctx.fillRect(6 * s, -2 * s, 22 * s, 3.6 * s);
+        ctx.fillStyle = '#8a5a22'; ctx.fillRect(6 * s, 1.2 * s, 22 * s, 1.4 * s);
+        ctx.fillStyle = '#caa33a'; ctx.fillRect(24 * s, -2.6 * s, 3 * s, 5 * s); break;
+      case 'gearrifle':  // lança-engrenagens: corpo de latão + engrenagem visível
+        ctx.fillStyle = '#8a5a22'; ctx.fillRect(-2 * s, -2.4 * s, 12 * s, 4.8 * s);
+        ctx.fillStyle = M; ctx.fillRect(10 * s, -2 * s, 14 * s, 4 * s);
+        ctx.save(); ctx.translate(6 * s, 0); ctx.fillStyle = '#caa33a';
+        for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; ctx.fillRect(Math.cos(a) * 4 * s - 1 * s, Math.sin(a) * 4 * s - 1 * s, 2 * s, 2 * s); }
+        ctx.beginPath(); ctx.arc(0, 0, 3 * s, 0, TAU); ctx.fill(); ctx.fillStyle = '#3a2a1a'; ctx.beginPath(); ctx.arc(0, 0, 1 * s, 0, TAU); ctx.fill(); ctx.restore(); break;
+      case 'harpoon':    // arpão a vapor: cano grosso + arpão farpado
+        ctx.fillStyle = Md; ctx.fillRect(-2 * s, -3 * s, 12 * s, 6 * s);
+        ctx.fillStyle = M; ctx.fillRect(10 * s, -1.6 * s, 12 * s, 3.2 * s);
+        ctx.fillStyle = '#cfd2d6'; ctx.beginPath(); ctx.moveTo(22 * s, -3 * s); ctx.lineTo(29 * s, 0); ctx.lineTo(22 * s, 3 * s); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(24 * s, -1 * s); ctx.lineTo(20 * s, -4 * s); ctx.lineTo(24 * s, -0.5 * s); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(24 * s, 1 * s); ctx.lineTo(20 * s, 4 * s); ctx.lineTo(24 * s, 0.5 * s); ctx.fill(); break;
+
+      /* ===== CAJADOS / ARMAS MÁGICAS ===== */
+      case 'runestaff':  // varinha/cajado com runas e cristal na ponta
+        ctx.fillStyle = '#3a2a4a'; ctx.fillRect(-3 * s, -1.6 * s, 24 * s, 3.2 * s);
+        ctx.fillStyle = '#7be0ff'; for (let i = 0; i < 3; i++) ctx.fillRect((2 + i * 5) * s, -0.7 * s, 1.4 * s, 1.4 * s);   // runas
+        ctx.fillStyle = P.orb || '#7be0ff'; ctx.shadowColor = P.orb || '#7be0ff'; ctx.shadowBlur = 9 * s;
+        ctx.beginPath(); ctx.moveTo(21 * s, -4 * s); ctx.lineTo(26 * s, 0); ctx.lineTo(21 * s, 4 * s); ctx.lineTo(18 * s, 0); ctx.closePath(); ctx.fill(); ctx.shadowBlur = 0; break;
+      case 'orbstaff':   // cajado ornamentado com orbe flutuante em anel
+        ctx.fillStyle = Wd; ctx.fillRect(-3 * s, -1.5 * s, 22 * s, 3 * s);
+        ctx.strokeStyle = '#caa33a'; ctx.lineWidth = 1.6 * s; ctx.beginPath(); ctx.arc(22 * s, 0, 5 * s, 0, TAU); ctx.stroke();
+        ctx.fillStyle = P.orb || '#b07bff'; ctx.shadowColor = P.orb || '#b07bff'; ctx.shadowBlur = 10 * s;
+        ctx.beginPath(); ctx.arc(22 * s, 0, 3 * s, 0, TAU); ctx.fill(); ctx.shadowBlur = 0; break;
+      case 'reaperstaff': // foice ceifadora (arma de fogo que lança crescentes)
+        ctx.fillStyle = '#2a2620'; ctx.fillRect(-4 * s, -1.5 * s, 26 * s, 3 * s);
+        ctx.fillStyle = '#9b6bff'; ctx.shadowColor = '#9b6bff'; ctx.shadowBlur = 8 * s;
+        ctx.beginPath(); ctx.moveTo(20 * s, -2 * s); ctx.quadraticCurveTo(30 * s, -4 * s, 27 * s, -16 * s); ctx.quadraticCurveTo(24 * s, -6 * s, 18 * s, -3 * s); ctx.closePath(); ctx.fill(); ctx.shadowBlur = 0; break;
     }
+  },
+
+  // ---- arma BRANCA desenhada durante o golpe (integra o desenho ao sprite) ----
+  // desenha no ORIGEM apontando para +x; o chamador posiciona/gira conforme o
+  // arco do golpe. `col` = cor da lâmina; `glow` acende o brilho mágico.
+  drawMeleeWeapon(ctx, kind, s = 1, col = '#dfe7ef', glow = false) {
+    const steelSh = '#9aa6b2', wood = '#5a4326', gold = '#caa33a', dark = '#2a2620';
+    const grip = (g) => { ctx.fillStyle = wood; ctx.fillRect(-6 * s, -1.6 * s, 8 * s, 3.2 * s); ctx.fillStyle = g || gold; ctx.fillRect(2 * s, -3.6 * s, 2.4 * s, 7.2 * s); };
+    const blade = (x0, len, wid, c) => {
+      ctx.fillStyle = c; ctx.fillRect(x0 * s, -wid / 2 * s, len * s, wid * s);
+      ctx.beginPath(); ctx.moveTo((x0 + len) * s, -wid / 2 * s); ctx.lineTo((x0 + len + wid) * s, 0); ctx.lineTo((x0 + len) * s, wid / 2 * s); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(x0 * s, -wid / 2 * s, len * s, wid * 0.32 * s);
+    };
+    const shaft = (len, c) => { ctx.fillStyle = c || wood; ctx.fillRect(-len * 0.28 * s, -1.4 * s, len * s, 2.8 * s); };
+    if (glow) { ctx.shadowColor = col; ctx.shadowBlur = 9 * s; }
+    switch (kind) {
+      case 'sword':       grip(); blade(4, 22, 4, col); break;
+      case 'saber':       grip(); ctx.strokeStyle = col; ctx.lineWidth = 3.4 * s; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(4 * s, 1 * s); ctx.quadraticCurveTo(20 * s, -4 * s, 30 * s, -9 * s); ctx.stroke(); ctx.lineWidth = 1.2 * s; ctx.strokeStyle = '#fff'; ctx.stroke(); break;
+      case 'katana':      grip(dark); ctx.fillStyle = '#2a2620'; ctx.beginPath(); ctx.arc(3 * s, 0, 3 * s, 0, TAU); ctx.fill(); blade(6, 30, 3, col); break;
+      case 'rapier':      grip(); ctx.strokeStyle = gold; ctx.lineWidth = 1.4 * s; ctx.beginPath(); ctx.arc(4 * s, 0, 3.4 * s, 0, TAU); ctx.stroke(); blade(6, 30, 1.8, col); break;
+      case 'greatsword':  grip(); ctx.fillStyle = gold; ctx.fillRect(1 * s, -6 * s, 3 * s, 12 * s); blade(4, 34, 6.5, col); break;
+      case 'giantsword':  grip('#6a3aa0'); ctx.fillStyle = '#8a4ad0'; ctx.fillRect(0, -8 * s, 4 * s, 16 * s); blade(4, 44, 9, col); ctx.fillStyle = 'rgba(255,255,255,0.6)'; for (let i = 0; i < 4; i++) ctx.fillRect((10 + i * 9) * s, -1 * s, 2 * s, 2 * s); break;
+      case 'flameblade':  grip('#b1322c'); blade(4, 26, 5, col); ctx.fillStyle = '#ffd86b'; for (let i = 0; i < 3; i++) ctx.fillRect((8 + i * 7) * s, -3.2 * s, 1.6 * s, 1.6 * s); break;
+      case 'frostbrand':  grip('#3a6a8a'); blade(4, 26, 5, col); ctx.fillStyle = '#eaf8ff'; ctx.beginPath(); ctx.moveTo(14 * s, -3 * s); ctx.lineTo(17 * s, -6 * s); ctx.lineTo(18 * s, -2 * s); ctx.fill(); break;
+      case 'thunderblade':grip('#caa33a'); blade(4, 28, 4.5, col); ctx.strokeStyle = '#eaffff'; ctx.lineWidth = 1.2 * s; ctx.beginPath(); ctx.moveTo(8 * s, 0); ctx.lineTo(14 * s, -3 * s); ctx.lineTo(18 * s, 2 * s); ctx.lineTo(26 * s, -2 * s); ctx.stroke(); break;
+      case 'holyblade':   grip('#e8d08a'); ctx.fillStyle = '#ffe9a8'; ctx.fillRect(0, -7 * s, 3.4 * s, 14 * s); blade(4, 30, 5, col); break;
+      case 'axe':         shaft(26, wood); ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(10 * s, -3 * s); ctx.quadraticCurveTo(20 * s, -12 * s, 24 * s, -2 * s); ctx.quadraticCurveTo(20 * s, 7 * s, 10 * s, 3 * s); ctx.closePath(); ctx.fill(); ctx.fillStyle = steelSh; ctx.beginPath(); ctx.moveTo(10 * s, 3 * s); ctx.quadraticCurveTo(20 * s, 7 * s, 24 * s, -2 * s); ctx.lineTo(16 * s, 0); ctx.closePath(); ctx.fill(); break;
+      case 'greataxe':    shaft(30, wood); ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(8 * s, -4 * s); ctx.quadraticCurveTo(24 * s, -16 * s, 30 * s, -3 * s); ctx.quadraticCurveTo(24 * s, 10 * s, 8 * s, 4 * s); ctx.closePath(); ctx.fill(); ctx.fillStyle = steelSh; ctx.fillRect(6 * s, -4 * s, 3 * s, 8 * s); break;
+      case 'warhammer':   shaft(28, wood); ctx.fillStyle = col; ctx.fillRect(14 * s, -8 * s, 12 * s, 16 * s); ctx.fillStyle = steelSh; ctx.fillRect(14 * s, -8 * s, 4 * s, 16 * s); ctx.fillStyle = gold; ctx.fillRect(24 * s, -8 * s, 2 * s, 16 * s); break;
+      case 'earthmaul':   shaft(30, dark); ctx.fillStyle = '#8a7a5a'; ctx.fillRect(12 * s, -10 * s, 16 * s, 20 * s); ctx.fillStyle = '#6a5a3a'; for (let i = 0; i < 3; i++) ctx.fillRect((14 + i * 5) * s, (-8 + i * 4) * s, 3 * s, 3 * s); ctx.fillStyle = col; ctx.globalAlpha = 0.5; ctx.fillRect(12 * s, -10 * s, 16 * s, 20 * s); ctx.globalAlpha = 1; break;
+      case 'spear':       shaft(34, wood); ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(22 * s, -3.5 * s); ctx.lineTo(31 * s, 0); ctx.lineTo(22 * s, 3.5 * s); ctx.lineTo(24 * s, 0); ctx.closePath(); ctx.fill(); break;
+      case 'halberd':     shaft(34, wood); ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(18 * s, -2 * s); ctx.quadraticCurveTo(28 * s, -12 * s, 30 * s, -2 * s); ctx.lineTo(20 * s, 2 * s); ctx.closePath(); ctx.fill(); ctx.beginPath(); ctx.moveTo(24 * s, -2 * s); ctx.lineTo(32 * s, 0); ctx.lineTo(24 * s, 2 * s); ctx.fill(); break;
+      case 'glaive':      shaft(32, dark); ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(16 * s, -2 * s); ctx.quadraticCurveTo(34 * s, -6 * s, 30 * s, 6 * s); ctx.quadraticCurveTo(24 * s, 0, 16 * s, 2 * s); ctx.closePath(); ctx.fill(); break;
+      case 'bostaff':     ctx.fillStyle = col; ctx.fillRect(-16 * s, -1.6 * s, 46 * s, 3.2 * s); ctx.fillStyle = gold; ctx.fillRect(-16 * s, -2.2 * s, 3 * s, 4.4 * s); ctx.fillRect(27 * s, -2.2 * s, 3 * s, 4.4 * s); break;
+      case 'scythe':      shaft(30, dark); ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(20 * s, -1 * s); ctx.quadraticCurveTo(34 * s, -3 * s, 30 * s, -18 * s); ctx.quadraticCurveTo(26 * s, -6 * s, 18 * s, -3 * s); ctx.closePath(); ctx.fill(); break;
+      case 'voidscythe':  shaft(32, '#1a0f2a'); ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(20 * s, -1 * s); ctx.quadraticCurveTo(38 * s, -4 * s, 32 * s, -22 * s); ctx.quadraticCurveTo(28 * s, -7 * s, 18 * s, -3 * s); ctx.closePath(); ctx.fill(); ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.4; ctx.beginPath(); ctx.arc(28 * s, -12 * s, 2 * s, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; break;
+      case 'whip':        ctx.strokeStyle = col; ctx.lineWidth = 2.4 * s; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(0, 0); for (let i = 1; i <= 8; i++) { const x = i * 5 * s; ctx.lineTo(x, Math.sin(i * 0.9) * (i * 0.7) * s); } ctx.stroke(); ctx.fillStyle = gold; ctx.fillRect(-4 * s, -2 * s, 6 * s, 4 * s); break;
+      case 'flail':       ctx.fillStyle = wood; ctx.fillRect(-2 * s, -1.6 * s, 12 * s, 3.2 * s); ctx.strokeStyle = '#8a929d'; ctx.lineWidth = 1.6 * s; ctx.beginPath(); ctx.moveTo(10 * s, 0); ctx.lineTo(22 * s, 6 * s); ctx.stroke(); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(24 * s, 8 * s, 5 * s, 0, TAU); ctx.fill(); ctx.fillStyle = steelSh; for (let i = 0; i < 6; i++) { const a = i / 6 * TAU; ctx.fillRect(24 * s + Math.cos(a) * 5 * s - 1 * s, 8 * s + Math.sin(a) * 5 * s - 1 * s, 2.4 * s, 2.4 * s); } break;
+      case 'claws':       ctx.fillStyle = gold; ctx.fillRect(-4 * s, -4 * s, 8 * s, 8 * s); ctx.fillStyle = col; for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(4 * s, i * 3.2 * s); ctx.quadraticCurveTo(16 * s, i * 4.2 * s, 22 * s, i * 3 * s - 1 * s); ctx.lineTo(15 * s, i * 3.2 * s); ctx.closePath(); ctx.fill(); } break;
+      case 'daggers':     grip(); blade(3, 12, 3.4, col); ctx.save(); ctx.rotate(2.7); grip(); blade(3, 11, 3, col); ctx.restore(); break;
+      case 'shieldspear': ctx.fillStyle = '#5a4326'; ctx.beginPath(); ctx.arc(-2 * s, 0, 8 * s, 0, TAU); ctx.fill(); ctx.fillStyle = gold; ctx.beginPath(); ctx.arc(-2 * s, 0, 8 * s, 0, TAU); ctx.lineWidth = 1.6 * s; ctx.strokeStyle = gold; ctx.stroke(); ctx.fillStyle = '#b1322c'; ctx.beginPath(); ctx.arc(-2 * s, 0, 2.6 * s, 0, TAU); ctx.fill(); shaft(30, wood); ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(22 * s, -3 * s); ctx.lineTo(30 * s, 0); ctx.lineTo(22 * s, 3 * s); ctx.closePath(); ctx.fill(); break;
+      default:            grip(); blade(4, 22, 4, col);
+    }
+    ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+  },
+
+  // ---- arma branca PIXELIZADA (golpe corpo-a-corpo) --------------
+  // Mesmo pipeline dos canos: a arma é ASSADA já rotacionada em ~1/PXF da
+  // resolução, o alfa é limiarizado (silhueta retrô nítida) e o quadro fica
+  // em cache por (arma, cor, brilho, ângulo). Ao varrer o arco do golpe, os
+  // ângulos discretos formam a "sequência de sprites" pixel-art.
+  _pixMeleeFrame(kind, col, glow, aim, PXF) {
+    const steps = this.WAIM, bucket = ((Math.round(aim / (TAU / steps)) % steps) + steps) % steps;
+    const ckey = 'm:' + kind + ':' + col + ':' + (glow ? 1 : 0) + ':' + bucket;
+    if (!this._mwCache) this._mwCache = {};
+    let frame = this._mwCache[ckey];
+    if (frame) return frame;
+    const ang = bucket * (TAU / steps);
+    const R = 66;                                              // meio-alcance (cobre até a espada colossal/chicote)
+    const bw = Math.max(8, Math.ceil((2 * R) / PXF) + 2);
+    let buf = this._mwBuf; if (!buf) buf = this._mwBuf = document.createElement('canvas');
+    if (buf.width !== bw || buf.height !== bw) { buf.width = bw; buf.height = bw; }
+    const g = buf.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, bw, bw); g.imageSmoothingEnabled = true;
+    const c = bw / 2;
+    g.save(); g.translate(c, c); g.scale(1 / PXF, 1 / PXF); g.rotate(ang);   // unidades naturais → pixels do buffer, já rotacionado
+    this.drawMeleeWeapon(g, kind, 1, col, glow);
+    g.restore();
+    const im = g.getImageData(0, 0, bw, bw), px = im.data;     // silhueta nítida (sem meias-tintas)
+    for (let i = 0; i < px.length; i += 4) px[i + 3] = px[i + 3] >= 110 ? 255 : 0;
+    g.putImageData(im, 0, 0);
+    frame = document.createElement('canvas'); frame.width = bw; frame.height = bw;
+    frame.getContext('2d').drawImage(buf, 0, 0);              // cópia (buf é reaproveitado)
+    this._mwCache[ckey] = frame;
+    return frame;
+  },
+  // blita o quadro pixel da arma branca na mão do herói (ampliado, nearest)
+  drawMeleeSwing(ctx, wx, wy, worldScale, aim, kind, col, glow) {
+    const PXF = this.PXF;
+    const buf = this._pixMeleeFrame(kind, col, glow, aim, PXF);
+    const c = buf.width / 2;
+    ctx.save(); ctx.imageSmoothingEnabled = false;
+    ctx.translate(wx, wy); ctx.scale(worldScale * PXF, worldScale * PXF);
+    ctx.drawImage(buf, -c, -c);
+    ctx.restore();
   },
 
   // chest/hands anchor where the weapon is held (world coords, no camera)

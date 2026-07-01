@@ -40,16 +40,58 @@ class Bullet {
     this.freezeT = opts.freezeT || 0; this.slowT = opts.slowT || 0; this.slowK = opts.slowK || 0.5;
     this.burnT = opts.burnT || 0; this.burnDps = opts.burnDps || 0;
     this.homing = opts.homing || false;   // míssil teleguiado (procura o inimigo mais próximo)
+    // ---- MECÂNICAS NOVAS do arsenal expandido ----
+    this.poison = opts.poison || false;   // envenena o inimigo ao acertar
+    this.poisonT = opts.poisonT || 4; this.poisonDps = opts.poisonDps || 5;
+    this.stun = opts.stun || 0;           // atordoa (staggera) o inimigo ao acertar
+    this.launch = opts.launch || 0;       // arremessa o inimigo PRO ALTO ao acertar
+    this.blast = opts.blast || 0;         // arremessa o inimigo p/ LONGE (voa pra fora da câmera)
+    this.teleUp = opts.teleUp || 0;       // TELETRANSPORTA o inimigo N tiles pra cima
+    this.chain = opts.chain || 0;         // relâmpago em cadeia: salta p/ N inimigos próximos
+    this.chainRange = opts.chainRange || 150; this.chainDmg = opts.chainDmg || null;
+    this.bounce = opts.bounce || 0;       // ricocheteia nas paredes N vezes
+    this.split = opts.split || null;      // estilhaça em fragmentos ao morrer {n,kind,speed,dmg,...}
+    this.boomerang = opts.boomerang || 0; // retorna ao dono após `boomerang` segundos (0 = nunca)
+    this.owner = opts.owner || null;      // dono (p/ retorno do bumerangue)
+    this.ghost = opts.ghost || false;     // ignora o terreno (bumerangues/projéteis fantasma)
+    this._age = 0;
+  }
+  // fragmenta em vários projéteis menores (bombas de fragmentação, prisma…)
+  _burst(game) {
+    if (!this.split || this._didSplit) return; this._didSplit = true;
+    const s = this.split, n = s.n || 5;
+    for (let i = 0; i < n; i++) {
+      const a = (s.radial ? (i / n) * TAU : this.ang + (i - (n - 1) / 2) * (s.spread || 0.5));
+      game.bullets.push(new Bullet(this.x, this.y, a, s.speed || 560, Object.assign(
+        { faction: this.faction, kind: s.kind || 'ember', dmg: s.dmg || 8, tileDmg: s.tileDmg || 6,
+          r: s.r || 3, life: s.life || 0.5, knock: s.knock || 60, grav: s.grav || 0, color: s.color }, s.opts || {})));
+    }
   }
   detonate(game) {
+    this._burst(game);
     if (this.explosive > 0) game.world.explode(this.x, this.y, this.explosive, this.dmg);
     else { game.fx.spark(this.x, this.y, this.color, 4); }
     this.alive = false;
   }
   update(dt, game) {
+    this._age += dt;
     this.life -= dt;
     if (this.life <= 0) { this.detonate(game); return; }
+    // ---- BUMERANGUE: depois de `boomerang`s, curva de volta ao dono ----
+    if (this.boomerang && this._age > this.boomerang) {
+      const o = this.owner || game.player;
+      if (o && !o.dead) {
+        const ta = Math.atan2(o.cy - this.y, o.cx - this.x), ca = Math.atan2(this.vy, this.vx);
+        let d = ta - ca; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU;
+        const na = ca + clamp(d, -7 * dt, 7 * dt), sp = Math.hypot(this.vx, this.vy);
+        this.vx = Math.cos(na) * sp; this.vy = Math.sin(na) * sp; this.ang = na;
+        if (this.faction === 'player' && aabb({ x: this.x - 8, y: this.y - 8, w: 16, h: 16 }, o)) this.alive = false;   // recolhido
+      }
+    }
     if (this.kind === 'fireball' && Math.random() < 0.7) game.fx.spark(this.x, this.y, pick(['#ff8a3c', '#ffd86b', '#ff5b2c']), 1); // rastro flamejante
+    if ((this.kind === 'meteor' || this.kind === 'wisp') && Math.random() < 0.85) game.fx.spark(this.x, this.y, pick(['#ff8a3c', '#ffd86b', this.color || '#ff5b2c']), 1);
+    if ((this.kind === 'plasma' || this.kind === 'orb') && Math.random() < 0.4) game.fx.spark(this.x, this.y, this.color, 1);
+    if (this.kind === 'void' && Math.random() < 0.5) game.fx.spark(this.x + rand(-4, 4), this.y + rand(-4, 4), '#c479ff', 1);
     if (this.homing && this.faction === 'player') {                       // míssil arcano teleguiado
       const e = game.nearestEnemy ? game.nearestEnemy(this.x, this.y, 460) : null;
       if (e) {
@@ -70,10 +112,23 @@ class Bullet {
       this.y += this.vy * dt / steps;
       if (this.y > game.world.pixelH + 60) { this.alive = false; return; }
       if (game.world.solidPx(this.x, this.y)) {
+        if (this.ghost) continue;                              // FANTASMA: atravessa o terreno
         const T = game.world.T;
         const c = Math.floor(this.x / T), r = Math.floor(this.y / T);
+        if (this.bounce > 0) {                                 // RICOCHETE: reflete na parede e segue
+          this.bounce--;
+          const hx = game.world.solidPx(this.x + sign(this.vx) * (this.r + 2), this.y);
+          const hy = game.world.solidPx(this.x, this.y + sign(this.vy) * (this.r + 2));
+          if (hx) this.vx = -this.vx; if (hy) this.vy = -this.vy;
+          if (!hx && !hy) { this.vx = -this.vx; this.vy = -this.vy; }
+          this.x += this.vx * dt / steps * 1.5; this.y += this.vy * dt / steps * 1.5;
+          this.ang = Math.atan2(this.vy, this.vx);
+          game.fx.spark(this.x, this.y, this.color, 3);
+          return;
+        }
         if (this.explosive > 0) { this.detonate(game); }
         else {
+          this._burst(game);
           game.carveTiles(c, r, this.tileDmg, { power: 70 });   // ~2 tiles de altura + ~40% um 3º
           game.fx.spark(this.x, this.y, this.kind === 'flame' ? '#ff8a3c' : '#fff', 3);
           this.alive = false;
@@ -150,6 +205,68 @@ class Bullet {
       if (this.kind === 'crescent') { ctx.fillStyle = 'rgba(26,12,48,0.55)'; ctx.beginPath(); ctx.arc(0, 0, r * 0.78, -0.95, 0.95); ctx.arc(r * 0.5, 0, r * 0.78, 0.95, -0.95, true); ctx.closePath(); ctx.fill(); }
       ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.globalAlpha = clamp(this.life * 2, 0.3, 0.9);
       ctx.beginPath(); ctx.arc(0, 0, r, -1.1, -0.55); ctx.lineWidth = 2.2; ctx.strokeStyle = '#fff'; ctx.stroke();
+    } else if (this.kind === 'plasma') {               // dardo de plasma — cápsula com núcleo claro
+      ctx.translate(x, y); ctx.rotate(this.ang);
+      ctx.shadowColor = this.color; ctx.shadowBlur = 12;
+      ctx.fillStyle = this.color; ctx.beginPath(); ctx.ellipse(0, 0, this.r * 1.9, this.r * 0.9, 0, 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(this.r * 0.4, 0, this.r * 0.9, this.r * 0.5, 0, 0, TAU); ctx.fill();
+    } else if (this.kind === 'arc') {                  // raio em cadeia — ziguezague grosso e brilhante
+      ctx.translate(x, y); ctx.rotate(this.ang);
+      ctx.strokeStyle = this.color; ctx.shadowColor = this.color; ctx.shadowBlur = 12; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-this.r * 2.2, 0); ctx.lineTo(-this.r, -this.r); ctx.lineTo(this.r * 0.4, this.r * 0.8); ctx.lineTo(this.r * 1.4, -this.r * 0.5); ctx.lineTo(this.r * 2.4, 0); ctx.stroke();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+    } else if (this.kind === 'rail') {                 // traçador de trilho — feixe fino e longo
+      ctx.translate(x, y); ctx.rotate(this.ang);
+      ctx.fillStyle = this.color; ctx.shadowColor = this.color; ctx.shadowBlur = 12; ctx.fillRect(-16, -1.2, 32, 2.4);
+      ctx.fillStyle = '#fff'; ctx.fillRect(-16, -0.5, 32, 1);
+    } else if (this.kind === 'orb') {                  // orbe de energia pulsante com anel
+      const pl = 0.8 + Math.sin(this._age * 20) * 0.2;
+      ctx.shadowColor = this.color; ctx.shadowBlur = 12;
+      ctx.strokeStyle = this.color; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(x, y, this.r * 1.5 * pl, 0, TAU); ctx.stroke();
+      ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(x, y, this.r, 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, y, this.r * 0.45, 0, TAU); ctx.fill();
+    } else if (this.kind === 'void') {                 // esfera do abismo — núcleo escuro + borda púrpura
+      ctx.shadowColor = '#c479ff'; ctx.shadowBlur = 14;
+      ctx.fillStyle = '#c479ff'; ctx.beginPath(); ctx.arc(x, y, this.r * 1.3, 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0; ctx.fillStyle = '#12081e'; ctx.beginPath(); ctx.arc(x, y, this.r * 0.85, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(196,121,255,0.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, this.r * 1.3, this._age * 6, this._age * 6 + 2.2); ctx.stroke();
+    } else if (this.kind === 'gear') {                 // engrenagem de latão girando
+      ctx.translate(x, y); ctx.rotate(this.rot || 0);
+      ctx.fillStyle = this.color || '#caa33a';
+      ctx.beginPath(); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU, rr = i % 2 ? this.r : this.r * 0.66; const px = Math.cos(a) * rr, py = Math.sin(a) * rr; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#3a2a1a'; ctx.beginPath(); ctx.arc(0, 0, this.r * 0.3, 0, TAU); ctx.fill();
+    } else if (this.kind === 'sonic') {                // onda de choque sônica — arcos concêntricos
+      ctx.translate(x, y); ctx.rotate(this.ang);
+      ctx.strokeStyle = this.color; ctx.shadowColor = this.color; ctx.shadowBlur = 10; ctx.lineWidth = 2.4;
+      for (let i = 1; i <= 3; i++) { ctx.beginPath(); ctx.arc(-i * 2, 0, this.r * (0.5 + i * 0.5), -1.1, 1.1); ctx.stroke(); }
+    } else if (this.kind === 'star') {                 // estrela arcana cintilante
+      ctx.translate(x, y); ctx.rotate(this.rot || this._age * 4);
+      ctx.fillStyle = this.color; ctx.shadowColor = this.color; ctx.shadowBlur = 12;
+      ctx.beginPath(); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, rr = i % 2 ? this.r * 1.7 : this.r * 0.6; const px = Math.cos(a) * rr, py = Math.sin(a) * rr; i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } ctx.closePath(); ctx.fill();
+      ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, this.r * 0.4, 0, TAU); ctx.fill();
+    } else if (this.kind === 'shard' || this.kind === 'crystal') {   // estilhaço cristalino
+      ctx.translate(x, y); ctx.rotate(this.ang);
+      ctx.fillStyle = this.color; ctx.shadowColor = this.color; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.moveTo(this.r * 1.8, 0); ctx.lineTo(0, -this.r); ctx.lineTo(-this.r, 0); ctx.lineTo(0, this.r); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(this.r * 1.1, 0); ctx.lineTo(0, -this.r * 0.4); ctx.lineTo(0, this.r * 0.4); ctx.closePath(); ctx.fill();
+    } else if (this.kind === 'boomerang') {            // lâmina bumerangue em V, girando
+      ctx.translate(x, y); ctx.rotate(this.rot || 0);
+      ctx.fillStyle = this.color || '#caa45a'; ctx.strokeStyle = '#3a2a1a'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(-this.r, -this.r); ctx.lineTo(this.r, 0); ctx.lineTo(-this.r, this.r); ctx.lineTo(-this.r * 0.3, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else if (this.kind === 'ember' || this.kind === 'wisp' || this.kind === 'meteor') {   // brasa / fogo-fátuo / meteoro
+      const c = this.color || '#ff8a3c';
+      ctx.shadowColor = c; ctx.shadowBlur = this.kind === 'meteor' ? 16 : 10;
+      ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, this.r * (this.kind === 'meteor' ? 1.3 : 1), 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0; ctx.fillStyle = '#ffe9a8'; ctx.beginPath(); ctx.arc(x, y, this.r * 0.5, 0, TAU); ctx.fill();
+    } else if (this.kind === 'glob') {                 // gosma venenosa com brilho
+      ctx.fillStyle = this.color || '#8ef06a'; ctx.shadowColor = this.color || '#8ef06a'; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.ellipse(x, y, this.r, this.r * 1.15, 0, 0, TAU); ctx.fill();
+      ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(x - this.r * 0.3, y - this.r * 0.3, this.r * 0.25, 0, TAU); ctx.fill();
+    } else if (this.kind === 'harpoon') {              // arpão farpado
+      ctx.translate(x, y); ctx.rotate(this.ang);
+      ctx.fillStyle = '#5a4326'; ctx.fillRect(-9, -1, 12, 2);
+      ctx.fillStyle = this.color || '#cfd2d6'; ctx.beginPath(); ctx.moveTo(2, -3); ctx.lineTo(10, 0); ctx.lineTo(2, 3); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(4, -1); ctx.lineTo(0, -4); ctx.lineTo(4, -0.5); ctx.fill(); ctx.beginPath(); ctx.moveTo(4, 1); ctx.lineTo(0, 4); ctx.lineTo(4, 0.5); ctx.fill();
     } else {
       // glowing pellet/ball
       ctx.fillStyle = this.color; ctx.shadowColor = this.color; ctx.shadowBlur = 8;
@@ -372,7 +489,11 @@ class Player extends Entity {
     this.flyT = 0; this.phaseT = 0; this.invisT = 0; this.hasteT = 0; this.wardHp = 0;
     // ---- técnicas do Ragnarok: postura de arma branca (golpe C) + frenesi/roubo de vida ----
     this.meleeStance = null; this.meleeStanceT = 0; this.berserkT = 0; this.lifestealT = 0;
+    // ---- arma branca EQUIPADA (Modo Criação / seleção): define o golpe C ----
+    this.meleeKey = null;
   }
+  // equipa uma ARMA BRANCA do registro MELEE (usada no Modo Criação; null = espada padrão)
+  equipMelee(key) { this.meleeKey = (typeof MELEE !== 'undefined' && MELEE[key]) ? key : null; }
   setHero(i) {
     this.heroIndex = i;
     const H = HEROES[i];
@@ -622,6 +743,7 @@ class Player extends Entity {
       const w = WEAPONS[this.weaponKey] || WEAPONS.scatter;
       if (this.powered > 0 && w.poweredFire) w.poweredFire(this, game);
       else w.fire(this, game);
+      if (w.kick) this.recoilKick(w.kick, game);   // COICE: empurra o corpo p/ trás
       this.shootT = 0.18;   // marca tiro recente (anim "agachado atirando")
     }
     if (c.special && this.specCool <= 0) {
@@ -665,13 +787,20 @@ class Player extends Entity {
   // uma com alcance, dano, recuo, efeito (atordoar/incendiar) e visual próprios.
   meleeProfile() {
     const mult = this.berserkT > 0 ? 1.5 : 1;
+    // 1) POSTURA do Ragnarok (Códice de Guerra) tem prioridade
     switch (this.meleeStance) {
       case 'hammer':       return { range: 60, dmg: 40 * mult, tileDmg: 60, knock: 520, color: 'rgba(255,210,120,0.95)', shake: 7, stun: 0.8, cd: 0.5 };
       case 'fists':        return { range: 46, dmg: 18 * mult, tileDmg: 14, knock: 160, color: 'rgba(255,150,70,0.95)', shake: 3, ignite: [3, 8], cd: 0.28 };
       case 'flamesword':   return { range: 58, dmg: 32 * mult, tileDmg: 26, knock: 240, color: 'rgba(255,140,60,0.95)', shake: 4, ignite: [3, 7], cd: 0.4 };
       case 'transcendent': return { range: 72, dmg: 38 * mult, tileDmg: 30, knock: 300, color: 'rgba(155,107,255,0.95)', shake: 5, ranged: true, cd: 0.42 };
-      default:             return { range: 54, dmg: 28 * mult, tileDmg: 22, knock: 250, color: 'rgba(230,238,255,0.95)', shake: 4, cd: 0.4 };
     }
+    // 2) ARMA BRANCA equipada (registro MELEE — Modo Criação / seleção)
+    if (this.meleeKey && typeof MELEE !== 'undefined' && MELEE[this.meleeKey]) {
+      const w = MELEE[this.meleeKey];
+      return Object.assign({}, w, { dmg: (w.dmg != null ? w.dmg : 28) * mult });
+    }
+    // 3) espada padrão
+    return { range: 54, dmg: 28 * mult, tileDmg: 22, knock: 250, color: 'rgba(230,238,255,0.95)', shake: 4, cd: 0.4 };
   }
 
   // helper used by hero weapon definitions
@@ -695,6 +824,16 @@ class Player extends Entity {
     this.ammo -= n;
     if (this.ammo <= 0) { this.ammo = 0; this.reloading = this.reloadTime; }
   }
+  // COICE da arma: empurra o corpo para trás ao disparar. `kick` (px/s):
+  // 0 = nenhum · ~80 suave · ~300 agressivo. Kicks médios dão um leve saltinho
+  // (tira do chão) p/ o recuo DESLIZAR de verdade em vez de o atrito comê-lo.
+  recoilKick(kick, game) {
+    if (!kick) return;
+    this.vx -= this.face * kick;
+    if (kick >= 90) this.vy = Math.min(this.vy, -Math.min(70, kick * 0.16));   // saltinho do coice
+    if (kick >= 150 && this.onGround) game.fx.smoke(this.cx - this.face * this.w * 0.4, this.y + this.h, 2);
+    if (kick >= 200) game.cam.addShake(kick / 120);
+  }
 
   draw(ctx, cam) {
     if (this.dead) {
@@ -714,7 +853,34 @@ class Player extends Entity {
     if (this.invisT > 0) ctx.globalAlpha = Math.min(ctx.globalAlpha, 0.32);             // MANTO ETÉREO: quase invisível
     else if (this.phaseT > 0) ctx.globalAlpha = Math.min(ctx.globalAlpha, 0.55);        // FORMA ETÉREA: translúcido
     drawFighter(ctx, this, cam, true);
+    this._drawMeleeSwing(ctx, cam);
     ctx.globalAlpha = 1;
+  }
+
+  // desenha a ARMA BRANCA empunhada varrendo o arco durante o golpe (tecla C),
+  // usando o visual da arma equipada — assim o golpe fica integrado ao sprite.
+  _drawMeleeSwing(ctx, cam) {
+    // só desenha a arma quando uma ARMA BRANCA está equipada (Modo Criação);
+    // sem isso, as posturas do Ragnarok (punhos/martelo) usam as sprites de ataque.
+    if (!(this.attackArc > 0) || this.dead || !this.meleeKey || typeof SPR === 'undefined' || !SPR.drawMeleeSwing) return;
+    const prof = (typeof MELEE !== 'undefined') ? MELEE[this.meleeKey] : null;
+    if (!prof) return;
+    const visual = prof.visual || 'sword';
+    const col = prof.blade || '#dfe7ef';
+    const glow = !!prof.glow;
+    const ga = SPR.gunAnchor(this), f = this.face < 0 ? -1 : 1;
+    const thrust = prof.swing === 'thrust';
+    const t = 1 - clamp(this.attackArc, 0, 1);                   // 0 → 1 conforme o golpe avança
+    // ESTOCADA (lança/chicote): avança reto; demais: arco de cima p/ baixo.
+    // o `aim` embute o lado (facing) — a arma pixel é assada já rotacionada.
+    const sweep = thrust ? (-0.12 + Math.sin(t * Math.PI) * 0.12) : lerp(-1.35, 1.2, t);
+    const aim = f > 0 ? sweep : (Math.PI - sweep);
+    const reach = thrust ? Math.sin(t * Math.PI) * (prof.range || 60) * 0.35 : 0;
+    const worldScale = this.h / 42;
+    ctx.save();
+    ctx.globalAlpha = clamp(this.attackArc * 2.2, 0.45, 1);
+    SPR.drawMeleeSwing(ctx, ga.x + cam.ox + f * reach, ga.y + cam.oy, worldScale, aim, visual, col, glow);
+    ctx.restore();
   }
 
   // auras dos buffs de feitiço (escudo de pedra, voo, pressa)

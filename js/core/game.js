@@ -273,46 +273,133 @@ class Game {
     this.cam.addShake(o.shake || 3);
   }
 
-  // golpe corpo-a-corpo em VOLTA do herói (tecla C): atinge os DOIS lados e
-  // ACIMA, mas NUNCA abaixo dos pés — não quebra o chão sob o personagem.
+  // golpe corpo-a-corpo (tecla C). Perfil vindo de MELEE / postura do Ragnarok.
+  // Padrão: golpe em VOLTA (lados + acima, nunca abaixo dos pés). Variações:
+  // swing:'thrust' = estocada reta e longa. Efeitos: rebater tiros, arremessar
+  // pro alto, puxar, incendiar, congelar, sangrar, atordoar, cadeia, ondas…
   meleeRadial(p, o) {
     const range = o.range, kn = o.knock != null ? o.knock : 200, dmg = o.dmg, td = o.tileDmg != null ? o.tileDmg : dmg;
     const T = this.world.T, cx = p.cx, cy = p.cy, feetY = p.y + p.h;
+    const thrust = o.swing === 'thrust', dir = p.face, ang = p.aimAng;
+    if (o.deflect) this._deflectProjectiles(p, range);   // REBATE tiros/flechas à frente
     let hits = 0;
-    // inimigos ao redor (ignora os que estão claramente abaixo dos pés)
-    for (const e of this.enemies) {
-      if (!e.alive) continue;
-      const dx = e.cx - cx, dy = e.cy - cy, d = Math.hypot(dx, dy);
-      if (d > range + e.w * 0.5) continue;
-      if (e.cy > feetY + 6) continue;                 // abaixo dos pés → não atinge
-      const kd = sign(dx) || p.face;
+    const apply = (e) => {
+      const kd = thrust ? dir : (sign(e.cx - cx) || dir);
       e.hurt(dmg, kd, this);
-      e.vx += kd * kn; e.vy -= 70; hits++;
-      this.fx.blood(e.cx, e.cy, kd, 6);
-      this.fx.spark(e.cx, e.cy, '#fff2b0', 6);          // faíscas ao acertar
-      // ---- efeitos de POSTURA do Ragnarok (arma branca equipada) ----
+      e.vx += kd * kn;
+      if (o.launch) { e.vy = -o.launch; e.onGround = false; } else e.vy -= 70;   // arremessa pro alto
+      if (o.pull) e.vx += sign(cx - e.cx) * o.pull;        // CHICOTE: puxa o inimigo
+      hits++;
+      this.fx.blood(e.cx, e.cy, kd, 6); this.fx.spark(e.cx, e.cy, '#fff2b0', 6);
       if (o.ignite) { e.ignite(o.ignite[0], o.ignite[1]); this.fx.fire(e.cx, e.cy, 3); }
+      if (o.freeze) { e.freeze(o.freeze); this.fx.spark(e.cx, e.cy, '#bfe8ff', 6); }
+      if (o.slow) e.slow(o.slow[0], o.slow[1]);
       if (o.bleed) { e.envenom(3, 5); this.fx.blood(e.cx, e.cy, kd, 5); }
       if (o.stun) { e.stagger = Math.max(e.stagger, o.stun); this.fx.spark(e.cx, e.cy - 6, '#ffd86b', 6); }
+      if (o.blast) this._blastAway(e, kd, o.blast);        // manda voando p/ LONGE
+      if (o.teleUp) this._teleportUp(e, o.teleUp);         // TELETRANSPORTE pra cima
+      if (o.chain) this._chainLightning(e, { chain: o.chain.n, chainRange: o.chain.range, chainDmg: o.chain.dmg, dmg, color: '#bff0ff', stun: o.stun }, kd);
+    };
+    if (thrust) {
+      // ESTOCADA: faixa estreita à frente, alcance longo
+      for (const e of this.enemies) {
+        if (!e.alive) continue;
+        const fwd = (e.cx - cx) * dir, off = Math.abs(e.cy - cy);
+        if (fwd > -e.w * 0.5 && fwd < range && off < T * 0.9 + e.h * 0.3) apply(e);
+      }
+      for (let r = T * 0.4; r <= range; r += T * 0.6) this.world.damage(Math.floor((cx + dir * r) / T), Math.floor(cy / T), td, { power: 80 });
+    } else {
+      // golpe em VOLTA (ignora os que estão claramente abaixo dos pés)
+      for (const e of this.enemies) {
+        if (!e.alive) continue;
+        if (Math.hypot(e.cx - cx, e.cy - cy) > range + e.w * 0.5) continue;
+        if (e.cy > feetY + 6) continue;
+        apply(e);
+      }
+      const feetRow = Math.floor((feetY - 1) / T);
+      const c0 = Math.floor((cx - range) / T), c1 = Math.floor((cx + range) / T), r0 = Math.floor((cy - range) / T);
+      for (let r = r0; r <= feetRow; r++) for (let c = c0; c <= c1; c++) {
+        const tcx = c * T + T / 2, tcy = r * T + T / 2;
+        if (Math.hypot(tcx - cx, tcy - cy) > range) continue;
+        this.world.damage(c, r, td, { power: 80 });
+      }
     }
-    // tiles ao redor: lados + acima, até a linha dos pés (nunca abaixo)
-    const feetRow = Math.floor((feetY - 1) / T);
-    const c0 = Math.floor((cx - range) / T), c1 = Math.floor((cx + range) / T), r0 = Math.floor((cy - range) / T);
-    for (let r = r0; r <= feetRow; r++) for (let c = c0; c <= c1; c++) {
-      const tcx = c * T + T / 2, tcy = r * T + T / 2;
-      if (Math.hypot(tcx - cx, tcy - cy) > range) continue;
-      this.world.damage(c, r, td, { power: 80 });
+    // QUAKE (marreta sísmica): abala e arremessa TODOS num raio grande
+    if (o.quake) {
+      for (const e of this.enemies) { if (!e.alive) continue; if (Math.hypot(e.cx - cx, e.cy - cy) >= range * 2.2) continue; e.hurt(Math.round(dmg * 0.5), sign(e.cx - cx) || dir, this); e.vy = -(o.launch || 400); e.onGround = false; e.vx += (sign(e.cx - cx) || 1) * 120; hits++; }
+      this.fx.shock(cx, feetY, range * 2.2, '#caa33a'); this.flashScreen(0.12);
     }
-    // postura TRANSCENDENTAL: cada golpe também projeta um crescente de energia à frente
-    if (o.ranged) { const m = p.muzzlePos(); this.bullets.push(new Bullet(m.x, m.y, p.aimAng, 760, { faction: 'player', kind: 'crescent', color: '#9b6bff', dmg: Math.round(dmg * 0.7), tileDmg: 14, r: 12, life: 0.7, pierce: 5, knock: 140 })); }
-    // RAGNAROK acumula FÚRIA ao golpear; e cura com roubo de vida quando em frenesi
+    // ONDA de corte: postura transcendente (ranged) ou armas com `wave`
+    if (o.ranged) this.bullets.push(new Bullet(p.muzzlePos().x, p.muzzlePos().y, ang, 760, { faction: 'player', kind: 'crescent', color: '#9b6bff', dmg: Math.round(dmg * 0.7), tileDmg: 14, r: 12, life: 0.7, pierce: 5, knock: 140 }));
+    if (o.wave) this._meleeWave(p, o.wave, dmg);
+    // RAGNAROK acumula FÚRIA; roubo de vida da arma (lifesteal) e do frenesi
     if (hits && p.hero && p.hero.key === 'ragnarok') p.gainSpecial(5 * hits);
+    if (hits && o.lifesteal) { p.hp = clamp(p.hp + o.lifesteal * hits, 0, p.maxhp); this.fx.spark(p.cx, p.cy, '#7be08a', 4); this.fx.text(p.cx, p.y - 6, '+' + (o.lifesteal * hits), '#7be08a'); }
     if (hits && (p.lifestealT > 0 || p.berserkT > 0)) { p.hp = clamp(p.hp + 4 * hits, 0, p.maxhp); this.fx.spark(p.cx, p.cy, '#d34a3a', 3); }
-    // efeito visual: UM corte contínuo (arco de ~270° ao redor) + faíscas
+    // efeito visual do golpe
     const col = o.color || 'rgba(255,255,255,0.92)';
-    this.fx.swirl(cx, cy - 4, range * 0.86, col, p.face);
-    this.fx.spark(cx + p.face * range * 0.4, cy - range * 0.3, '#fff2b0', 12);   // faíscas do golpe
+    if (thrust) this.fx.slash(cx + dir * range * 0.5, cy, ang, range * 0.7, col);
+    else { this.fx.swirl(cx, cy - 4, range * 0.86, col, p.face); this.fx.spark(cx + p.face * range * 0.4, cy - range * 0.3, '#fff2b0', 12); }
     this.cam.addShake(o.shake || 3);
+  }
+
+  // rebate projéteis inimigos à frente do herói: viram da facção do jogador,
+  // ganham dano e voltam voando para quem os disparou (escudos/sabres/bordão).
+  _deflectProjectiles(p, range) {
+    const cx = p.cx, cy = p.cy, dir = p.face; let n = 0;
+    for (const b of this.bullets) {
+      if (!b.alive || b.faction === 'player') continue;
+      const fwd = (b.x - cx) * dir, off = Math.abs(b.y - cy);
+      if (fwd > -12 && fwd < range + 18 && off < range * 0.85) {
+        b.faction = 'player'; b.hitSet = null;
+        const sp = Math.max(Math.hypot(b.vx, b.vy), 360) + 160;
+        b.vx = dir * sp; b.vy *= -0.25; b.ang = Math.atan2(b.vy, b.vx);
+        b.dmg = Math.round(b.dmg * 1.6); b.knock = Math.max(b.knock || 0, 140); b.pierce = Math.max(b.pierce, 1);
+        this.fx.spark(b.x, b.y, '#fff', 6); this.fx.miniShock(b.x, b.y, '#bff0ff', 3); n++;
+      }
+    }
+    if (n) { this.fx.text(cx, p.y - 8, 'REBATIDO!', '#bff0ff'); Sound.hit(); this.cam.addShake(2); }
+  }
+
+  // relâmpago em cadeia: salta do inimigo atingido para até N vizinhos próximos.
+  _chainLightning(from, b, dir) {
+    const n = b.chain, range = b.chainRange || 150, dmg = b.chainDmg || Math.round(b.dmg * 0.7);
+    let prev = from; const hit = new Set([from]);
+    for (let i = 0; i < n; i++) {
+      let best = null, bd = range;
+      for (const e of this.enemies) { if (!e.alive || hit.has(e) || e.dying != null) continue; const d = Math.hypot(e.cx - prev.cx, e.cy - prev.cy); if (d < bd) { bd = d; best = e; } }
+      if (!best) break;
+      best.hurt(dmg, sign(best.cx - prev.cx) || dir, this);
+      if (b.stun) best.stagger = Math.max(best.stagger, b.stun);
+      this.fx.bolt(prev.cx, prev.cy, best.cx, best.cy, b.color || '#bff0ff'); this.fx.miniShock(best.cx, best.cy, '#bff0ff', 3);
+      hit.add(best); prev = best;
+    }
+  }
+
+  // manda o inimigo VOANDO para longe (some do enquadramento). O stagger longo
+  // impede a IA de frear a arrancada; fica no ar p/ não sofrer atrito do chão.
+  _blastAway(e, dir, power) {
+    if (e.boss) { e.vx += dir * power * 0.12; return; }
+    e.stagger = Math.max(e.stagger, 0.9);
+    e.vx = dir * power; e.vy = -Math.min(380, power * 0.18); e.onGround = false;
+    this.fx.spark(e.cx, e.cy, '#fff', 8); this.fx.smoke(e.cx, e.cy, 3); this.cam.addShake(2);
+  }
+  // TELETRANSPORTA o inimigo N tiles para cima (para antes de um bloco sólido) e
+  // o deixa cair de volta — reação "gravitacional/abissal".
+  _teleportUp(e, tiles) {
+    if (e.boss) { e.vy = -420; e.onGround = false; return; }
+    const T = this.world.T; let ny = e.y;
+    for (let t = 1; t <= tiles; t++) { const ty = e.y - t * T; if (this.world.solidPx(e.cx, ty) || this.world.solidPx(e.cx, ty + e.h)) break; ny = ty; }
+    this.fx.magic(e.cx, e.cy, '#c479ff', 12); this.fx.smoke(e.cx, e.cy, 2);
+    e.y = Math.max(-60, ny); e.vy = 40; e.onGround = false; e.stagger = Math.max(e.stagger, 0.25);
+    this.fx.magic(e.cx, e.cy, '#c479ff', 14); this.fx.text(e.cx, e.y - 6, '↑', '#c479ff');
+  }
+
+  // onda(s) de corte disparada(s) por uma arma branca (katana/glaive/colossal…).
+  _meleeWave(p, w, baseDmg) {
+    const m = p.muzzlePos(), ang = p.aimAng;
+    const mk = (a) => this.bullets.push(new Bullet(m.x, m.y, a, w.speed || 720, { faction: 'player', kind: w.kind || 'slashwave', color: w.color, dmg: w.dmg || Math.round(baseDmg * 0.6), tileDmg: w.tileDmg || 12, r: w.r || 12, life: w.life || 0.6, pierce: w.pierce || 4, knock: w.knock || 100 }));
+    mk(ang); if (w.both) mk(ang + Math.PI);
   }
 
   collectOregano(pk) {
@@ -461,11 +548,16 @@ class Game {
     const p = this.player;
     if (p) p.update(dt, this);
 
-    // FASE DE TESTES: 1–9 = arma rápida · , . = ciclar TODAS · B = invocar inimigo · M = limpar
+    // FASE DE TESTES: 1–9 = arma rápida · , . = ciclar armas de fogo · K L = ciclar armas brancas
+    //                 B = invocar inimigo · N = chefe · M = limpar
     if (this.testMode && p && !p.dead) {
       for (let i = 0; i < WEAPON_ORDER.length && i < 9; i++) if (Input.once(String(i + 1))) this._testEquip(i);
       if (Input.once(',')) this._testEquip(((this._testWi || 0) - 1 + WEAPON_ORDER.length) % WEAPON_ORDER.length);
       if (Input.once('.')) this._testEquip(((this._testWi || 0) + 1) % WEAPON_ORDER.length);
+      if (typeof MELEE_ORDER !== 'undefined') {
+        if (Input.once('k')) this._testEquipMelee(((this._testMwi || 0) - 1 + MELEE_ORDER.length) % MELEE_ORDER.length);
+        if (Input.once('l')) this._testEquipMelee(((this._testMwi || 0) + 1) % MELEE_ORDER.length);
+      }
       if (Input.once('b')) this._testSpawnEnemy();
       if (Input.once('n')) this._testSpawnMythos();
       if (Input.once('m')) { for (const e of this.enemies) e.alive = false; this.boss = null; this.fx.text(p.cx, p.y - 12, 'INIMIGOS LIMPOS', '#9be0ff'); Sound.swap(); }
@@ -539,6 +631,13 @@ class Game {
             if (b.freezeT) e.freeze(b.freezeT);                       // balas mágicas aplicam status
             if (b.slowT) e.slow(b.slowT, b.slowK);
             if (b.burnT) e.ignite(b.burnT, b.burnDps);
+            if (b.poison) e.envenom(b.poisonT, b.poisonDps);          // gosmas tóxicas
+            if (b.bleed) { e.envenom(3, 5); this.fx.blood(e.cx, e.cy, sign(b.vx) || 1, 5); }   // arpão/farpa
+            if (b.stun) e.stagger = Math.max(e.stagger, b.stun);      // pulso/tesla atordoam
+            if (b.launch) { e.vy = -b.launch; e.onGround = false; }   // arremessa PRO ALTO
+            if (b.blast) this._blastAway(e, sign(b.vx) || 1, b.blast); // manda voando p/ LONGE
+            if (b.teleUp) this._teleportUp(e, b.teleUp);               // TELETRANSPORTE pra cima
+            if (b.chain) this._chainLightning(e, b, sign(b.vx) || 1); // relâmpago em cadeia
             e.vx += sign(b.vx) * (b.knock * 0.5); Sound.hit();
             if (b.explosive) { b.detonate(this); break; }
             if (b.hitSet.size > b.pierce) { b.alive = false; break; }
@@ -638,6 +737,13 @@ class Game {
     this.player.equipWeapon(k);
     this.fx.text(this.player.cx, this.player.y - 12, (i + 1 <= 9 ? (i + 1) + '· ' : '') + WEAPONS[k].name, '#6fd0ff'); Sound.swap();
   }
+  // FASE DE TESTES: troca a ARMA BRANCA equipada (golpe C) — teclas K / L
+  _testEquipMelee(i) {
+    if (!this.player || typeof MELEE_ORDER === 'undefined') return;
+    this._testMwi = i; const k = MELEE_ORDER[i];
+    this.player.equipMelee(k);
+    this.fx.text(this.player.cx, this.player.y - 12, '✊ ' + (MELEE[k].name), '#e8b94a'); Sound.swap();
+  }
   _testSpawnEnemy() {
     const p = this.player; if (!p) return;
     const keys = Object.keys(ENEMY_TYPES).filter(k => !ENEMY_TYPES[k].boss);
@@ -689,10 +795,17 @@ class Game {
       y += h + rowGap;
     }
     ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'center';
-    ctx.fillStyle = '#9a8f7d'; ctx.font = '12px "Trebuchet MS"';
+    ctx.font = '12px "Trebuchet MS"';
+    // linha da ARMA BRANCA equipada (golpe C) — em dourado
+    if (typeof MELEE_ORDER !== 'undefined' && this.player) {
+      const mk = this.player.meleeKey || 'sword';
+      ctx.fillStyle = '#e8b94a';
+      ctx.fillText('✊ Arma branca (C): ' + ((MELEE[mk] && MELEE[mk].name) || 'Espada Longa') + '  ·  K / L trocam', CONFIG.W / 2, CONFIG.H - 24);
+    }
+    ctx.fillStyle = '#9a8f7d';
     const hasBook = this.player && typeof Grimoire !== 'undefined' && Grimoire.heroHasBook(this.player.morph ? this.player.morph.key : this.player.hero.key);
-    const tip = hasBook ? '✦ G árvore de habilidades · [ ] trocam · X usa · C golpe curto · B inimigo · N chefe MYTHOS · M limpa · S/D herói'
-                        : '1–9 armas · , . ciclam · B inimigo · N chefe MYTHOS · M limpa · S/D herói (Edward e Ragnarok têm árvores!)';
+    const tip = hasBook ? '✦ G árvore de habilidades · [ ] trocam · X usa · C golpe · B inimigo · N chefe · M limpa · S/D herói'
+                        : '1–9 armas de fogo · , . ciclam · C golpe · B inimigo · N chefe · M limpa · S/D herói';
     ctx.fillText(tip, CONFIG.W / 2, CONFIG.H - 9);
     ctx.restore(); ctx.textAlign = 'left';
   }

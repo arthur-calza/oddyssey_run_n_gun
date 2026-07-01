@@ -115,6 +115,18 @@ procedural**. As pastas `concept/`, `assets/`, `references/` e `pictures/` estã
 - **Nova arte de personagem:** PNG em `concept/`, mapeie em `tools/python/build_assets.py`,
   rode-o (gera `assets/<chave>.png`), rode `build_parts.py` e aponte `spr:'<chave>'` no
   herói/inimigo. Um `SPR.define('<chave>',{…})` opcional serve de fallback procedural.
+- **Nova arma de fogo:** adicione uma entrada em `WEAPONS` (`gameplay/heroes.js`) com
+  `name/icon/visual/cool/clip/reload/gunLen/desc` e `fire(p, game)` (chame `p.shoot(...)`);
+  registre a chave em `WEAPON_ORDER` p/ aparecer no Modo Criação. Mecânicas de projétil
+  (cadeia, ricochete, bumerangue, fragmentação, teleguiado, congelar, envenenar, `launch`
+  arremessar-pro-alto, `blast` mandar-voando, `teleUp` teletransportar) são flags do `Bullet`
+  em `gameplay/entities.js`; novos visuais de cano vão em `SPR._weapon`. O **coice** ao
+  disparar vem da tabela `WEAPON_KICK` (aplicada em `Player.recoilKick`).
+- **Nova arma branca:** adicione uma entrada em `MELEE` (`gameplay/heroes.js`) definindo o
+  perfil do golpe `C` (alcance/dano/cor + flags `swing/deflect/launch/blast/teleUp/pull/ignite/…`)
+  e registre em `MELEE_ORDER`. O desenho empunhado é **pixelizado** por `SPR.drawMeleeSwing`
+  (assado a partir do vetor `SPR.drawMeleeWeapon`); a lógica do golpe (rebate/onda/cadeia/quake/
+  reações) mora em `Game.meleeRadial` (`core/game.js`).
 - **Novo herói:** adicione um objeto em `HEROES` (`gameplay/heroes.js`) com `weapon.fire`
   e `special.use`.
 - **Novo inimigo:** adicione em `ENEMY_TYPES` e em `CHAR2ENEMY` (`gameplay/enemies.js`);

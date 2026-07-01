@@ -121,6 +121,24 @@ campo aberto pra calibrar animações e testar tudo já como Edward — troque p
 Ragnarok com `S`/`D`, cicle os Mythos com `N`), o **Estúdio de animação** e o
 **Editor de fases/construções**.
 
+Na **Fase de Testes** dá pra empunhar **todo o arsenal**: `1`–`9` escolhem armas
+de fogo rápidas e `,`/`.` ciclam por **todas as 42** (das espingardas de pólvora
+a **fuzis de plasma, carabinas Tesla, blasters, canhões de trilho, armas a vapor
+e cajados mágicos** — com relâmpago em cadeia, ricochete, teleguiados,
+fragmentação, congelamento, veneno e arremesso pro alto). As **25 armas brancas**
+(espada, sabre, katana, machados, martelos, lança, **escudo & lança**, alabarda,
+**chicote**, glaive, foices, garras, e **espadas colossais/lâminas místicas** de
+fogo, gelo, raio, luz e abismo) ciclam com `K`/`L` e golpeiam com `C` — várias
+**rebatem tiros/flechas**, **arremessam inimigos pro alto**, puxam, sangram ou
+soltam ondas de corte. O golpe desenha a **arma branca em pixel-art** (assada como
+os canos das armas de fogo) varrendo o arco.
+
+Cada arma tem **personalidade própria**: um **coice** ao disparar empurra o corpo
+pra trás na medida da arma (de nenhum, nas leves, ao lombo do Trabuco de Bronze),
+e certas armas causam **reações dramáticas** no inimigo — o Canhão de Pulso, o
+Martelo de Guerra e a Espada Colossal **mandam voando pra fora da tela**, enquanto
+o **Manipulador Gravitacional** e a **Foice do Abismo teletransportam pra cima**.
+
 ---
 
 ## 👩‍💻 Para desenvolvedores
