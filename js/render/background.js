@@ -127,31 +127,45 @@ const BG = {
     for (let x = 0; x < BW; x++) { g.lineTo(x, H[x]); g.lineTo(x + 1, H[x]); }   // topos em degrau
     g.lineTo(BW, BH); g.closePath(); g.fill();
     if (o.rim) { g.fillStyle = o.rim; const rh = o.rimH || 1; for (let x = 0; x < BW; x++) g.fillRect(x, H[x], 1, rh); }
+    // VÉU atmosférico abraçando o topo da silhueta — separa visualmente este
+    // plano do plano de trás (níveis de fundo bem definidos)
+    if (o.haze) { g.globalAlpha = o.hazeA || 0.16; g.fillStyle = o.haze; const hh = o.hazeH || 2; for (let x = 0; x < BW; x++) g.fillRect(x, H[x] - hh, 1, hh); g.globalAlpha = 1; }
   },
 
-  // nuvens "pixel" (aglomerados chapados que derivam + parallax)
+  // nuvens "pixel" ESTÁTICAS no mundo (só parallax — nada de deriva temporal):
+  // ficam paradas como parte da paisagem e deslizam apenas com a câmera.
   _clouds(g, cam, t, y, count, col, par) {
-    const BW = this.BW, range = BW + 90, vy = this._cy * par; g.fillStyle = col;
+    const BW = this.BW, range = BW + 90, vy = this._cy * par;
     for (let i = 0; i < count; i++) {
-      const cx = ((i * (range / count) + t * 6 - cam.x * par) % range + range) % range - 45;
+      const cx = ((i * (range / count) + (i * 29) % 23 - cam.x * par) % range + range) % range - 45;
       const cy = y - vy + ((i * 37) % 16) - 6, s = 1 + (i % 3) * 0.4;
-      this._cloud(g, Math.round(cx), Math.round(cy), s);
+      this._cloud(g, Math.round(cx), Math.round(cy), s, col);
     }
   },
-  _cloud(g, x, y, s) {
+  // nuvem com VOLUME: topo iluminado e base sombreada (leitura de forma no pixel-art)
+  _cloud(g, x, y, s, base) {
     const w = Math.round(16 * s), h = Math.round(5 * s);
+    const tx = x + Math.round(4 * s), tw = Math.round(9 * s);
+    if (base) g.fillStyle = base;
     g.fillRect(x, y, w, h);
-    g.fillRect(x + Math.round(4 * s), y - Math.round(3 * s), Math.round(9 * s), h);
+    g.fillRect(tx, y - Math.round(3 * s), tw, h);
     g.fillRect(x - Math.round(3 * s), y + 1, Math.round(7 * s), Math.max(2, h - 1));
+    g.fillStyle = 'rgba(255,255,255,0.22)';                        // luz no topo
+    g.fillRect(tx, y - Math.round(3 * s), tw, 1);
+    g.fillRect(x, y, Math.max(2, tx - x), 1);
+    g.fillRect(tx + tw, y, x + w - (tx + tw), 1);
+    g.fillStyle = 'rgba(8,10,22,0.20)';                            // sombra na barriga
+    g.fillRect(x - Math.round(3 * s), y + h - 1, Math.round(7 * s) + w + Math.round(3 * s), 1);
+    if (base) g.fillStyle = base;
   },
   // ---- ATMOSFERA EXTRA (camadas distantes p/ profundidade "3 níveis") ----
-  // banco de nuvens GRANDES e MUITO lentas (plano mais distante de todos)
+  // banco de nuvens GRANDES do plano mais distante — também estáticas no mundo
   _cloudBank(g, cam, t, y, count, col, par) {
-    const BW = this.BW, range = BW + 180, vy = this._cy * par; g.fillStyle = col;
+    const BW = this.BW, range = BW + 180, vy = this._cy * par;
     for (let i = 0; i < count; i++) {
-      const cx = ((i * (range / count) + t * 2.4 - cam.x * par) % range + range) % range - 90;
+      const cx = ((i * (range / count) + (i * 47) % 31 - cam.x * par) % range + range) % range - 90;
       const cy = y - vy + ((i * 53) % 18) - 9, s = 2.4 + (i % 3) * 0.8;
-      this._cloud(g, Math.round(cx), Math.round(cy), s);
+      this._cloud(g, Math.round(cx), Math.round(cy), s, col);
     }
   },
   // pássaros distantes (V em pixels) — vida ao céu dos biomas diurnos
@@ -363,8 +377,8 @@ const BG = {
     g.globalAlpha = 1;
   },
   _fog(g, t, y, col) {
-    g.globalAlpha = 0.12; g.fillStyle = col || '#3c466e';
-    for (let i = 0; i < 4; i++) { const fx = ((i * 92 + t * 9) % (this.BW + 90)) - 45; this._cloud(g, fx | 0, (y + i * 5) | 0, 1.7); }
+    g.globalAlpha = 0.12;
+    for (let i = 0; i < 4; i++) { const fx = ((i * 92 + t * 9) % (this.BW + 90)) - 45; this._cloud(g, fx | 0, (y + i * 5) | 0, 1.7, col || '#3c466e'); }
     g.globalAlpha = 1;
   },
   _smokeColumns(g, cam, t, col, par) {
@@ -384,35 +398,37 @@ const BG = {
   // Castelo (noite): estrelas, lua, montanhas, muralhas com torres variadas, névoa.
   castle(g, cam, L, t, BW, BH) {
     const sky = this._hex(L.sky[0]), ls = ((L.seed || 0) * 97) | 0, vy = this._cy;
+    const lt = this._rgb(this._mix(sky, [235, 240, 255], 0.55));   // luar p/ véus e rims
     this._stars(g, cam, t, 70, 11, BH * 0.58);
-    this._cloudBank(g, cam, t, BH * 0.24, 4, 'rgba(58,64,96,0.40)', 0.012);   // plano MAIS distante (nuvens noturnas lentíssimas)
+    this._cloudBank(g, cam, t, BH * 0.24, 4, 'rgba(58,64,96,0.40)', 0.012);   // plano MAIS distante (nuvens noturnas paradas)
     this._moon(g, BW * 0.74, BH * 0.2 - vy * 0.01, 11, '#f4ecd0');
-    this._ridge(g, cam, { par: 0.018, baseY: BH * 0.44, amp: 19, freq: 0.008, oct: 4, seed: 1 + ls, color: this._far(sky, [40, 46, 72], 0.5) });
-    this._ridge(g, cam, { par: 0.03, baseY: BH * 0.5, amp: 13, freq: 0.015, oct: 4, seed: 6 + ls, color: this._far(sky, [34, 40, 64], 0.36) });
+    this._ridge(g, cam, { par: 0.018, baseY: BH * 0.44, amp: 19, freq: 0.008, oct: 4, seed: 1 + ls, color: this._far(sky, [40, 46, 72], 0.5), rim: this._far(sky, [96, 104, 148], 0.42), haze: lt, hazeH: 3, hazeA: 0.14 });
+    this._ridge(g, cam, { par: 0.03, baseY: BH * 0.5, amp: 13, freq: 0.015, oct: 4, seed: 6 + ls, color: this._far(sky, [34, 40, 64], 0.36), rim: this._far(sky, [78, 86, 124], 0.3), haze: lt, hazeH: 2, hazeA: 0.12 });
     this._castleLayer(g, cam, { par: 0.05, baseY: BH * 0.66, wallH: 16, spacing: 70, seed: 2 + ls,
       col: this._far(sky, [30, 34, 52], 0.3), rim: this._far(sky, [52, 58, 84], 0.26), dark: this._far(sky, [14, 16, 28], 0.18), moss: this._far(sky, [46, 70, 42], 0.32), lit: '#ffc24a' });
     this._castleLayer(g, cam, { par: 0.1, baseY: BH * 0.74, wallH: 14, spacing: 98, seed: 11 + ls,
       col: this._far(sky, [19, 21, 34], 0.1), rim: this._far(sky, [32, 36, 56], 0.12), dark: '#0c0e16', moss: '#2a4222', lit: '#e0a838' });
     // PLANO MAIS PRÓXIMO (rola bem mais rápido → parallax forte): crista escura de escombros
-    this._ridge(g, cam, { par: 0.22, baseY: BH * 0.82, amp: 9, freq: 0.05, oct: 3, seed: 21 + ls, color: '#0a0b12', rim: '#161826' });
+    this._ridge(g, cam, { par: 0.22, baseY: BH * 0.82, amp: 9, freq: 0.05, oct: 3, seed: 21 + ls, color: '#0a0b12', rim: '#1c1f30', haze: lt, hazeH: 2, hazeA: 0.1 });
     this._fog(g, t, BH * 0.7 - vy * 0.1, '#3a4468');
   },
 
   // Vila (entardecer): cidade medieval — casas, sobrados e um campanário, fumaça.
   village(g, cam, L, t, BW, BH) {
     const sky = this._hex(L.sky[0]), ls = ((L.seed || 0) * 97) | 0, vy = this._cy;
+    const lt = this._rgb(this._mix(sky, [255, 236, 200], 0.6));   // luz dourada do entardecer
     this._moon(g, BW * 0.22, BH * 0.18 - vy * 0.01, 9, '#ffe9b0');
     this._clouds(g, cam, t, BH * 0.16, 4, 'rgba(255,220,180,0.45)', 0.03);
     this._birds(g, cam, t, 0.045);
-    this._ridge(g, cam, { par: 0.02, baseY: BH * 0.46, amp: 14, freq: 0.011, oct: 4, seed: 1 + ls, color: this._far(sky, [52, 74, 48], 0.5) });
-    this._ridge(g, cam, { par: 0.05, baseY: BH * 0.55, amp: 10, freq: 0.02, oct: 3, seed: 2 + ls, color: this._far(sky, [40, 60, 36], 0.28), rim: this._far(sky, [78, 110, 62], 0.26) });
+    this._ridge(g, cam, { par: 0.02, baseY: BH * 0.46, amp: 14, freq: 0.011, oct: 4, seed: 1 + ls, color: this._far(sky, [52, 74, 48], 0.5), rim: this._far(sky, [110, 130, 92], 0.44), haze: lt, hazeH: 3, hazeA: 0.16 });
+    this._ridge(g, cam, { par: 0.05, baseY: BH * 0.55, amp: 10, freq: 0.02, oct: 3, seed: 2 + ls, color: this._far(sky, [40, 60, 36], 0.28), rim: this._far(sky, [78, 110, 62], 0.26), haze: lt, hazeH: 2, hazeA: 0.12 });
     // CIDADE distante (telhados ao fundo, enevoados → profundidade urbana)
     this._townRow(g, cam, t, { par: 0.08, spacing: 19, baseY: BH * 0.62, seed: 31 + ls,
       wall: this._far(sky, [78, 64, 46], 0.4), wallSh: this._far(sky, [50, 40, 28], 0.38), wallHi: this._far(sky, [96, 80, 58], 0.4),
       roof: this._far(sky, [96, 48, 38], 0.36), roofHi: this._far(sky, [122, 66, 50], 0.36), roofSh: this._far(sky, [58, 26, 22], 0.34),
       win: this._far(sky, [40, 30, 18], 0.3), lit: '#e8b24a', door: this._far(sky, [34, 24, 16], 0.3) });
     // plano da CIDADE da frente: chão + prédios bem visíveis (mesmo parallax → assentados)
-    this._ridge(g, cam, { par: 0.12, baseY: BH * 0.66, amp: 4, freq: 0.04, oct: 3, seed: 8 + ls, color: '#3c3a24', rim: '#56542e' });
+    this._ridge(g, cam, { par: 0.12, baseY: BH * 0.66, amp: 4, freq: 0.04, oct: 3, seed: 8 + ls, color: '#3c3a24', rim: '#56542e', haze: lt, hazeH: 2, hazeA: 0.1 });
     this._townRow(g, cam, t, { par: 0.12, spacing: 23, baseY: BH * 0.66, seed: 7 + ls,
       wall: '#8a7050', wallSh: '#54422c', wallHi: '#a88c64', roof: '#9a4232', roofHi: '#c26044', roofSh: '#5e221a',
       win: '#28200f', lit: '#ffd664', door: '#241710' });
@@ -467,10 +483,11 @@ const BG = {
   // Campo de Guerra (céu vermelho de tempestade): ruínas em chamas, fumaça, brasas.
   battlefield(g, cam, L, t, BW, BH) {
     const sky = this._hex(L.sky[0]), ls = ((L.seed || 0) * 97) | 0;
+    const lt = this._rgb(this._mix(sky, [255, 150, 90], 0.5));   // brasa no horizonte
     if (Math.sin(t * 0.5) > 0.9988) { g.fillStyle = 'rgba(255,210,170,0.15)'; g.fillRect(0, 0, BW, BH); }   // relâmpago raro
     this._cloudBank(g, cam, t, BH * 0.2, 5, 'rgba(78,40,32,0.42)', 0.012);   // fumaça distante de batalha (plano mais ao fundo)
-    this._ridge(g, cam, { par: 0.02, baseY: BH * 0.44, amp: 16, freq: 0.01, oct: 4, seed: 1 + ls, color: this._far(sky, [64, 26, 22], 0.5) });
-    this._ridge(g, cam, { par: 0.035, baseY: BH * 0.5, amp: 12, freq: 0.016, oct: 4, seed: 5 + ls, color: this._far(sky, [52, 20, 16], 0.32) });
+    this._ridge(g, cam, { par: 0.02, baseY: BH * 0.44, amp: 16, freq: 0.01, oct: 4, seed: 1 + ls, color: this._far(sky, [64, 26, 22], 0.5), rim: this._far(sky, [140, 62, 44], 0.42), haze: lt, hazeH: 3, hazeA: 0.15 });
+    this._ridge(g, cam, { par: 0.035, baseY: BH * 0.5, amp: 12, freq: 0.016, oct: 4, seed: 5 + ls, color: this._far(sky, [52, 20, 16], 0.32), rim: this._far(sky, [112, 48, 34], 0.3), haze: lt, hazeH: 2, hazeA: 0.12 });
     // plano das ruínas: chão + torres (mesmo parallax → assentadas)
     this._ridge(g, cam, { par: 0.06, baseY: BH * 0.64, amp: 6, freq: 0.03, oct: 3, seed: 12 + ls, color: '#1e0d0c', rim: '#2e1412' });
     this._towerRow(g, cam, { par: 0.06, spacing: 80, baseY: BH * 0.64, seed: 2 + ls, color: '#241010', rim: '#3a1816', ruin: true, fireRatio: 0.4, t });
@@ -483,16 +500,17 @@ const BG = {
   // Floresta (dia): feixes de luz, fileiras de coníferas em planos assentados.
   forest(g, cam, L, t, BW, BH) {
     const sky = this._hex(L.sky[0]), ls = ((L.seed || 0) * 97) | 0, vy = this._cy;
+    const lt = this._rgb(this._mix(sky, [235, 255, 210], 0.6));
     g.globalAlpha = 0.08; g.fillStyle = '#dfffb0';
     for (let i = 0; i < 5; i++) { const sx = ((i * 70 - cam.x * 0.05) % (BW + 60) + BW + 60) % (BW + 60) - 30; g.beginPath(); g.moveTo(sx, -vy * 0.05); g.lineTo(sx + 14, -vy * 0.05); g.lineTo(sx + 40, BH); g.lineTo(sx + 20, BH); g.closePath(); g.fill(); }
     g.globalAlpha = 1;
     this._cloudBank(g, cam, t, BH * 0.14, 4, 'rgba(228,244,210,0.55)', 0.02);   // nuvens distantes (plano mais ao fundo)
     this._birds(g, cam, t, 0.05);
-    this._ridge(g, cam, { par: 0.02, baseY: BH * 0.4, amp: 14, freq: 0.012, oct: 4, seed: 1 + ls, color: this._far(sky, [54, 96, 62], 0.46) });
+    this._ridge(g, cam, { par: 0.02, baseY: BH * 0.4, amp: 14, freq: 0.012, oct: 4, seed: 1 + ls, color: this._far(sky, [54, 96, 62], 0.46), rim: this._far(sky, [116, 160, 112], 0.4), haze: lt, hazeH: 3, hazeA: 0.16 });
     this._treeRow(g, cam, { par: 0.05, spacing: 15, baseY: BH * 0.5, kind: 'conifer', rad: 9, color: this._far(sky, [28, 60, 32], 0.22), rim: this._far(sky, [64, 112, 60], 0.26), trunk: '#243020', seed: 2 + ls });
     this._treeRow(g, cam, { par: 0.12, spacing: 18, baseY: BH * 0.6, kind: 'conifer', rad: 12, color: '#183a1c', rim: '#2c5a2e', trunk: '#1e1810', seed: 3 + ls });
     // plano da frente: chão + coníferas no MESMO parallax (assentadas)
-    this._ridge(g, cam, { par: 0.22, baseY: BH * 0.72, amp: 6, freq: 0.05, oct: 3, seed: 5 + ls, color: '#0e2612', rim: '#163a1c' });
+    this._ridge(g, cam, { par: 0.22, baseY: BH * 0.72, amp: 6, freq: 0.05, oct: 3, seed: 5 + ls, color: '#0e2612', rim: '#163a1c', haze: lt, hazeH: 2, hazeA: 0.1 });
     this._treeRow(g, cam, { par: 0.22, spacing: 24, baseY: BH * 0.74, kind: 'conifer', rad: 16, color: '#0c220f', rim: '#193318', trunk: '#161009', seed: 4 + ls });
     this._fireflies(g, t); this._leaves(g, t);
   },
@@ -500,13 +518,14 @@ const BG = {
   // Selva (dia claro): sol, bruma, montanhas, dossel, zigurautes, mata, palmeiras.
   jungle(g, cam, L, t, BW, BH) {
     const sky = this._hex(L.sky[0]), ls = ((L.seed || 0) * 97) | 0, vy = this._cy;
+    const lt = this._rgb(this._mix(sky, [255, 255, 240], 0.55));
     this._sun(g, BW * 0.8, BH * 0.2 - vy * 0.01, 10, '#fff4c0', 0.7);
     this._hazeBand(g, BH * 0.3 - vy * 0.03, BH * 0.22, this._rgb(this._mix(sky, [255, 255, 255], 0.3)), 0.22);
     this._hazeBand(g, BH * 0.46 - vy * 0.04, BH * 0.15, this._rgb(this._mix(sky, [170, 210, 150], 0.5)), 0.28);
     this._clouds(g, cam, t, BH * 0.15, 5, 'rgba(255,255,255,0.8)', 0.04);
     this._birds(g, cam, t, 0.05);
-    this._ridge(g, cam, { par: 0.02, baseY: BH * 0.4, amp: 17, freq: 0.01, oct: 4, seed: 1 + ls, color: this._far(sky, [56, 112, 104], 0.5) });
-    this._ridge(g, cam, { par: 0.035, baseY: BH * 0.47, amp: 13, freq: 0.014, oct: 4, seed: 2 + ls, color: this._far(sky, [44, 100, 80], 0.36), rim: this._far(sky, [100, 160, 110], 0.34) });
+    this._ridge(g, cam, { par: 0.02, baseY: BH * 0.4, amp: 17, freq: 0.01, oct: 4, seed: 1 + ls, color: this._far(sky, [56, 112, 104], 0.5), rim: this._far(sky, [118, 170, 152], 0.44), haze: lt, hazeH: 3, hazeA: 0.16 });
+    this._ridge(g, cam, { par: 0.035, baseY: BH * 0.47, amp: 13, freq: 0.014, oct: 4, seed: 2 + ls, color: this._far(sky, [44, 100, 80], 0.36), rim: this._far(sky, [100, 160, 110], 0.34), haze: lt, hazeH: 2, hazeA: 0.12 });
     this._ridge(g, cam, { par: 0.05, baseY: BH * 0.52, amp: 9, freq: 0.06, oct: 3, seed: 4 + ls, color: this._far(sky, [34, 86, 46], 0.24), rim: this._far(sky, [70, 138, 70], 0.28) });   // dossel distante
     this._ziggRow(g, cam, { par: 0.07, spacing: 132, baseY: BH * 0.56, w: 56, steps: 5, stepH: 6, seed: 3 + ls, color: this._far(sky, [54, 76, 54], 0.36), rim: this._far(sky, [112, 146, 108], 0.32) });
     // MATA DENSA: fileiras próximas de copas redondas (planos médios)

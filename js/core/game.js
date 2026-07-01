@@ -76,6 +76,14 @@ class Game {
       this.decor.push({ type: pr.type, x: pr.c * T, y: pr.r * T, color: pr.color || L.bannerColor, opts: pr });
     }
     if (!this.spawn) this.spawn = { x: T * 2, y: T * 2 };
+    // pré-assa idle/run de quem aparece na fase (o bake é preguiçoso; isso evita
+    // micro-engasgos na primeira aparição de cada personagem)
+    if (typeof SPR !== 'undefined') {
+      const keys = new Set(this.enemies.map(e => e.spr));
+      if (typeof HEROES !== 'undefined') for (const h of HEROES) if (h.spr) keys.add(h.spr);
+      for (const a of this.allies) if (a.spr) keys.add(a.spr);
+      SPR.warm(keys);
+    }
     world.settle();             // instantly rest any unsupported gravity blocks on load
     world.markGrass();          // freeze grass onto the original surface only (no re-growth after digging)
     this._anchorDecor();        // tie each suspended decoration to the block it hangs on
@@ -712,6 +720,7 @@ class Game {
     }
 
     this.fx.drawDecals(ctx, this.cam);   // persistent scorch marks — trail of destruction
+    this.fx.drawCorpses(ctx, this.cam);  // CADÁVERES deitados — ficam na cena (atrás dos vivos)
     this.fx.drawCrumbs(ctx, this.cam);   // settled mini-block debris & gore on the ground
     for (const k of this.pickups) k.draw(ctx, this.cam);
     for (const a of this.allies) a.draw(ctx, this.cam);
@@ -944,8 +953,9 @@ class Game {
       else { const p = def.portrait; x.drawImage(img, p.x, p.y, p.w, p.h, 0, 0, W, H); }        // recorte da cabeça
       return;
     }
-    if (typeof SPR !== 'undefined' && SPR.ready && SPR.sheets[key]) {   // fallback: sprite pixel-art
-      const img = SPR.sheets[key].idle[0];
+    if (typeof SPR !== 'undefined' && SPR.ready && SPR.defs[key]) {   // fallback: sprite pixel-art
+      const arr = SPR.sheet(key, 'idle'), img = arr && arr[0];
+      if (!img) return;
       x.imageSmoothingEnabled = false;
       x.drawImage(img, 0, 0, img.width, img.height, 0, 0, W, H);
     }

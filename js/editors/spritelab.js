@@ -235,9 +235,9 @@ const SpriteLab = {
 
   // ---------- exportar como .js (pacote do personagem, auto-aplicável) ----------
   _exportJs() {
-    const key = this.charKey, sheets = SPR.sheets[key]; if (!sheets) return;
+    const key = this.charKey; if (!SPR.defs[key]) return;
     const data = {};
-    for (const anim in sheets) { const arr = sheets[anim]; if (arr && arr.length) data[key + '/' + anim] = arr.map(c => c.toDataURL()); }
+    for (const anim in SPR.ANIMS) { const arr = SPR.sheet(key, anim); if (arr && arr.length) data[key + '/' + anim] = arr.map(c => c.toDataURL()); }   // assa sob demanda p/ exportar tudo
     const body =
       '/* SpriteLab export — ' + this.charName + ' (' + key + ') — ' + new Date().toISOString().slice(0, 10) + '\n' +
       '   Inclua APÓS js/render/sprites.js no index.html:  <script src="js/render/sprite_' + key + '.js"><\\/script>\n' +
@@ -280,7 +280,7 @@ const SpriteLab = {
       if (this._isHero(key)) out.push({ cv: SPR._pixWeaponFrame(def, 'sword', 0, PXF, def.weapon), label: 'Modo lâmina (investida)' });
       return out;
     }
-    const arr = (SPR.sheets[key] && SPR.sheets[key][action]) || [];
+    const arr = SPR.sheet(key, action) || [];
     return arr.map((cv, i) => ({ cv, label: 'Quadro ' + (i + 1) }));
   },
 

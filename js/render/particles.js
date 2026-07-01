@@ -18,6 +18,36 @@ class FX {
     this.corpses = []; // PERSISTENT whole bodies lying on the ground (mortes "de cadáver inteiro")
   }
 
+  // ---- CADÁVERES persistentes: o último frame de morte fica deitado no chão ----
+  // Física leve: cai se o bloco de apoio for destruído; carbonizado ganha tinta
+  // escura + fumaça breve. Limite alto (o rastro de batalha é parte do visual).
+  addCorpse(e) {
+    if (!(typeof SPR !== 'undefined' && e.spr && SPR.defs[e.spr])) return;
+    const frames = SPR.sheet(e.spr, 'death'); if (!frames || !frames.length) return;
+    const d = SPR.defs[e.spr], W = d.cw || 160, H = d.ch || 132;
+    const fr = frames[frames.length - 1];
+    const charred = (e._charAcc || 0) > 1.2;
+    this.corpses.push({
+      fr, chFr: charred ? SPR._tinted(fr, '#201410') : null,
+      W, H, scale: e.h * (d.artK || 1.7) / H,
+      x: e.cx, y: e.y + e.h, face: e.face < 0 ? -1 : 1,
+      vy: 0, rest: false, smolder: charred ? 1.6 : 0,
+    });
+    if (this.corpses.length > 90) this.corpses.shift();
+  }
+  drawCorpses(ctx, cam) {
+    const vw = cam.vw, vh = cam.vh;
+    for (const c of this.corpses) {
+      if (c.x < cam.x - 140 || c.x > cam.x + vw + 140 || c.y < cam.y - 80 || c.y > cam.y + vh + 160) continue;
+      const fr = c.fr;
+      ctx.save(); ctx.imageSmoothingEnabled = false;
+      ctx.translate(c.x + cam.ox, c.y + cam.oy); ctx.scale(c.face * c.scale, c.scale);
+      ctx.drawImage(fr, 0, 0, fr.width, fr.height, -c.W / 2, -(c.H - 6), c.W, c.H);
+      if (c.chFr) { ctx.globalAlpha = 0.78; ctx.drawImage(c.chFr, 0, 0, fr.width, fr.height, -c.W / 2, -(c.H - 6), c.W, c.H); }
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
+  }
+
   _pushDecal(o) { this.decals.push(o); const max = 1800; if (this.decals.length > max) this.decals.splice(0, this.decals.length - max); }
   bloodPool(x, y, c, n = 6) { for (let i = 0; i < n; i++) this._pushDecal({ t: 'blob', x: x + rand(-12, 12), y: y + rand(-3, 4), r: rand(3, 8), c: c || '#6a160e', a: rand(0.5, 0.85) }); }
   rubble(x, y, c) { for (let i = 0; i < 3; i++) this._pushDecal({ t: 'rect', x: x + rand(-11, 11), y: y + rand(-9, 9), s: rand(2, 4.5), c, rot: rand(0, TAU), a: rand(0.55, 0.9) }); }
@@ -97,6 +127,10 @@ class FX {
         ctx.fillRect(-s / 2, -s / 2, s, s);
         ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fillRect(-s / 2, -s / 2, s, s * 0.22);
         ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(-s / 2, s * 0.16, s, s * 0.34);
+      } else if (k.kind === 'shell') {                          // cápsula de latão (brilho no dorso)
+        ctx.fillRect(-s / 2, -s * 0.34, s, s * 0.68);
+        ctx.fillStyle = 'rgba(255,244,200,0.55)'; ctx.fillRect(-s / 2, -s * 0.34, s, s * 0.24);
+        ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(s * 0.24, -s * 0.34, s * 0.26, s * 0.68);
       } else if (k.kind === 'glob' || k.blood) {                // glóbulo / respingo de carne
         ctx.beginPath(); ctx.ellipse(0, 0, s * 0.62, s * 0.5, 0, 0, TAU); ctx.fill();
         if (k.kind === 'glob') { ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.ellipse(s * 0.1, s * 0.14, s * 0.3, s * 0.22, 0, 0, TAU); ctx.fill(); }
@@ -149,6 +183,30 @@ class FX {
     for (let i = 0; i < n; i++) { const a = rand(0, TAU), sp = rand(60, 260); this._add({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 40, life: rand(0.3, 0.6), max: 0.6, r: rand(1.5, 3.6), c: pick(['#bfe8ff', '#eaf8ff', '#9fd0e0', '#fff']), g: 1300, glow: true, shrink: true, land: true }); }
     this.rings.push({ x, y, r: 4, max: 32, life: 0.3, t: 0.3, color: '#bfe8ff' });
   }
+  // névoa GELADA: motas frias que escorrem devagar do corpo congelado
+  frost(x, y, n = 1) {
+    for (let i = 0; i < n; i++) this._add({ x: x + rand(-3, 3), y: y + rand(-3, 3), vx: rand(-9, 9), vy: rand(8, 30), life: rand(0.4, 0.9), max: 0.9, r: rand(1, 2.4), c: pick(['#bfe8ff', '#eaf8ff', '#fff']), g: 26, glow: true, shrink: true });
+  }
+  // bolha de veneno: sobe da pele, balança e estoura
+  bubble(x, y, color = '#8ef06a') {
+    this._add({ x, y, vx: rand(-8, 8), vy: -rand(18, 44), life: rand(0.35, 0.75), max: 0.75, r: rand(1.4, 2.8), c: color, g: -70, glow: true });
+  }
+  // CURA: fagulhas douradas-esverdeadas e cruzinhas subindo do corpo
+  heal(x, y, n = 12) {
+    for (let i = 0; i < n; i++) this._add({
+      x: x + rand(-12, 12), y: y + rand(-8, 16), vx: rand(-12, 12), vy: -rand(30, 85),
+      life: rand(0.5, 1.05), max: 1.05, r: rand(1.6, 3), c: pick(['#7be08a', '#b6ffc2', '#ffe9a8']),
+      g: -55, glow: true, cross: i % 3 === 0,
+    });
+  }
+  // cápsula EJETADA da arma: gira, quica e fica no chão (junta-se aos detritos)
+  shell(x, y, dir) {
+    this._pushCrumb({
+      x, y, vx: -dir * rand(50, 130) + rand(-15, 15), vy: -rand(130, 230),
+      s: rand(2.4, 3.2), c: pick(['#caa33a', '#b58a2a', '#d8b24a']),
+      rot: rand(0, TAU), vr: rand(-20, 20), rest: false, kind: 'shell',
+    });
+  }
   // mini-choques: pequenos raios curtos brotando de um ponto (impacto elétrico no corpo)
   miniShock(x, y, color = '#bff0ff', n = 3) {
     for (let i = 0; i < n; i++) { const a = rand(0, TAU), len = rand(8, 22); this.bolts.push({ x1: x, y1: y, x2: x + Math.cos(a) * len, y2: y + Math.sin(a) * len, color, life: 0.12, max: 0.12, seed: Math.random() * 999 }); }
@@ -193,6 +251,21 @@ class FX {
   swirl(x, y, r, color = 'rgba(255,255,255,0.95)', dir = 1) { this.swirls.push({ x, y, r, color, dir: dir < 0 ? -1 : 1, life: 0.26, max: 0.26 }); }
   bolt(x1, y1, x2, y2, color = '#bfe8ff') { this.bolts.push({ x1, y1, x2, y2, color, life: 0.14, max: 0.14, seed: Math.random() * 999 }); }
   shock(x, y, max, color = '#ffd86b') { this.rings.push({ x, y, r: 6, max, life: 0.4, t: 0.4, color }); }
+  // poeirinha dos PÉS na corrida (levantada atrás da passada)
+  dustPuff(x, y, dir = 0) {
+    for (let i = 0; i < 3; i++) this._add({
+      x: x + rand(-3, 3), y: y - rand(0, 3), vx: -dir * rand(12, 46) + rand(-8, 8), vy: -rand(8, 32),
+      life: rand(0.25, 0.5), max: 0.5, r: rand(2, 3.6), c: 'rgba(150,138,116,', g: -30, smoke: true,
+    });
+  }
+  // nuvem de ATERRISSAGEM: poeira abrindo p/ os dois lados (k = força da queda)
+  landPuff(x, y, k = 1) {
+    const n = Math.round(5 + k * 7);
+    for (let i = 0; i < n; i++) {
+      const d = i % 2 ? 1 : -1;
+      this._add({ x: x + d * rand(2, 9), y: y - rand(0, 2), vx: d * rand(30, 95) * (0.6 + k), vy: -rand(10, 42), life: rand(0.3, 0.55), max: 0.55, r: rand(2.5, 4.6), c: 'rgba(150,138,116,', g: -20, smoke: true });
+    }
+  }
   smoke(x, y, n = 5, c = 'rgba(60,55,50,') {
     for (let i = 0; i < n; i++) this._add({
       x, y, vx: rand(-40, 40), vy: rand(-70, -20), life: rand(0.6, 1.4), max: 1.4,
@@ -200,10 +273,13 @@ class FX {
     });
   }
   muzzle(x, y, ang) {
+    // clarão em ESTRELA no cano + cone de faíscas + baforada de fumaça
+    this._add({ x: x + Math.cos(ang) * 3, y: y + Math.sin(ang) * 3, vx: Math.cos(ang) * 30, vy: Math.sin(ang) * 30, life: 0.07, max: 0.07, r: 7, c: '#fff6c8', glow: true, shrink: true, star: true, rot: ang });
     for (let i = 0; i < 5; i++) this._add({
-      x, y, vx: Math.cos(ang) * rand(120, 320) + rand(-30, 30), vy: Math.sin(ang) * rand(120, 320) + rand(-30, 30),
-      life: rand(0.05, 0.14), max: 0.14, r: rand(2, 4.5), c: '#ffd86b', glow: true, shrink: true,
+      x, y, vx: Math.cos(ang) * rand(120, 340) + rand(-40, 40), vy: Math.sin(ang) * rand(120, 340) + rand(-40, 40),
+      life: rand(0.05, 0.14), max: 0.14, r: rand(2, 4.5), c: pick(['#ffd86b', '#ffe9a8', '#ff9a3c']), glow: true, shrink: true,
     });
+    this._add({ x: x + Math.cos(ang) * 6, y: y + Math.sin(ang) * 6, vx: Math.cos(ang) * 26 + rand(-8, 8), vy: -rand(14, 30), life: rand(0.3, 0.55), max: 0.55, r: rand(3, 5), c: 'rgba(70,64,58,', g: -40, smoke: true });
   }
   explosion(x, y, radius) {
     this.rings.push({ x, y, r: 6, max: radius * 1.3, life: 0.35, t: 0.35, color: '#ff8a3c' });
@@ -288,6 +364,19 @@ class FX {
         }
       }
     }
+    // cadáveres: caem se o apoio sumir; carbonizados soltam fumaça por um tempo
+    for (let i = this.corpses.length - 1; i >= 0; i--) {
+      const c = this.corpses[i];
+      if (c.smolder > 0) { c.smolder -= dt; if (Math.random() < 0.2) this.smoke(c.x + rand(-8, 8), c.y - rand(2, 8), 1); }
+      if (c.rest) { if (world && !world.solidPx(c.x, c.y + 2)) c.rest = false; else continue; }
+      c.vy = Math.min(c.vy + CONFIG.GRAVITY * dt, CONFIG.TERMINAL_VY);
+      let ny = c.y + c.vy * dt;
+      if (world && world.solidPx(c.x, ny + 1)) {
+        while (world.solidPx(c.x, ny)) ny -= 1;   // encosta exatamente no topo do bloco
+        c.y = ny; c.vy = 0; c.rest = true;
+      } else c.y = ny;
+      if (world && c.y > world.pixelH + 120) this.corpses.splice(i, 1);
+    }
     // rings
     for (let i = this.rings.length - 1; i >= 0; i--) {
       const r = this.rings[i]; r.t -= dt;
@@ -323,7 +412,18 @@ class FX {
       if (p.smoke) { ctx.fillStyle = p.c + (a * 0.5) + ')'; }
       else { ctx.globalAlpha = a; ctx.fillStyle = p.c; }
       if (p.glow) ctx.globalAlpha = a;
-      ctx.beginPath(); ctx.arc(p.x + ox, p.y + oy, r, 0, TAU); ctx.fill();
+      if (p.star) {                                             // clarão em estrela (boca do cano)
+        ctx.save(); ctx.translate(p.x + ox, p.y + oy); ctx.rotate(p.rot || 0);
+        ctx.beginPath(); ctx.moveTo(r * 1.9, 0); ctx.lineTo(0, -r * 0.55); ctx.lineTo(-r * 0.9, 0); ctx.lineTo(0, r * 0.55); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(0, -r * 1.2); ctx.lineTo(r * 0.4, 0); ctx.lineTo(0, r * 1.2); ctx.lineTo(-r * 0.4, 0); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      } else if (p.cross) {                                     // cruzinha de cura
+        const cw = r * 0.7;
+        ctx.fillRect(p.x + ox - cw / 2, p.y + oy - r, cw, r * 2);
+        ctx.fillRect(p.x + ox - r, p.y + oy - cw / 2, r * 2, cw);
+      } else {
+        ctx.beginPath(); ctx.arc(p.x + ox, p.y + oy, r, 0, TAU); ctx.fill();
+      }
       ctx.globalAlpha = 1;
     }
     // debris

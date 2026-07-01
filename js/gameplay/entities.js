@@ -779,7 +779,21 @@ class Player extends Entity {
 
     // anim clocks: anim = seconds (idle), runDist = foot-locked distance (run cycle)
     this.anim += dt;
-    if (this.onGround) this.runDist = (this.runDist || 0) + Math.abs(this.vx) * dt;
+    if (this.onGround) {
+      this.runDist = (this.runDist || 0) + Math.abs(this.vx) * dt;
+      // poeirinha atrás de cada passada firme (corrida no chão)
+      if (Math.abs(this.vx) > this.speed * 0.55 && (this.runDist - (this._stepDust || 0)) > 26) {
+        this._stepDust = this.runDist;
+        game.fx.dustPuff(this.cx - this.face * 7, this.y + this.h - 1, this.face);
+      }
+    }
+    // nuvem de poeira ao ATERRISSAR de uma queda forte
+    if (this.onGround && !this._wasGround && (this._fallVy || 0) > 420) {
+      game.fx.landPuff(this.cx, this.y + this.h, clamp(this._fallVy / 1300, 0.3, 1));
+      if (this._fallVy > 900) game.cam.addShake(2);
+    }
+    this._wasGround = this.onGround;
+    if (!this.onGround) this._fallVy = this.vy;
   }
 
   // perfil do golpe corpo-a-corpo (C): padrão = espada. O Ragnarok troca por
@@ -816,6 +830,9 @@ class Player extends Entity {
       game.bullets.push(b);
     }
     game.fx.muzzle(m.x, m.y, this.aimAng);
+    // armas de PÓLVORA/mecânicas ejetam cápsula (magia/arcos não)
+    const vis = this.weaponVisual || (typeof SPR !== 'undefined' && SPR.defs[this.spr] && SPR.defs[this.spr].weapon) || '';
+    if (!/staff|bow|wand|orb|rune|reaper|flame|cryo|dagger/.test(vis)) game.fx.shell(this.cx + this.face * 3, this.y + this.h * 0.38, this.face);
     this.vx -= Math.cos(this.aimAng) * (opts.recoil || 0);
     game.cam.addShake(opts.shake || 1.2);
     game.alertEnemies(this.cx, this.cy, 460);   // o barulho do tiro denuncia a posição
@@ -857,29 +874,36 @@ class Player extends Entity {
     ctx.globalAlpha = 1;
   }
 
-  // desenha a ARMA BRANCA empunhada varrendo o arco durante o golpe (tecla C),
-  // usando o visual da arma equipada — assim o golpe fica integrado ao sprite.
+  // desenha a ARMA BRANCA empunhada durante o golpe (tecla C), PRESA À MÃO do
+  // braço animado (SPR.attackHand) — a arma certa gira exatamente com o braço.
+  // Sem arma equipada usa a espada padrão; posturas do Ragnarok têm visual próprio.
   _drawMeleeSwing(ctx, cam) {
-    // só desenha a arma quando uma ARMA BRANCA está equipada (Modo Criação);
-    // sem isso, as posturas do Ragnarok (punhos/martelo) usam as sprites de ataque.
-    if (!(this.attackArc > 0) || this.dead || !this.meleeKey || typeof SPR === 'undefined' || !SPR.drawMeleeSwing) return;
-    const prof = (typeof MELEE !== 'undefined') ? MELEE[this.meleeKey] : null;
-    if (!prof) return;
-    const visual = prof.visual || 'sword';
-    const col = prof.blade || '#dfe7ef';
-    const glow = !!prof.glow;
-    const ga = SPR.gunAnchor(this), f = this.face < 0 ? -1 : 1;
-    const thrust = prof.swing === 'thrust';
-    const t = 1 - clamp(this.attackArc, 0, 1);                   // 0 → 1 conforme o golpe avança
-    // ESTOCADA (lança/chicote): avança reto; demais: arco de cima p/ baixo.
-    // o `aim` embute o lado (facing) — a arma pixel é assada já rotacionada.
-    const sweep = thrust ? (-0.12 + Math.sin(t * Math.PI) * 0.12) : lerp(-1.35, 1.2, t);
-    const aim = f > 0 ? sweep : (Math.PI - sweep);
-    const reach = thrust ? Math.sin(t * Math.PI) * (prof.range || 60) * 0.35 : 0;
-    const worldScale = this.h / 42;
+    if (!(this.attackArc > 0) || this.dead || typeof SPR === 'undefined' || !SPR.drawMeleeSwing) return;
+    // visual: arma MELEE equipada > postura do Ragnarok > espada padrão
+    let visual = 'sword', col = '#dfe7ef', glow = false, thrust = false, range = 54;
+    const prof = (typeof MELEE !== 'undefined' && this.meleeKey && MELEE[this.meleeKey]) ? MELEE[this.meleeKey] : null;
+    if (prof) {
+      visual = prof.visual || 'sword'; col = prof.blade || col; glow = !!prof.glow;
+      thrust = prof.swing === 'thrust'; range = prof.range || 54;
+    } else if (this.meleeStance) {
+      const SV = { hammer: ['warhammer', '#c8ccd2', false], fists: null,
+                   flamesword: ['flameblade', '#ff8a3c', true], transcendent: ['katana', '#c9a0ff', true] };
+      const v = SV[this.meleeStance];
+      if (v === null) return;                                   // punhos: golpe de mão nua (só o braço)
+      if (v) { visual = v[0]; col = v[1]; glow = v[2]; }
+    }
+    const t = 1 - clamp(this.attackArc, 0, 1);                  // 0 → 1 conforme o golpe avança
+    const hand = SPR.attackHand(this, t); if (!hand) return;
+    const f = this.face < 0 ? -1 : 1, wScale = hand.scale * 1.5;
     ctx.save();
     ctx.globalAlpha = clamp(this.attackArc * 2.2, 0.45, 1);
-    SPR.drawMeleeSwing(ctx, ga.x + cam.ox + f * reach, ga.y + cam.oy, worldScale, aim, visual, col, glow);
+    if (thrust) {
+      // ESTOCADA (lança/chicote/florete): reta à frente, avançando com o golpe
+      const ga = SPR.gunAnchor(this), reach = Math.sin(t * Math.PI) * range * 0.35;
+      SPR.drawMeleeSwing(ctx, ga.x + cam.ox + f * reach, ga.y + cam.oy, wScale, f > 0 ? 0 : Math.PI, visual, col, glow);
+    } else {
+      SPR.drawMeleeSwing(ctx, hand.x + cam.ox, hand.y + cam.oy, wScale, hand.ang, visual, col, glow);
+    }
     ctx.restore();
   }
 
@@ -989,6 +1013,7 @@ class Minion extends Entity {
       const p = game.player;
       if (p && !p.dead && Math.hypot(p.cx - this.cx, p.cy - this.cy) < 7 * CONFIG.TILE) {
         p.hp = clamp(p.hp + 10, 0, p.maxhp); game.fx.text(p.cx, p.y - 6, '+10', '#7be08a');
+        game.fx.heal(p.cx, p.cy, 8);   // fagulhas de cura subindo pelo corpo
       }
       for (const e of (game.enemiesInRadius ? game.enemiesInRadius(this.cx, this.cy, 2 * CONFIG.TILE) : [])) e.hurt(8, sign(e.cx - this.cx) || 1, game);
       game.fx.shock(this.cx, this.cy, 2 * CONFIG.TILE, '#7be08a');
@@ -1002,9 +1027,22 @@ class Minion extends Entity {
     if (this.def.totem) { this._drawTotem(ctx, cam); return; }
     if (this.flash > 0 && Math.floor(this.flash * 50) % 2 === 0) { /* drawFighter já trata flash em inimigos, aqui só sprite */ }
     drawFighter(ctx, this, cam, true);
-    // leve tonalidade aliada por cima
-    ctx.save(); ctx.globalAlpha = 0.18; ctx.fillStyle = this.aura;
-    ctx.fillRect(this.x + cam.ox, this.y + cam.oy, this.w, this.h); ctx.restore();
+    // tonalidade aliada NO CORPO (silhueta tintada, sem retângulo)
+    if (typeof SPR !== 'undefined' && this.spr && SPR.defs[this.spr]) {
+      SPR.drawTinted(ctx, this, cam, this.aura, 0.16 + 0.05 * Math.sin(this.anim * 4));
+    }
+    // SERVO DOMINADO: espiral hipnótica girando sobre a cabeça
+    if (this.kind === 'thrall') {
+      const hx = gx, hy = this.y + cam.oy - 8, tt = this.anim * 3;
+      ctx.save(); ctx.strokeStyle = '#7be08a'; ctx.globalAlpha = 0.85; ctx.lineWidth = 1.4;
+      ctx.shadowColor = '#7be08a'; ctx.shadowBlur = 6;
+      ctx.beginPath();
+      for (let a = 0; a <= 4.2; a += 0.3) {
+        const rr = 1 + a * 1.15, px = hx + Math.cos(a * 1.8 + tt) * rr, py = hy + Math.sin(a * 1.8 + tt) * rr * 0.6;
+        a ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.stroke(); ctx.restore();
+    }
   }
   _drawTotem(ctx, cam) {
     const x = this.x + cam.ox, y = this.y + cam.oy, w = this.w, h = this.h, gl = 0.6 + 0.4 * Math.sin(this.anim * 4);
@@ -1065,7 +1103,7 @@ class Pickup extends Entity {
     game.world.moveAndCollide(this, dt);
     if (this.onGround) this.vx *= 0.8;
     if (p && !p.dead && aabb(this, p)) {
-      if (this.kind === 'health') { p.hp = clamp(p.hp + 30, 0, p.maxhp); game.fx.text(p.cx, p.y - 6, '+30', '#7be08a'); Sound.rescue(); this.alive = false; }
+      if (this.kind === 'health') { p.hp = clamp(p.hp + 30, 0, p.maxhp); game.fx.heal(p.cx, p.cy, 10); game.fx.text(p.cx, p.y - 6, '+30', '#7be08a'); Sound.rescue(); this.alive = false; }
       else if (this.kind === 'oregano') { game.collectOregano(this); }
       else if (this.kind === 'life') { game.lives++; game.fx.text(p.cx, p.y - 6, '+1 VIDA', '#ff5b6e'); game.fx.spark(this.cx, this.cy, '#ff5b6e', 14); Sound.heal(); this.alive = false; }
       else if (this.kind === 'potion') { game.applyPotion(p); this.alive = false; }

@@ -46,10 +46,10 @@ Três consequências práticas:
 |---------|------------------|
 | `textures.js` | **`TEX`**: texturas de bloco pré-renderizadas (offscreen) + arte de decoração. |
 | `background.js` | **`BG`**: fundos pixel-art em parallax por bioma (castelo/vila/masmorra/floresta/selva/campo). |
-| `sprites.js` | **`SPR`**: renderizador procedural de *fallback* + paletas, `gunAnchor` e retratos do HUD. |
+| `sprites.js` | **`SPR`**: spritesheets pixel-art **assadas sob demanda** (bake preguiçoso por personagem/ação; `SPR.warm` pré-assa no load da fase) + paletas, `gunAnchor`, `attackHand` (mão do golpe), `drawTinted` (status no corpo), `bodyPoint` (pontos da silhueta) e retratos do HUD. |
 | `rig.js` | **`RIG`**: animação *cut-out* da concept art (topo posado + pernas blindadas que oscilam). Carrega de `assets/parts/` em runtime. |
 | `rigdata.js` | **`RIG_DATA`**: dados de recorte do rig. **Gerado** por `tools/python/build_parts.py` — não editar à mão. |
-| `particles.js` | Partículas, detritos, **decals persistentes** (sangue/ossos/queimadura), arcos de golpe, magia, raios. |
+| `particles.js` | Partículas, detritos, **decals persistentes** (sangue/ossos/queimadura), **cadáveres persistentes** (`fx.addCorpse`/`drawCorpses`, com física de suporte), cápsulas ejetadas, poeira de passos/aterrissagem, cura, arcos de golpe, magia, raios. |
 
 ### `world/` — terreno, construções e fases
 | Arquivo | Responsabilidade |

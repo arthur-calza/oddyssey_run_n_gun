@@ -9,11 +9,14 @@
 const SPR = {
   ready: false, sheets: {}, defs: {},
   images: {}, whites: {}, imgLoading: false,
-  ANIMS: { idle: 6, run: 8, jump: 8, fall: 8, crouch: 4, crouchwalk: 8, crouchshoot: 4, attack: 8, hurt: 2, death: 6 },
+  // mais quadros por ação = animações mais fluidas (o bake é PREGUIÇOSO, então não pesa no boot)
+  ANIMS: { idle: 8, run: 10, jump: 8, fall: 8, crouch: 6, crouchwalk: 10, crouchshoot: 5, attack: 10, hurt: 4, death: 8 },
   PXF: 5,          // fator de pixelização: a arte é assada em ~1/PXF da resolução e ampliada (look retrô, ~20px de altura)
   _pwBuf: null,    // buffer reaproveitado para pixelizar o braço/arma
   _pwCache: {},    // cache de quadros da arma por (def, modo, ângulo) — evita re-pixelizar todo frame
   WAIM: 64,        // nº de ângulos discretos da arma no cache
+  _tidSeq: 0,      // ids p/ cache de silhuetas tintadas (efeitos de status no corpo)
+  _tintCache: {},
 
   define(key, d) { d.key = key; this.defs[key] = d; },
 
@@ -28,18 +31,40 @@ const SPR = {
   },
   hasImage(key) { const i = this.images[key]; return i && i.complete && i.naturalWidth > 0; },
 
-  // ---- bake all spritesheets -----------------------------------
+  // ---- spritesheets (bake PREGUIÇOSO) ---------------------------
+  // build() só prepara os contêineres; cada (personagem, ação) é assado na
+  // PRIMEIRA vez que aparece — o boot fica instantâneo mesmo com muitos
+  // quadros, e um mundo típico assa só o que realmente entra em cena.
   build() {
     if (this.ready) return;
-    for (const key in this.defs) {
-      const d = this.defs[key]; this.sheets[key] = {};
-      for (const a in this.ANIMS) {
-        const n = this.ANIMS[a], frames = [];
-        for (let f = 0; f < n; f++) frames.push(this._bake(d, a, f, n));
-        this.sheets[key][a] = frames;
-      }
-    }
+    for (const key in this.defs) if (!this.sheets[key]) this.sheets[key] = {};
     this.ready = true;
+  },
+  // acesso central às folhas: assa sob demanda e devolve o array de quadros
+  sheet(key, anim) {
+    const d = this.defs[key]; if (!d) return null;
+    let sk = this.sheets[key]; if (!sk) sk = this.sheets[key] = {};
+    let arr = sk[anim];
+    if (!arr) {
+      const n = this.ANIMS[anim]; if (!n) return null;
+      arr = [];
+      for (let f = 0; f < n; f++) arr.push(this._bake(d, anim, f, n));
+      sk[anim] = arr;
+    }
+    return arr;
+  },
+  // pré-assa as ações principais de um conjunto de personagens (chamado ao
+  // carregar a fase). idle/run são SÍNCRONOS (aparecem no 1º frame); o resto
+  // (pulo/queda/ataque/morte…) pinga em segundo plano, um por tick — sem
+  // engasgo na primeira morte/pulo de cada personagem.
+  warm(keys) {
+    const list = [];
+    for (const k of keys) if (this.defs[k]) { list.push(k); this.sheet(k, 'idle'); this.sheet(k, 'run'); }
+    const queue = [];
+    for (const k of list) for (const a in this.ANIMS) if (!this.sheets[k] || !this.sheets[k][a]) queue.push([k, a]);
+    if (!queue.length) return;
+    const step = () => { const nx = queue.shift(); if (!nx) return; this.sheet(nx[0], nx[1]); setTimeout(step, 0); };
+    setTimeout(step, 60);
   },
 
   /* ===== EDIÇÃO DE SPRITES (SpriteLab) =====
@@ -49,20 +74,20 @@ const SPR = {
   _editKey: 'oddyssey_sprite_edits_v1',
   _dirty: {},                       // { "key/anim": true }
   markDirty(key, anim) { this._dirty[key + '/' + anim] = true; },
-  frameCanvas(key, anim, fi) { const a = this.sheets[key] && this.sheets[key][anim]; return a && a[fi]; },
+  frameCanvas(key, anim, fi) { const a = this.sheet(key, anim); return a && a[fi]; },
   _blankLike(ref) { const c = document.createElement('canvas'); c.width = ref.width; c.height = ref.height; return c; },
   _copyOf(ref) { const c = this._blankLike(ref); c.getContext('2d').drawImage(ref, 0, 0); return c; },
   addFrame(key, anim, blank) {
-    const arr = this.sheets[key] && this.sheets[key][anim]; if (!arr || !arr.length) return -1;
+    const arr = this.sheet(key, anim); if (!arr || !arr.length) return -1;
     arr.push(blank ? this._blankLike(arr[arr.length - 1]) : this._copyOf(arr[arr.length - 1]));
     this.markDirty(key, anim); return arr.length - 1;
   },
   removeFrame(key, anim, fi) {
-    const arr = this.sheets[key] && this.sheets[key][anim]; if (!arr || arr.length <= 1) return false;
+    const arr = this.sheet(key, anim); if (!arr || arr.length <= 1) return false;
     arr.splice(fi, 1); this.markDirty(key, anim); return true;
   },
   revertFrame(key, anim, fi) {
-    const d = this.defs[key], arr = this.sheets[key] && this.sheets[key][anim]; if (!d || !arr) return;
+    const d = this.defs[key], arr = this.sheet(key, anim); if (!d || !arr) return;
     if (fi < this.ANIMS[anim]) arr[fi] = this._bake(d, anim, fi, this.ANIMS[anim]);   // quadro original → reassa
     else { const c = this._blankLike(arr[fi]); arr[fi] = c; }                          // quadro extra → limpa
     this.markDirty(key, anim);
@@ -84,16 +109,30 @@ const SPR = {
   },
   clearAllEdits() {
     try { localStorage.removeItem(this._editKey); } catch (e) {}
-    for (const id in this._dirty) { const [key, anim] = id.split('/'); const d = this.defs[key]; if (!d) continue; const n = this.ANIMS[anim], frames = []; for (let f = 0; f < n; f++) frames.push(this._bake(d, anim, f, n)); this.sheets[key][anim] = frames; }
+    for (const id in this._dirty) { const [key, anim] = id.split('/'); if (this.sheets[key]) delete this.sheets[key][anim]; }   // reassa preguiçosamente
     this._dirty = {};
   },
 
+  // buffer de rascunho reutilizado (assar cria só o canvas FINAL pequeno;
+  // alocar 3 canvases full-res por quadro dominava o tempo de bake)
+  _scratch(name, w, h) {
+    let c = this[name];
+    if (!c) { c = this[name] = document.createElement('canvas'); c.getContext('2d', { willReadFrequently: true }); }   // CPU-backed: sem readback de GPU no bake
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    const g = c.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, w, h);
+    return c;
+  },
+
   _bake(d, anim, f, n) {
-    const W = d.cw || 120, H = d.ch || 132, foot = H - 6;
-    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const W = d.cw || 160, H = d.ch || 132, foot = H - 6;
+    const cv = this._scratch('_bakeBuf', W, H);
     const g = cv.getContext('2d');
     g.save(); g.translate(W / 2, foot);
-    if (anim === 'death') { const t = f / (n - 1 || 1); g.rotate(-t * 1.45); g.translate(0, t * 6); }
+    // morte: o corpo TOMBA girando e desliza um pouco p/ o lado — o translate
+    // recentra o corpo deitado no canvas (a cabeça não é cortada; o quadro
+    // final vira o CADÁVER persistente no chão)
+    if (anim === 'death') { const t = f / (n - 1 || 1); g.translate(t * 28 * (d.scale || 1), t * 6); g.rotate(-t * 1.45); }
     this._drawBody(g, d, this._pose(anim, f, n));
     g.restore();
     // contorno aplicado em ALTA resolução (1px no espaço grande) → vira só um leve
@@ -103,26 +142,40 @@ const SPR = {
 
   // downscale a baked (detailed) frame into a few chunky pixels and snap the
   // silhouette to hard edges — the low-res Broforce look (no thick outline).
+  // Média de área feita EM JS sobre o buffer de CPU: zero readback de GPU
+  // (o drawImage+getImageData antigo custava ~16ms por quadro assado).
   _pixelize(src, d) {
-    const PXF = d.pxf || this.PXF;
-    const sw = Math.max(1, Math.round(src.width / PXF));
-    const sh = Math.max(1, Math.round(src.height / PXF));
+    const PXF = d.pxf || this.PXF, W = src.width, H = src.height;
+    const sw = Math.max(1, Math.round(W / PXF));
+    const sh = Math.max(1, Math.round(H / PXF));
+    const px = src.getContext('2d').getImageData(0, 0, W, H).data;
+    const out = new ImageData(sw, sh), op = out.data;
+    for (let y = 0; y < sh; y++) {
+      const y0 = (y * H / sh) | 0, y1 = Math.min(H, Math.max(y0 + 1, ((y + 1) * H / sh) | 0));
+      for (let x = 0; x < sw; x++) {
+        const x0 = (x * W / sw) | 0, x1 = Math.min(W, Math.max(x0 + 1, ((x + 1) * W / sw) | 0));
+        let r = 0, g = 0, b = 0, a = 0, n = 0;
+        for (let yy = y0; yy < y1; yy++) {
+          let i = (yy * W + x0) * 4;
+          for (let xx = x0; xx < x1; xx++, i += 4) { const aa = px[i + 3]; a += aa; r += px[i] * aa; g += px[i + 1] * aa; b += px[i + 2] * aa; n++; }
+        }
+        const oi = (y * sw + x) * 4;
+        if (a / n >= 120) { op[oi] = r / a; op[oi + 1] = g / a; op[oi + 2] = b / a; op[oi + 3] = 255; }   // silhueta nítida
+      }
+    }
     const small = document.createElement('canvas'); small.width = sw; small.height = sh;
-    const g = small.getContext('2d'); g.imageSmoothingEnabled = true;
-    g.drawImage(src, 0, 0, sw, sh);                       // area-average down to low-res
-    const im = g.getImageData(0, 0, sw, sh), px = im.data; // crisp silhouette (no soft edges)
-    for (let i = 0; i < px.length; i += 4) px[i + 3] = px[i + 3] >= 120 ? 255 : 0;
-    g.putImageData(im, 0, 0);
+    small.getContext('2d').putImageData(out, 0, 0);
     return small;
   },
 
   // wrap a baked frame with a 1px dark outline by stamping a black silhouette
+  // (usa buffers compartilhados — o resultado é consumido na hora pelo _pixelize)
   _outline(src) {
     const W = src.width, H = src.height;
-    const sil = document.createElement('canvas'); sil.width = W; sil.height = H;
+    const sil = this._scratch('_silBuf', W, H);
     const sc = sil.getContext('2d'); sc.drawImage(src, 0, 0);
     sc.globalCompositeOperation = 'source-atop'; sc.fillStyle = '#0a0908'; sc.fillRect(0, 0, W, H);
-    const out = document.createElement('canvas'); out.width = W; out.height = H;
+    const out = this._scratch('_outBuf', W, H);
     const o = out.getContext('2d');
     const off = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]];
     for (const [dx, dy] of off) o.drawImage(sil, dx, dy);
@@ -134,10 +187,14 @@ const SPR = {
     const ph = (f / n) * TAU;
     const p = { anim, ph, legF: 0, legB: 0, bob: 0, lean: 0, arm: 0, crouch: 0, air: false };
     if (anim === 'run') {
+      // passada mais "cavada": bob forte, inclinação p/ frente e braços bombando
       p.legF = ph; p.legB = ph + Math.PI;
-      p.bob = -Math.abs(Math.sin(ph)) * 3; p.lean = 4; p.arm = Math.sin(ph) * 0.5;
+      p.bob = -Math.abs(Math.sin(ph)) * 3.6; p.lean = 5 + Math.sin(ph * 2) * 0.8; p.arm = Math.sin(ph) * 0.62;
     } else if (anim === 'idle') {
-      p.legF = 0.12; p.legB = -0.12; p.bob = Math.sin(ph) * 1.2; p.arm = Math.sin(ph) * 0.08;
+      // respiração + leve troca de apoio (peso desloca de um pé pro outro)
+      const shift = Math.sin(ph * 0.5) * 0.06;
+      p.legF = 0.12 + shift; p.legB = -0.12 + shift; p.bob = Math.sin(ph) * 1.4;
+      p.arm = Math.sin(ph) * 0.1; p.lean = Math.sin(ph * 0.5) * 0.8;
     } else if (anim === 'jump') {
       // 8 quadros: DOBRA OS JOELHOS (impulso) → estica subindo → ápice
       p.air = true; const t = n > 1 ? f / (n - 1) : 0;
@@ -169,9 +226,15 @@ const SPR = {
       p.swing = lerp(-Math.PI / 2, Math.PI, t);
       p.crouch = Math.sin(t * Math.PI) * 5; p.lean = lerp(-2, 5, t); p.legF = 0.28; p.legB = -0.28; p.arm = 0.25; p.bob = 0;
     } else if (anim === 'hurt') {
-      p.lean = -6 - f * 2; p.legF = -0.4; p.legB = 0.3; p.arm = -0.9;
+      // recuo com chicoteada: dobra, braços jogados, cabeça vai atrás (4 quadros)
+      const t = n > 1 ? f / (n - 1) : 0, k = Math.sin(t * Math.PI);
+      p.lean = -5 - k * 5; p.legF = -0.4 - k * 0.15; p.legB = 0.3 + k * 0.1;
+      p.arm = -0.7 - k * 0.5; p.bob = k * 1.5; p.crouch = k * 2;
     } else if (anim === 'death') {
-      p.legF = 0.2; p.legB = -0.3; p.arm = -1.0; p.lean = -4;
+      // agonia em 8 quadros: braço relaxa, pernas cedem enquanto o corpo tomba
+      const t = n > 1 ? f / (n - 1) : 0;
+      p.legF = lerp(0.2, 0.55, t); p.legB = lerp(-0.3, -0.6, t);
+      p.arm = lerp(-0.6, -1.4, t); p.lean = lerp(-2, -6, t); p.crouch = t * 4;
     }
     return p;
   },
@@ -204,22 +267,38 @@ const SPR = {
     } else {
       this._head(g, d, lean * 1.05, headCy, headR);
     }
-    // ATAQUE CURTO: braço + espada varrendo o arco de 270° (assado no quadro)
-    if (p.anim === 'attack') this._attackSword(g, P, s, lean, shY, p.swing || 0);
+    // ATAQUE CURTO: só o BRAÇO varre o arco — a arma branca EQUIPADA é
+    // desenhada AO VIVO na mão (entities._drawMeleeSwing), então o golpe
+    // sempre mostra a arma certa (corrige a "espada curta" onipresente).
+    if (p.anim === 'attack') this._attackArm(g, P, s, lean, shY, p.swing || 0);
   },
 
-  // braço estendido segurando a espada, girado para `ang` (arco do golpe)
-  _attackSword(g, P, s, lean, shY, ang) {
+  // braço estendido (2 segmentos + luva) girado para `ang` (arco do golpe)
+  _attackArm(g, P, s, lean, shY, ang) {
     g.save(); g.translate(lean + 2 * s, shY + 6 * s); g.rotate(ang);
-    g.strokeStyle = P.arm || P.armor || '#6a6a7a'; g.lineWidth = 5 * s; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(0, 0); g.lineTo(11 * s, 0); g.stroke();
-    g.fillStyle = P.glove || P.skin || '#43321e'; g.beginPath(); g.arc(11 * s, 0, 3 * s, 0, TAU); g.fill();
-    g.fillStyle = '#5a4326'; g.fillRect(10 * s, -1.6 * s, 4 * s, 3.2 * s);              // cabo
-    g.fillStyle = P.buckle || '#caa33a'; g.fillRect(13.5 * s, -3.6 * s, 2.2 * s, 7.2 * s); // guarda
-    g.fillStyle = '#e8eef5'; g.fillRect(15.5 * s, -2 * s, 22 * s, 4 * s);               // lâmina
-    g.beginPath(); g.moveTo(37.5 * s, -2 * s); g.lineTo(43 * s, 0); g.lineTo(37.5 * s, 2 * s); g.fill(); // ponta
-    g.fillStyle = '#aeb8c2'; g.fillRect(15.5 * s, -2 * s, 22 * s, 1.4 * s);             // fio
+    const col = P.arm || P.armor || '#6a6a7a';
+    this._segLimb(g, 0, 0, 7 * s, 0, 6.2 * s, 5 * s, col, P.armorHi);
+    this._segLimb(g, 7 * s, 0, 13 * s, 0, 5 * s, 4.2 * s, col, null);
+    g.fillStyle = P.glove || P.skin || '#43321e'; g.beginPath(); g.arc(13 * s, 0, 3.2 * s, 0, TAU); g.fill();
     g.restore();
+  },
+
+  // posição da MÃO no mundo durante o golpe (t = progresso 0..1) — replica a
+  // pose assada do braço p/ a arma ao vivo girar exatamente junto com ele.
+  attackHand(e, t) {
+    const d = this.defs[e.spr]; if (!d) return null;
+    const H = d.ch || 132, scale = e.h * (d.artK || 1.7) / H, s = d.scale || 1;
+    const face = e.face < 0 ? -1 : 1;
+    const swing = lerp(-Math.PI / 2, Math.PI, t);                       // mesmo arco do _pose('attack')
+    const crouch = Math.sin(t * Math.PI) * 5, lean = lerp(-2, 5, t);
+    const px = lean + 2 * s + Math.cos(swing) * 13 * s;                 // pivô do ombro + comprimento do braço
+    const py = (-62 * s + crouch) + 6 * s + Math.sin(swing) * 13 * s;
+    return {
+      x: e.cx + face * scale * px,
+      y: (e.y + e.h) + scale * py,
+      ang: face > 0 ? swing : Math.PI - swing,                          // espelha o ângulo p/ a esquerda
+      scale,
+    };
   },
 
   _round(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.fill(); },
@@ -313,34 +392,62 @@ const SPR = {
     g.fillStyle = P.glove || P.skin || col; g.beginPath(); g.arc(hx, hy, 3 * s, 0, TAU); g.fill();
   },
 
-  // capa ESVOAÇANTE — maior e bem mais animada (corre/pula/cai). Puramente
-  // visual: sai pelas laterais e por baixo do corpo e ondula na barra inferior.
+  // capa ESVOAÇANTE — pano grande de verdade: extrapola o retângulo do corpo,
+  // barra inferior RECORTADA em línguas que ondulam fora de fase, dobra interna
+  // sombreada e fio de luz na borda. Reage a correr/pular/cair/atacar/apanhar.
   _cape(g, P, s, shY, hipY, lean, p) {
     const run = p.anim === 'run', jump = p.anim === 'jump', fall = p.anim === 'fall', air = !!p.air;
-    const t = p.ph || 0, fr = (t / TAU);   // fração do quadro (0..1) p/ a capa "abrir" ao longo da ação
+    const atk = p.anim === 'attack', hurt = p.anim === 'hurt';
+    const t = p.ph || 0, fr = (t / TAU);   // fração da ação (0..1)
     // No AR a capa abre MUITO mais (área maior) e ondula bastante — sobe no pulo, infla na queda
-    const airOpen = air ? (jump ? 0.5 + fr * 0.8 : 0.8 + fr * 0.5) : 0;   // cresce ao longo do pulo/queda
-    const back = (run ? 6 + Math.sin(t) * 3.5 : air ? 14 + airOpen * 8 : 2.5 + Math.sin(t * 0.6) * 1.4) * s;
-    const lift = (jump ? -8 - airOpen * 6 : fall ? -4 - airOpen * 4 : 0) * s;
-    const topHW = (air ? 12.5 : 11) * s, botHW = (run ? 18 : air ? 22 + airOpen * 7 : 14.5) * s;
-    const topY = shY - 2 * s, botY = hipY + 30 * s + lift;
-    const wob = (run ? Math.sin(t * 2) * 4.5 : air ? Math.sin(t * 1.5) * 4 : Math.sin(t * 0.8) * 1.6) * s;
-    // capa principal (pano)
+    const airOpen = air ? (jump ? 0.5 + fr * 0.8 : 0.8 + fr * 0.5) : 0;
+    const back = (run ? 9 + Math.sin(t) * 4.5
+                : air ? 16 + airOpen * 9
+                : atk ? 5 + fr * 7                                    // o golpe joga o pano p/ trás
+                : hurt ? 3 + Math.sin(fr * Math.PI) * 6
+                : 3 + Math.sin(t * 0.6) * 1.8) * s;
+    const lift = (jump ? -9 - airOpen * 7 : fall ? -5 - airOpen * 5 : hurt ? -4 * Math.sin(fr * Math.PI) : 0) * s;
+    const topHW = (air ? 13 : 11.5) * s;
+    const botHW = (run ? 20 : air ? 24 + airOpen * 8 : atk ? 17 : 15.5) * s;
+    const topY = shY - 2 * s;
+    // comprimento: quase toca o chão; nunca passa da borda inferior do canvas
+    const botY = Math.min(hipY + 34 * s + lift, 3 * s);
+    const wob = (run ? Math.sin(t * 2) * 5 : air ? Math.sin(t * 1.5) * 4.5 : Math.sin(t * 0.8) * 2) * s;
+    const L = lean - botHW - back, R0 = lean + botHW * 0.55 - back;   // extremos da barra
+    // ---- pano principal com barra em LÍNGUAS (3 recortes que ondulam fora de fase) ----
     g.fillStyle = P.cape;
     g.beginPath();
-    g.moveTo(lean - topHW, topY);                                                                      // ombro esquerdo
-    g.quadraticCurveTo(lean - topHW - back * 0.7, (topY + botY) * 0.5, lean - botHW - back, botY + wob); // desce esvoaçando p/ trás
-    g.quadraticCurveTo(lean - back, botY + 7 * s + wob * 0.4, lean + botHW * 0.55 - back, botY - wob);   // barra ondulada
+    g.moveTo(lean - topHW, topY);                                                                        // ombro esquerdo
+    g.quadraticCurveTo(lean - topHW - back * 0.8, (topY + botY) * 0.5, L, botY + wob);                    // desce esvoaçando p/ trás
+    for (let i = 0; i < 3; i++) {                                                                        // barra recortada
+      const u0 = i / 3, u1 = (i + 1) / 3;
+      const x0 = L + (R0 - L) * u0, x1 = L + (R0 - L) * u1;
+      const dipY = botY + (4.5 + Math.sin(t * 1.4 + i * 2.1) * 2.6) * s + wob * (0.5 - u0);              // ponta da língua
+      const upY = botY - (1.5 + Math.sin(t * 1.1 + i * 1.7) * 1.4) * s - wob * (u1 - 0.5) * 0.6;         // vale entre línguas
+      g.quadraticCurveTo((x0 + x1) * 0.5 - 2 * s, dipY, x1, upY);
+    }
     g.quadraticCurveTo(lean + topHW + back * 0.2, (topY + botY) * 0.5, lean + topHW, topY);              // volta ao ombro direito
     g.quadraticCurveTo(lean, topY - 4 * s, lean - topHW, topY);                                          // gola sobre os ombros
     g.closePath(); g.fill();
-    // dobra interna (sombra) p/ profundidade
+    // ---- dobra interna (sombra) p/ profundidade ----
     g.fillStyle = P.capeSh;
     g.beginPath();
     g.moveTo(lean + 1.5 * s, topY);
-    g.quadraticCurveTo(lean - back * 0.5, (topY + botY) * 0.5, lean - botHW * 0.4 - back, botY + wob * 0.7);
+    g.quadraticCurveTo(lean - back * 0.5, (topY + botY) * 0.5, lean - botHW * 0.45 - back, botY + wob * 0.7);
     g.quadraticCurveTo(lean - back, botY + 4 * s, lean + 2 * s - back * 0.5, botY - 2 * s);
     g.closePath(); g.fill();
+    // segunda dobra fina (vinco do pano acompanhando o vento)
+    g.beginPath();
+    g.moveTo(lean - topHW * 0.6, topY + 3 * s);
+    g.quadraticCurveTo(lean - topHW - back * 0.7, (topY + botY) * 0.55, L + 3 * s, botY + wob - 2 * s);
+    g.quadraticCurveTo(lean - back * 0.9, (topY + botY) * 0.62, lean - topHW * 0.4, topY + 6 * s);
+    g.closePath(); g.fill();
+    // ---- fio de luz na borda que pega o vento (dá leitura de volume) ----
+    g.strokeStyle = P.capeHi || 'rgba(255,255,255,0.18)'; g.lineWidth = 1.6 * s; g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(lean + topHW * 0.9, topY + 1 * s);
+    g.quadraticCurveTo(lean + topHW + back * 0.15, (topY + botY) * 0.5, R0 + 1 * s, botY - 2 * s);
+    g.stroke();
   },
 
   _tail(g, P, s, hipY, p) {
@@ -702,7 +809,7 @@ const SPR = {
     const bw = Math.max(8, Math.ceil((2 * R) / PXF) + 2);
     let buf = this._mwBuf; if (!buf) buf = this._mwBuf = document.createElement('canvas');
     if (buf.width !== bw || buf.height !== bw) { buf.width = bw; buf.height = bw; }
-    const g = buf.getContext('2d');
+    const g = buf.getContext('2d', { willReadFrequently: true });
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, bw, bw); g.imageSmoothingEnabled = true;
     const c = bw / 2;
     g.save(); g.translate(c, c); g.scale(1 / PXF, 1 / PXF); g.rotate(ang);   // unidades naturais → pixels do buffer, já rotacionado
@@ -737,23 +844,24 @@ const SPR = {
     return { x: e.cx + (e.face || 1) * 5 * s * scale, y: (e.y + e.h) - 56 * s * scale + drop };
   },
 
-  // ---- public draw ---------------------------------------------
-  draw(ctx, e, cam) {
+  // ---- estado de animação corrente (frame + métricas de blit) ----
+  // Compartilhado por draw, overlays de status (drawTinted), amostragem de
+  // pontos do corpo (bodyPoint) e cadáveres persistentes.
+  _animState(e) {
     if (!this.ready) this.build();
-    const d = this.defs[e.spr]; if (!d) return;
-    const W = d.cw || 120, H = d.ch || 132;
-    const dh = e.h * (d.artK || 1.7), scale = dh / H, dw = W * scale;
-    const cx = e.cx + cam.ox, baseY = e.y + e.h + cam.oy;
-    // pick animation
+    const d = this.defs[e.spr]; if (!d) return null;
+    const W = d.cw || 160, H = d.ch || 132;
+    const scale = e.h * (d.artK || 1.7) / H;
     let anim = 'idle';
     const dying = (e.dying != null && e.dying > 0) || e.dead;
     if (dying) anim = 'death';
-    else if (e.attackArc > 0) anim = 'attack';                              // ATAQUE CURTO (golpe de espada)
+    else if (e.attackArc > 0) anim = 'attack';                              // ATAQUE CURTO (golpe de arma branca)
     else if (e.flash > 0.04 && e.onGround && Math.abs(e.vx) < 30) anim = 'hurt';
     else if (!e.onGround) anim = (e.vy < -40 ? 'jump' : 'fall');
     else if (e.crouching) anim = (e.shootT > 0 ? 'crouchshoot' : (Math.abs(e.vx) > 24 ? 'crouchwalk' : 'crouch'));
     else if (Math.abs(e.vx) > 24) anim = 'run';
-    const frames = this.sheets[e.spr][anim] || this.sheets[e.spr].idle;
+    const frames = this.sheet(e.spr, anim) || this.sheet(e.spr, 'idle');
+    if (!frames || !frames.length) return null;
     let fi;
     if (anim === 'death') { const dt = e.dying != null ? (1 - clamp(e.dying / (e.dyingMax || 0.6), 0, 1)) : clamp((1 - (e.deathT || 0)), 0, 1); fi = Math.min(frames.length - 1, Math.floor(dt * frames.length)); }
     else if (anim === 'attack') { const t = clamp(1 - (e.attackArc || 0), 0, 1); fi = clamp(Math.round(t * (frames.length - 1)), 0, frames.length - 1); }   // arco conforme o golpe avança
@@ -762,22 +870,70 @@ const SPR = {
     else if (anim === 'jump') { const t = clamp(1 - (-(e.vy || 0)) / 1400, 0, 1); fi = clamp(Math.round(t * (frames.length - 1)), 0, frames.length - 1); }   // quadro pelo impulso vertical
     else if (anim === 'fall') { const t = clamp((e.vy || 0) / 1200, 0, 1); fi = clamp(Math.round(t * (frames.length - 1)), 0, frames.length - 1); }          // quadro pela velocidade de queda
     else { const fps = anim === 'idle' ? 3.5 : anim === 'crouch' ? 3 : 1; fi = Math.floor((e.anim || 0) * fps) % frames.length; }
+    return { d, W, H, scale, anim, fi, fr: frames[fi], face: e.face < 0 ? -1 : 1 };
+  },
 
-    const face = e.face < 0 ? -1 : 1;
+  // ---- public draw ---------------------------------------------
+  draw(ctx, e, cam) {
+    const st = this._animState(e); if (!st) return;
+    const cx = e.cx + cam.ox, baseY = e.y + e.h + cam.oy;
     ctx.save(); ctx.imageSmoothingEnabled = false;
-    ctx.translate(cx, baseY); ctx.scale(face * scale, scale);
-    const fr = frames[fi];                                     // low-res frame → stretched (nearest) to the WxH footprint
-    ctx.drawImage(fr, 0, 0, fr.width, fr.height, -W / 2, -(H - 6), W, H);
+    ctx.translate(cx, baseY); ctx.scale(st.face * st.scale, st.scale);
+    const fr = st.fr;                                          // low-res frame → stretched (nearest) to the WxH footprint
+    ctx.drawImage(fr, 0, 0, fr.width, fr.height, -st.W / 2, -(st.H - 6), st.W, st.H);
     ctx.restore();
 
     // live weapon arm at the chest/hands anchor (not while dying nor during the sword swing)
-    if (d.weapon && e.aimAng != null && anim !== 'death' && anim !== 'attack') {
+    if (st.d.weapon && e.aimAng != null && st.anim !== 'death' && st.anim !== 'attack') {
       const ga = this.gunAnchor(e);
       const recoil = (e.cool && e.coolMax) ? (e.cool / e.coolMax) * 4 : 0;
       const mode = (e.dashT > 0 || e.swordMode) ? 'sword' : null;
-      const wpn = e.weaponVisual || d.weapon;   // a arma equipada pode trocar o visual (ex.: fase de testes)
-      this._drawPixWeapon(ctx, d, ga.x + cam.ox, ga.y + cam.oy, scale, e.aimAng, recoil, mode, wpn);
+      const wpn = e.weaponVisual || st.d.weapon;   // a arma equipada pode trocar o visual (ex.: fase de testes)
+      this._drawPixWeapon(ctx, st.d, ga.x + cam.ox, ga.y + cam.oy, st.scale, e.aimAng, recoil, mode, wpn);
     }
+  },
+
+  // ---- silhueta TINTADA do frame atual (efeitos de status "no corpo") ----
+  // ex.: congelado (azul), em chamas (laranja piscando), envenenado (verde).
+  // A tinta é cacheada por (frame, cor) — custo ~zero por quadro.
+  drawTinted(ctx, e, cam, color, alpha, dx = 0, dy = 0) {
+    const st = this._animState(e); if (!st) return;
+    const tf = this._tinted(st.fr, color);
+    const cx = e.cx + cam.ox + dx, baseY = e.y + e.h + cam.oy + dy;
+    ctx.save(); ctx.imageSmoothingEnabled = false; ctx.globalAlpha = alpha;
+    ctx.translate(cx, baseY); ctx.scale(st.face * st.scale, st.scale);
+    ctx.drawImage(tf, 0, 0, tf.width, tf.height, -st.W / 2, -(st.H - 6), st.W, st.H);
+    ctx.restore(); ctx.globalAlpha = 1;
+  },
+  _tinted(fr, color) {
+    if (!fr._tid) fr._tid = ++this._tidSeq;
+    const key = fr._tid + ':' + color;
+    let c = this._tintCache[key];
+    if (c) return c;
+    c = document.createElement('canvas'); c.width = fr.width; c.height = fr.height;
+    const g = c.getContext('2d');
+    g.drawImage(fr, 0, 0);
+    g.globalCompositeOperation = 'source-in'; g.fillStyle = color; g.fillRect(0, 0, c.width, c.height);
+    return (this._tintCache[key] = c);
+  },
+
+  // ponto ALEATÓRIO dentro da silhueta do frame atual (coords de MUNDO) —
+  // p/ chamas lambendo o corpo, bolhas de veneno, brilhos de cura etc.
+  bodyPoint(e) {
+    const st = this._animState(e); if (!st) return { x: e.cx, y: e.cy };
+    const fr = st.fr;
+    let pts = fr._pts;
+    if (!pts) {
+      const im = fr.getContext('2d').getImageData(0, 0, fr.width, fr.height).data;
+      pts = [];
+      for (let y = 0; y < fr.height; y++) for (let x = 0; x < fr.width; x++) if (im[(y * fr.width + x) * 4 + 3] > 0) pts.push(x, y);
+      fr._pts = pts;
+    }
+    if (!pts.length) return { x: e.cx, y: e.cy };
+    const i = ((Math.random() * (pts.length / 2)) | 0) * 2;
+    const u = (pts[i] + 0.5) * (st.W / fr.width) - st.W / 2;          // low-res px → unidades do canvas
+    const v = (pts[i + 1] + 0.5) * (st.H / fr.height) - (st.H - 6);
+    return { x: e.cx + st.face * st.scale * u, y: (e.y + e.h) + st.scale * v };
   },
 
   // blit the (cached) pixel-art weapon at the hands anchor; the recoil kicks it
@@ -804,7 +960,7 @@ const SPR = {
     const bw = Math.max(8, Math.ceil((2 * R) / PXF) + 2);      // buffer size (+2 px for the outline)
     let buf = this._pwBuf; if (!buf) buf = this._pwBuf = document.createElement('canvas');
     if (buf.width !== bw || buf.height !== bw) { buf.width = bw; buf.height = bw; }
-    const g = buf.getContext('2d');
+    const g = buf.getContext('2d', { willReadFrequently: true });
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, bw, bw); g.imageSmoothingEnabled = true;
     const c = bw / 2;
     g.save(); g.translate(c, c); g.scale(1 / PXF, 1 / PXF);    // natural units → buffer pixels
@@ -901,13 +1057,13 @@ SPR.define('wolf', {
     leg: '#3e3224', legSh: '#241c12', arm: '#4a3c2e', foot: '#161009', claw: '#d8cfba' },
 });
 SPR.define('direwolf', {
-  head: 'wolf', digi: true, tail: true, scale: 1.22, bulk: 1.15, cw: 150, ch: 158, artK: 1.6,
+  head: 'wolf', digi: true, tail: true, scale: 1.22, bulk: 1.15, cw: 176, ch: 158, artK: 1.6,
   pal: { skin: '#322820', skinSh: '#1c140f', skinHi: '#4c3c30', eye: '#ff4a2a',
     torso: '#32281c', torsoHi: '#46382a', torsoSh: '#1c140e', armor: '#32281c', armorHi: '#4c3c30', armorSh: '#180f0a',
     leg: '#32281c', legSh: '#1c140e', arm: '#322820', foot: '#100b08', claw: '#d8cfba' },
 });
 SPR.define('dragonman', {
-  head: 'dragon', weapon: 'rifle', digi: true, tail: true, scale: 1.12, cw: 142, ch: 150, artK: 1.66,
+  head: 'dragon', weapon: 'rifle', digi: true, tail: true, scale: 1.12, cw: 168, ch: 150, artK: 1.66,
   pal: { skin: '#b32a1c', skinSh: '#6e1410', skinHi: '#d8402c', crest: '#5a120e', horn: '#241a12', eye: '#e0b028',
     torso: '#403a2c', torsoHi: '#544a38', torsoSh: '#26221a', armor: '#403a2c', armorHi: '#5a5040', armorSh: '#241f18', pauldron: '#5a5040',
     leg: '#8a1c14', legSh: '#54120e', arm: '#b32a1c', foot: '#341210', claw: '#bcb190', belt: '#322414', pendant: '#bcb190',
@@ -942,7 +1098,7 @@ SPR.define('ghoul', {
     leg: '#48421f', legSh: '#2a2612', arm: '#7a8a4a', boot: '#201810', belt: '#2a2010' },
 });
 SPR.define('imp', {
-  head: 'demon', weapon: 'wand', scale: 0.8, bulk: 0.92, cw: 104, ch: 116, tail: true, artK: 1.5,
+  head: 'demon', weapon: 'wand', scale: 0.8, bulk: 0.92, cw: 124, ch: 116, tail: true, artK: 1.5,
   pal: { skin: '#b23425', skinSh: '#6e1410', skinHi: '#d8503a', horn: '#241a12',
     torso: '#3a2420', torsoHi: '#4e342c', torsoSh: '#201210', armor: '#3a2420', armorHi: '#4e342c', armorSh: '#201210',
     leg: '#8a241a', legSh: '#541210', arm: '#b23425', foot: '#241010', claw: '#e8d0a0', orb: '#ff7a2c', wood: '#3a2418' },
@@ -985,7 +1141,7 @@ SPR.define('hellhound', {
    run/jump/fall/hurt/death + braço-arma ao vivo). Padrões de ataque ficam em
    Enemy._atk<Nome> (enemies.js). */
 SPR.define('necromancer', {   // O NECROMANTE ANCIÃO — caveira encapuzada, olhos verdes, cajado-orbe
-  head: 'skull', weapon: 'staff', scale: 1.5, bulk: 1.04, cw: 180, ch: 196, artK: 1.55,
+  head: 'skull', weapon: 'staff', scale: 1.5, bulk: 1.04, cw: 216, ch: 196, artK: 1.55,
   pal: { skin: '#dad3bf', skinSh: '#a59c82', eye: '#9bf06a', hood: '#1b1430',
     torso: '#241a3a', torsoHi: '#372a54', torsoSh: '#130c22', armor: '#241a3a', armorHi: '#372a54', armorSh: '#130c22',
     leg: '#2a1f4a', legSh: '#160e2a', arm: '#241a3a', boot: '#160c22', belt: '#6a3aa0', buckle: '#caa33a',
@@ -1006,7 +1162,7 @@ SPR.define('fenrir', {   // FENRAHK — lobo colossal de juba escura e olhos âm
     leg: '#2a221c', legSh: '#150f0a', arm: '#2f261e', foot: '#100b08', claw: '#e8e0cf' },
 });
 SPR.define('titan', {   // O CARRASCO INFERNAL — titã demoníaco blindado, fornalha no peito e cutelo
-  head: 'demon', weapon: 'cleaver', scale: 1.95, bulk: 1.32, cw: 240, ch: 290, artK: 1.5,
+  head: 'demon', weapon: 'cleaver', scale: 1.95, bulk: 1.32, cw: 276, ch: 290, artK: 1.5,
   pal: { skin: '#8a2a1e', skinSh: '#4e1410', skinHi: '#b23a28', horn: '#e8e0cf',
     torso: '#2c2a28', torsoHi: '#454240', torsoSh: '#161413', armor: '#2c2a28', armorHi: '#454240', armorSh: '#161413',
     plate: '#ff5b2c', pauldron: '#3a3735',

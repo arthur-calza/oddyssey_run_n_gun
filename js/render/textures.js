@@ -11,6 +11,16 @@ const TEX = {
 
   _cv(s) { const c = document.createElement('canvas'); c.width = c.height = s; return c; },
   _rng(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; },
+  // rascunho CPU reutilizado (willReadFrequently) — pintar/ler aqui evita o
+  // readback de GPU que custava ~16ms POR TILE no bake
+  _scratchCv(name, w, h) {
+    let c = this[name];
+    if (!c) { c = this[name] = document.createElement('canvas'); c.getContext('2d', { willReadFrequently: true }); }
+    if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+    const g = c.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'source-over'; g.clearRect(0, 0, w, h);
+    return c;
+  },
 
   build() {
     const T = CONFIG.TILE;
@@ -18,32 +28,43 @@ const TEX = {
       const id = +idStr; if (!id || !MAT[id]) continue;
       this.tiles[id] = [];
       for (let v = 0; v < this.V; v++) {
-        const c = this._cv(T); this._paint(c.getContext('2d'), id, T, v);
-        this._pixelateTile(c);                 // resolve o tile em poucos pixels (pixel-art)
-        this.tiles[id].push(c);
+        const src = this._scratchCv('_paintBuf', T, T);
+        this._paint(src.getContext('2d'), id, T, v);
+        this.tiles[id].push(this._pixelateTile(src));   // resolve o tile em poucos pixels (pixel-art)
       }
     }
     this.ready = true;
   },
 
-  // reduz o tile detalhado p/ TQ×TQ, achata a paleta (posterize) e amplia
-  // de volta com vizinho-mais-próximo → blocos em pixel-art casando com os personagens.
-  _pixelateTile(c) {
-    const T = c.width, TQ = this.TQ;
-    const small = this._cv(TQ);
-    const sg = small.getContext('2d'); sg.imageSmoothingEnabled = true;
-    sg.drawImage(c, 0, 0, TQ, TQ);
-    const im = sg.getImageData(0, 0, TQ, TQ), px = im.data, Q = 28;
-    for (let i = 0; i < px.length; i += 4) {
-      if (px[i + 3] < 90) { px[i + 3] = 0; continue; }       // mantém vãos (ex.: escada) transparentes
-      px[i + 3] = 255;
-      px[i]     = Math.min(255, Math.round(px[i]     / Q) * Q);
-      px[i + 1] = Math.min(255, Math.round(px[i + 1] / Q) * Q);
-      px[i + 2] = Math.min(255, Math.round(px[i + 2] / Q) * Q);
+  // reduz o tile detalhado p/ TQ×TQ (média de área em JS, sem readback), achata
+  // a paleta (posterize) e amplia com vizinho-mais-próximo num canvas GPU final.
+  _pixelateTile(src) {
+    const T = src.width, TQ = this.TQ, Q = 28;
+    const px = src.getContext('2d').getImageData(0, 0, T, T).data;
+    const out = new ImageData(TQ, TQ), op = out.data;
+    for (let y = 0; y < TQ; y++) {
+      const y0 = (y * T / TQ) | 0, y1 = Math.max(y0 + 1, ((y + 1) * T / TQ) | 0);
+      for (let x = 0; x < TQ; x++) {
+        const x0 = (x * T / TQ) | 0, x1 = Math.max(x0 + 1, ((x + 1) * T / TQ) | 0);
+        let r = 0, g = 0, b = 0, a = 0, n = 0;
+        for (let yy = y0; yy < y1; yy++) {
+          let i = (yy * T + x0) * 4;
+          for (let xx = x0; xx < x1; xx++, i += 4) { const aa = px[i + 3]; a += aa; r += px[i] * aa; g += px[i + 1] * aa; b += px[i + 2] * aa; n++; }
+        }
+        const oi = (y * TQ + x) * 4;
+        if (a / n < 90) continue;                              // mantém vãos (ex.: escada) transparentes
+        op[oi]     = Math.min(255, Math.round((r / a) / Q) * Q);
+        op[oi + 1] = Math.min(255, Math.round((g / a) / Q) * Q);
+        op[oi + 2] = Math.min(255, Math.round((b / a) / Q) * Q);
+        op[oi + 3] = 255;
+      }
     }
-    sg.putImageData(im, 0, 0);
-    const g = c.getContext('2d'); g.clearRect(0, 0, T, T); g.imageSmoothingEnabled = false;
+    const small = this._scratchCv('_smallBuf', TQ, TQ);
+    small.getContext('2d').putImageData(out, 0, 0);
+    const c = this._cv(T);                                     // canvas FINAL (GPU) — desenhado todo frame
+    const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
     g.drawImage(small, 0, 0, TQ, TQ, 0, 0, T, T);
+    return c;
   },
 
   // desenha uma decoração com o mesmo "grão" de pixel dos blocos: renderiza em
@@ -52,7 +73,8 @@ const TEX = {
     const T = CONFIG.TILE, PXT = Math.max(1, Math.round(T / this.TQ));
     const bx = d.x - T, by = d.y - Math.round(T * 1.6), bw = T * 3, bh = T * 4;
     const sw = Math.ceil(bw / PXT), sh = Math.ceil(bh / PXT);
-    let buf = this._decorBuf; if (!buf) buf = this._decorBuf = document.createElement('canvas');
+    let buf = this._decorBuf;
+    if (!buf) { buf = this._decorBuf = document.createElement('canvas'); buf.getContext('2d', { willReadFrequently: true }); }   // CPU: o posterize lê pixels TODO frame
     if (buf.width !== sw || buf.height !== sh) { buf.width = sw; buf.height = sh; }
     const g = buf.getContext('2d');
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, sw, sh); g.imageSmoothingEnabled = true;

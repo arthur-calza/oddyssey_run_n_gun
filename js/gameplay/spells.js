@@ -314,6 +314,7 @@ const RAGNAROK_BOOK = {
         let heal = 0;
         for (const e of game.enemiesInRadius(p.cx, p.cy, 4 * CONFIG.TILE)) { e.hurt(16, sign(e.cx - p.cx) || 1, game); heal += 10; game.fx.bolt(e.cx, e.cy, p.cx, p.cy, '#d34a3a'); game.fx.blood(e.cx, e.cy, sign(e.cx - p.cx) || 1, 4); }
         p.hp = clamp(p.hp + Math.min(heal, 60), 0, p.maxhp); p.lifestealT = 6;
+        if (heal > 0) game.fx.heal(p.cx, p.cy, 10);
         game.fx.magic(p.cx, p.cy, '#d34a3a', 16); game.fx.text(p.cx, p.y - 12, heal > 0 ? '+' + Math.min(heal, 60) : 'SEDE DE SANGUE', heal > 0 ? '#7be08a' : '#d34a3a'); Sound.heal();
       } },
 
@@ -389,6 +390,7 @@ const RAGNAROK_BOOK = {
       desc: 'Santifica o solo: cura você e queima os inimigos ao redor com luz radiante.',
       cast(p, game) {
         const R = 4 * CONFIG.TILE; p.hp = clamp(p.hp + 30, 0, p.maxhp);
+        game.fx.heal(p.cx, p.cy, 12);
         for (const e of game.enemiesInRadius(p.cx, p.cy, R)) { e.hurt(28, sign(e.cx - p.cx) || 1, game); if (!e.boss && Math.random() < 0.3) e.frighten(2); for (let i = 0; i < 3; i++) game.fx.spark(e.cx + rand(-10, 10), e.cy + rand(-14, 14), '#fff2b0', 2); }
         game.fx.shock(p.cx, p.cy, R, '#fff2b0'); game.fx.shock(p.cx, p.cy, R * 0.6, '#ffe9a8'); game.fx.text(p.cx, p.y - 12, 'CONSAGRAÇÃO', '#ffe9a8'); Sound.heal();
       } },
@@ -397,7 +399,7 @@ const RAGNAROK_BOOK = {
       cast(p, game) { p.dashT = 0.22; p.dashSpeedK = 2.8; p.dashRadius = 36; p.dashDmg = 24; p.invuln = Math.max(p.invuln, 0.4); for (const e of game.enemiesInRadius(p.cx + p.face * 30, p.cy, 60)) { e.stagger = Math.max(e.stagger, 1.0); e.vx += p.face * 200; game.fx.spark(e.cx, e.cy, '#ffe9a8', 5); } game.fx.text(p.cx, p.y - 12, 'INVESTIDA!', '#ffe9a8'); Sound.thump(); } },
     { id: 'layhands', name: 'Imposição das Mãos', icon: '🙏', tradition: 'paladin', tier: 5, cost: 32, cd: 1.0,
       desc: 'Cura forte e instantânea, extinguindo o fogo e revigorando o corpo.',
-      cast(p, game) { p.hp = clamp(p.hp + 60, 0, p.maxhp); for (let i = 0; i < 22; i++) { const a = i / 22 * TAU; game.fx.spark(p.cx + Math.cos(a) * 20, p.cy + Math.sin(a) * 20, '#fff2b0', 3); } game.fx.magic(p.cx, p.cy, '#ffe9a8', 16); game.fx.text(p.cx, p.y - 12, '+60', '#7be08a'); Sound.heal(); } },
+      cast(p, game) { p.hp = clamp(p.hp + 60, 0, p.maxhp); game.fx.heal(p.cx, p.cy, 18); for (let i = 0; i < 22; i++) { const a = i / 22 * TAU; game.fx.spark(p.cx + Math.cos(a) * 20, p.cy + Math.sin(a) * 20, '#fff2b0', 3); } game.fx.magic(p.cx, p.cy, '#ffe9a8', 16); game.fx.text(p.cx, p.y - 12, '+60', '#7be08a'); Sound.heal(); } },
 
     /* LÂMINA — a arte da espada (e a lâmina transcendental) */
     { id: 'transcendent', name: 'Espada Transcendental', icon: '🗡', tradition: 'blade', tier: 1, cost: 36, cd: 0.7,
